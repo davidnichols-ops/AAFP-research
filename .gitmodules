@@ -1,0 +1,6 @@
+[submodule "aafp"]
+	path = aafp
+	url = https://github.com/davidnichols-ops/aafp.git
+[submodule "aafp-go"]
+	path = aafp-go
+	url = https://github.com/davidnichols-ops/aafp-go.git
