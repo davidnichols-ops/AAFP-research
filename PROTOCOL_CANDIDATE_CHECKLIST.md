@@ -64,9 +64,9 @@ protocol freeze.
 | Protocol compliance test suite | [x] | aafp-conformance/protocol_compliance.rs |
 | RFC-specific conformance tests | [x] | aafp-conformance/rfc0002-0006 |
 | End-to-end handshake over QUIC | [x] | test_full_end_to_end_handshake_over_quic |
-| Fuzzing of parser/framing | [ ] | Pending P0 item |
-| Property-based testing | [ ] | Pending P0 item |
-| Adversarial testing (malformed inputs) | [ ] | Pending P0 item |
+| Fuzzing of parser/framing | [x] | aafp-conformance/adversarial.rs (deterministic fuzz) |
+| Property-based testing | [x] | aafp-conformance/adversarial.rs (invariants) |
+| Adversarial testing (malformed inputs) | [x] | aafp-conformance/adversarial.rs (28 tests) |
 
 ## Error Model
 
@@ -89,18 +89,15 @@ protocol freeze.
 
 ## Summary
 
-- **Complete**: 26 items
-- **Pending**: 6 items
+- **Complete**: 29 items
+- **Pending**: 3 items
 - **In progress**: 0 items
 
-The 6 pending items are:
+The 3 pending items are:
 1. Go implementation conformance
 2. Rust ↔ Go authenticated interoperability
 3. Wire compatibility tests (golden traces)
-4. Fuzzing of parser/framing
-5. Property-based testing
-6. Adversarial testing (malformed inputs)
 
 The protocol specification is complete. The remaining work is
-implementation-side: porting to Go, generating golden traces, and
-adding adversarial testing.
+implementation-side: porting to Go and generating golden traces
+for cross-implementation validation.
