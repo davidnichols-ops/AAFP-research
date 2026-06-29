@@ -181,13 +181,15 @@ cross-stream ordering.
 
 ### 3.4 Maximum Frame Size
 
-The maximum payload size is 1 MiB (1,048,576 bytes). Implementations
-MUST reject frames with payloads larger than this limit by sending an
-ERROR frame (see RFC-0005) with error code `8001` (FRAME_TOO_LARGE)
-and closing the stream. The ERROR frame's fatal flag SHOULD be false
-(non-fatal), allowing the connection to continue for other streams.
-If the peer repeatedly sends oversized frames, the implementation MAY
-set the fatal flag to true and close the connection.
+The maximum payload size is 1 MiB (1,048,576 bytes). The maximum
+extension section size is 64 KiB (65,536 bytes). Implementations
+MUST reject frames where either the Payload Length or Extension Length
+exceeds these limits by sending an ERROR frame (see RFC-0005) with
+error code `8001` (FRAME_TOO_LARGE) and closing the stream. The ERROR
+frame's fatal flag SHOULD be false (non-fatal), allowing the connection
+to continue for other streams. If the peer repeatedly sends oversized
+frames, the implementation MAY set the fatal flag to true and close
+the connection.
 
 Larger application messages MUST be fragmented across multiple frames
 on the same stream. The `MORE` flag (see Section 4.1) indicates that
