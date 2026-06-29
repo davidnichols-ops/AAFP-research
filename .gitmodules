@@ -1,6 +1,6 @@
 [submodule "aafp"]
-	path = aafp
+	path = implementations/rust
 	url = https://github.com/davidnichols-ops/aafp.git
 [submodule "aafp-go"]
-	path = aafp-go
+	path = implementations/go
 	url = https://github.com/davidnichols-ops/aafp-go.git
