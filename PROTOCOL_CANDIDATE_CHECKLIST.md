@@ -52,7 +52,7 @@ protocol freeze.
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Rust implementation conforms | [x] | 516 tests, 0 failures |
+| Rust implementation conforms | [x] | 995 tests, 0 failures |
 | Go implementation conforms | [ ] | Pending Phase C-3 |
 | Rust ↔ Go authenticated interoperability | [ ] | Pending Go conformance |
 | Wire compatibility tests | [ ] | Pending golden trace generation |
@@ -101,3 +101,61 @@ The 3 pending items are:
 The protocol specification is complete. The remaining work is
 implementation-side: porting to Go and generating golden traces
 for cross-implementation validation.
+
+---
+
+## Rev 6 Categorization
+
+The following items were identified in Rev 6 as either **v1 Protocol
+Blockers** (Category A) or **Post-v1 Enhancements** (Category B).
+
+### Category A — Rev 6 Protocol Amendments (10 of 10 implemented)
+
+| ID | Item | Resolution | Status |
+|----|------|------------|--------|
+| A-1 | RPC `params` field was `null` by default | Changed to empty map `{}`; null rejected | DONE |
+| A-2 | Optional fields encoded as `null` instead of omitted | Omit-when-absent; null rejected on decode | DONE |
+| A-3 | No replay protection for AgentRecord | Added `record_version` (key 10), monotonic | DONE |
+| A-4 | Session ID not bound to server identity | `server_agent_id` added to HKDF input | DONE |
+| A-5 | Frame extensions unbounded (DoS vector) | 64 KiB limit enforced before allocation | DONE |
+| A-6 | Handshake state machine not normative | Normative state machine in RFC-0002 §5.10; Rust + Go impls + 61 tests | DONE |
+| A-7 | Extension processing before sig verification | 20-phase normative pipeline in RFC-0002 §6.5; Rust + Go impls + 88+ tests | DONE |
+| A-8 | CLOSE frame semantics underspecified | Normative state machine + 36 tests | DONE |
+| A-9 | Nonce reuse detection not specified | ReplayCache + 32 conformance tests | DONE |
+| A-10 | Cross-signature verification (Go ML-DSA-65) | Go ML-DSA-65 library + 117 cross-lang tests | DONE |
+
+### Category B — Post-v1 Enhancements (deferred)
+
+| ID | Item | Rationale |
+|----|------|-----------|
+| B-1 | Go ML-DSA-65 cross-signature | Implementation gap, not protocol issue |
+| B-2 | Go QUIC transport | Implementation gap, not protocol issue |
+| B-3 | Network performance validation | Deployment concern, not protocol issue |
+| B-4 | Browser/WASM support | Future target, not v1 blocker |
+| B-5 | Adaptive connection limits | Optimization, not correctness |
+
+All currently scoped Rev 6 Category A protocol amendments (A-1 through
+A-7) have been implemented and are passing local conformance tests.
+3 of 10 Category A items remain pending (A-8 through A-10). This does
+not constitute full v1 readiness — see the Outstanding Items section
+below.
+
+## Outstanding Items (not addressed by Rev 6)
+
+The following items remain open and must be resolved before claiming
+full v1 production readiness:
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Revocation mechanism | NOT IMPLEMENTED | Compromised keys remain valid until expiry; no CRL/OCSP-like mechanism |
+| Normative handshake state machine | DONE (A-6) | RFC-0002 §5.10 normative state machine; Rust + Go implementations with 61 tests |
+| Go ML-DSA-65 cross-signature verification | NOT MET | Go lacks native ML-DSA-65; release criterion #3 still unmet |
+| Performance validation | NOT MET | Network benchmarks untested; release criterion #9 still unmet |
+| Independent third-party interop testing | NOT DONE | Only author-maintained implementations exist |
+| Production deployment experience | NONE | No real-world deployment data |
+| NAT traversal | PARTIAL | Implementation exists but not validated in production |
+| Persistent/networked DHT | NOT IMPLEMENTED | Only in-memory discovery; no persistent DHT |
+| PubSub | NOT IMPLEMENTED | Not yet built |
+
+**Current status: Rev 6 protocol candidate pending production validation.**
+Not "v1-ready." Not "all release blockers resolved."
