@@ -728,8 +728,281 @@ Handshake error codes:
 - `2006`: Handshake failed (including TLS exporter unavailable)
 - `2007`: Invalid AgentId (AgentId does not match SHA-256(public_key))
 - `2009`: Receiver MAC invalid (DoS pre-verification failed)
+- `2008`: Nonce reuse detected (replay attack, see Section 6.7)
+- `2010`: Unsupported key algorithm
 
-## 6. Extensions
+### 5.10 Normative Handshake State Machine (Rev 6)
+
+This section defines the complete, normative state machine for the
+AAFP handshake and session lifecycle. Implementations MUST conform to
+these states, transitions, timeouts, and error handling rules.
+
+#### 5.10.1 Client States
+
+| State | Description |
+|-------|-------------|
+| `C_IDLE` | No connection initiated. Initial state. |
+| `C_CONNECTING` | QUIC connection in progress, TLS handshake underway. |
+| `C_CH_SENT` | ClientHello sent on stream 0, awaiting ServerHello. |
+| `C_SH_VERIFIED` | ServerHello received and cryptographically verified. Session ID derived. |
+| `C_CF_SENT` | ClientFinished sent. Handshake complete. Awaiting authorization. |
+| `C_AUTHORIZED` | Authorization verified. Ready to enable messaging. |
+| `C_MESSAGING` | Application data flowing. AEAD applied to streams. |
+| `C_CLOSING` | CLOSE frame sent. Awaiting peer CLOSE or timeout. |
+| `C_CLOSED` | Terminal state. QUIC connection fully closed. |
+
+#### 5.10.2 Server States
+
+| State | Description |
+|-------|-------------|
+| `S_LISTENING` | Waiting for incoming QUIC connections. Initial state. |
+| `S_TRANSPORT_READY` | QUIC + TLS established. Awaiting ClientHello on stream 0. |
+| `S_CH_VERIFIED` | ClientHello received and cryptographically verified. |
+| `S_SH_SENT` | ServerHello sent. Awaiting ClientFinished. |
+| `S_CF_VERIFIED` | ClientFinished received and verified. Handshake complete. |
+| `S_AUTHORIZED` | Authorization verified. Ready to enable messaging. |
+| `S_MESSAGING` | Application data flowing. AEAD applied to streams. |
+| `S_CLOSING` | CLOSE frame sent. Awaiting peer CLOSE or timeout. |
+| `S_CLOSED` | Terminal state. QUIC connection fully closed. |
+
+#### 5.10.3 State Diagram
+
+```
+Client:                                    Server:
+
+C_IDLE                                     S_LISTENING
+  | connect()                                 | QUIC accept + TLS
+  v                                           v
+C_CONNECTING                               S_TRANSPORT_READY
+  | QUIC+TLS done                             | ClientHello received
+  | Send ClientHello                          | Verify ClientHello
+  v                                           v
+C_CH_SENT                                  S_CH_VERIFIED
+  | ServerHello received                      | Send ServerHello
+  | Verify ServerHello                        v
+  v                                         S_SH_SENT
+C_SH_VERIFIED                                | ClientFinished received
+  | Send ClientFinished                       | Verify ClientFinished
+  v                                           v
+C_CF_SENT                                  S_CF_VERIFIED
+  | Authorization verified                    | Authorization verified
+  v                                           v
+C_AUTHORIZED                               S_AUTHORIZED
+  | Enable messaging                          | Enable messaging
+  v                                           v
+C_MESSAGING                                S_MESSAGING
+  | CLOSE / Fatal ERROR / Transport reset     | CLOSE / Fatal ERROR / Transport reset
+  v                                           v
+C_CLOSING                                  S_CLOSING
+  | Peer CLOSE / Timeout                      | Peer CLOSE / Timeout
+  v                                           v
+C_CLOSED                                   S_CLOSED
+```
+
+#### 5.10.4 Client Transition Table
+
+| Current State | Incoming Event | Validation | Action | Next State | Error Code | Timeout |
+|---------------|----------------|------------|--------|------------|------------|---------|
+| C_IDLE | `connect()` | — | Open QUIC connection | C_CONNECTING | — | 30s connect timeout |
+| C_CONNECTING | QUIC + TLS established | ALPN = `aafp/1`, TLS exporter available | Compute channel binding, send ClientHello on stream 0 | C_CH_SENT | 2004 (ALPN fail), 2006 (no exporter) | 30s |
+| C_CONNECTING | QUIC/TLS failure | — | — | C_CLOSED | 2006 | — |
+| C_CONNECTING | Timeout | — | — | C_CLOSED | 2006 | 30s |
+| C_CH_SENT | HANDSHAKE frame (ServerHello) | Verify: version, agent_id, public_key, signature, expiry, key_algorithm | Derive session_id, send ClientFinished | C_SH_VERIFIED → C_CF_SENT | 2001 (sig), 2007 (agent_id), 2002 (expired), 2004 (version), 2010 (algorithm) | 30s |
+| C_CH_SENT | ERROR frame | — | Close connection | C_CLOSED | (from ERROR frame) | — |
+| C_CH_SENT | Timeout | — | Send ERROR 2006, close | C_CLOSED | 2006 | 30s |
+| C_CH_SENT | Unexpected frame type | Frame type ≠ HANDSHAKE | Send ERROR 2008, close | C_CLOSED | 2008 | — |
+| C_CH_SENT | Unexpected stream ID | Stream ID ≠ 0 | Send ERROR 2008, close | C_CLOSED | 2008 | — |
+| C_CH_SENT | Duplicate ServerHello | — | Send ERROR 2008, close | C_CLOSED | 2008 | — |
+| C_CF_SENT | Authorization success | — | — | C_AUTHORIZED | — | — |
+| C_CF_SENT | Authorization failure | — | Send ERROR 3001, close | C_CLOSED | 3001 | — |
+| C_CF_SENT | ERROR frame (fatal) | — | Close | C_CLOSED | (from ERROR) | — |
+| C_AUTHORIZED | `enable_messaging()` | — | Apply AEAD to streams | C_MESSAGING | — | — |
+| C_MESSAGING | `close()` initiated | — | Send CLOSE frame | C_CLOSING | — | 5s close timeout |
+| C_MESSAGING | CLOSE frame received | — | Send CLOSE frame in response | C_CLOSING | — | 5s |
+| C_MESSAGING | Fatal ERROR frame | — | Close QUIC | C_CLOSED | (from ERROR) | — |
+| C_MESSAGING | Transport reset / EOF | — | — | C_CLOSED | — | — |
+| C_MESSAGING | Non-fatal ERROR frame | — | Log, continue | C_MESSAGING | — | — |
+| C_MESSAGING | Unexpected HANDSHAKE frame | — | Send ERROR 2008, close | C_CLOSED | 2008 | — |
+| C_CLOSING | CLOSE frame received | — | Close QUIC connection | C_CLOSED | — | — |
+| C_CLOSING | Timeout | — | Close QUIC (force) | C_CLOSED | — | 5s |
+| C_CLOSING | Any frame other than CLOSE | — | Discard, continue waiting | C_CLOSING | — | 5s |
+| Any non-terminal | Abort (local) | — | Close QUIC immediately | C_CLOSED | — | — |
+| Any non-terminal | Fatal ERROR (received) | — | Close QUIC | C_CLOSED | (from ERROR) | — |
+
+#### 5.10.5 Server Transition Table
+
+| Current State | Incoming Event | Validation | Action | Next State | Error Code | Timeout |
+|---------------|----------------|------------|--------|------------|------------|---------|
+| S_LISTENING | QUIC connection accepted | — | Perform TLS handshake | S_TRANSPORT_READY | — | 30s |
+| S_TRANSPORT_READY | QUIC + TLS established | ALPN = `aafp/1`, TLS exporter available | Compute channel binding | S_TRANSPORT_READY | 2004, 2006 | 30s |
+| S_TRANSPORT_READY | HANDSHAKE frame (ClientHello) | Verify: version, agent_id, public_key, signature, expiry, key_algorithm, receiver_mac (if present) | — | S_CH_VERIFIED | 2001, 2007, 2002, 2004, 2009, 2010 | 30s |
+| S_TRANSPORT_READY | Timeout | — | Close | S_CLOSED | 2006 | 30s |
+| S_TRANSPORT_READY | Unexpected frame type | Frame type ≠ HANDSHAKE | Send ERROR 2008, close | S_CLOSED | 2008 | — |
+| S_TRANSPORT_READY | Unexpected stream ID | Stream ID ≠ 0 | Send ERROR 2008, close | S_CLOSED | 2008 | — |
+| S_CH_VERIFIED | Entry action | Session ID derived, ServerHello constructed and signed | Send ServerHello on stream 0 | S_SH_SENT | — | — |
+| S_SH_SENT | HANDSHAKE frame (ClientFinished) | Verify: session_id matches, signature valid | — | S_CF_VERIFIED | 2001 (sig), 2008 (session_id mismatch → nonce reuse) | 30s |
+| S_SH_SENT | ERROR frame | — | Close | S_CLOSED | (from ERROR) | — |
+| S_SH_SENT | Timeout | — | Send ERROR 2006, close | S_CLOSED | 2006 | 30s |
+| S_SH_SENT | Duplicate ClientHello | — | Send ERROR 2008, close | S_CLOSED | 2008 | — |
+| S_SH_SENT | Unexpected frame type | Frame type ≠ HANDSHAKE | Send ERROR 2008, close | S_CLOSED | 2008 | — |
+| S_CF_VERIFIED | Authorization success | — | — | S_AUTHORIZED | — | — |
+| S_CF_VERIFIED | Authorization failure | — | Send ERROR 3001, close | S_CLOSED | 3001 | — |
+| S_AUTHORIZED | `enable_messaging()` | — | Apply AEAD to streams | S_MESSAGING | — | — |
+| S_MESSAGING | `close()` initiated | — | Send CLOSE frame | S_CLOSING | — | 5s |
+| S_MESSAGING | CLOSE frame received | — | Send CLOSE frame in response | S_CLOSING | — | 5s |
+| S_MESSAGING | Fatal ERROR frame | — | Close QUIC | S_CLOSED | (from ERROR) | — |
+| S_MESSAGING | Transport reset / EOF | — | — | S_CLOSED | — | — |
+| S_MESSAGING | Non-fatal ERROR frame | — | Log, continue | S_MESSAGING | — | — |
+| S_MESSAGING | Unexpected HANDSHAKE frame | — | Send ERROR 2008, close | S_CLOSED | 2008 | — |
+| S_CLOSING | CLOSE frame received | — | Close QUIC | S_CLOSED | — | — |
+| S_CLOSING | Timeout | — | Close QUIC (force) | S_CLOSED | — | 5s |
+| S_CLOSING | Any frame other than CLOSE | — | Discard, continue waiting | S_CLOSING | — | 5s |
+| Any non-terminal | Abort (local) | — | Close QUIC immediately | S_CLOSED | — | — |
+| Any non-terminal | Fatal ERROR (received) | — | Close QUIC | S_CLOSED | (from ERROR) | — |
+
+#### 5.10.6 Duplicate and Replay Handling
+
+**Duplicate handshake messages**: If a handshake message is received
+that has the same type as one already processed in the current
+handshake, the receiver MUST send ERROR 2008 and close the connection.
+This includes:
+- Duplicate ClientHello at `S_TRANSPORT_READY` or `S_SH_SENT`
+- Duplicate ServerHello at `C_CH_SENT`
+- Duplicate ClientFinished at `S_SH_SENT`
+
+**Nonce reuse detection (A-9)**: The server MUST maintain a
+`ReplayCache` of observed `(agent_id, client_nonce)` pairs and the
+client MUST maintain a `ReplayCache` of observed `(agent_id,
+server_nonce)` pairs, with a configurable retention window (default:
+300 seconds). If a duplicate pair is detected, the recipient MUST
+send ERROR 2008 (NONCE_REUSE) and abort the handshake. The replay
+check MUST be performed before signature verification. See
+Section 6.7 for the full normative specification, including cache
+structure, invariants, eviction policy, and concurrency
+requirements. See Section 5.10.8 for resource limits.
+
+**Retransmissions**: AAFP handshake messages are NOT retransmitted at
+the application layer. QUIC provides reliable delivery. If the QUIC
+stream is reset during the handshake, the connection MUST be closed
+with error 2006.
+
+#### 5.10.7 Unexpected Frame Handling
+
+| Current State | Allowed Frame Types | All Others |
+|---------------|-------------------|------------|
+| C_CH_SENT | HANDSHAKE (ServerHello), ERROR | ERROR 2008, close |
+| C_SH_VERIFIED → C_CF_SENT | ERROR | ERROR 2008, close |
+| C_AUTHORIZED / C_MESSAGING | DATA, RPC_REQUEST, RPC_RESPONSE, PING, PONG, CLOSE, ERROR | ERROR 2008, close |
+| C_CLOSING | CLOSE | Discard silently |
+| S_TRANSPORT_READY | HANDSHAKE (ClientHello), ERROR | ERROR 2008, close |
+| S_SH_SENT | HANDSHAKE (ClientFinished), ERROR | ERROR 2008, close |
+| S_CF_VERIFIED → S_AUTHORIZED | ERROR | ERROR 2008, close |
+| S_MESSAGING | DATA, RPC_REQUEST, RPC_RESPONSE, PING, PONG, CLOSE, ERROR | ERROR 2008, close |
+| S_CLOSING | CLOSE | Discard silently |
+
+HANDSHAKE frames received during `C_MESSAGING` or `S_MESSAGING` state
+MUST be rejected with ERROR 2008 and the connection closed. There is
+no legitimate reason for a handshake message after the session is
+established.
+
+#### 5.10.8 Timeout Specification
+
+| Phase | Default Timeout | Configurable | On Expiry |
+|-------|----------------|-------------|-----------|
+| QUIC connection establishment | 30 seconds | Yes | Close, error 2006 |
+| Waiting for ClientHello (server) | 30 seconds | Yes | Close, error 2006 |
+| Waiting for ServerHello (client) | 30 seconds | Yes | Close, error 2006 |
+| Waiting for ClientFinished (server) | 30 seconds | Yes | Close, error 2006 |
+| Graceful close (waiting for peer CLOSE) | 5 seconds | Yes | Force close QUIC |
+| Nonce reuse cache retention (§6.7) | 300 seconds | Yes | Evict entry |
+
+Implementations MAY configure different timeout values but MUST
+document the defaults. The minimum handshake timeout is 10 seconds.
+The minimum close timeout is 1 second.
+
+#### 5.10.9 Close Behavior
+
+> **Note (Rev 6, A-8):** This section is retained for backward
+> compatibility. The normative, complete specification of CLOSE frame
+> semantics — including the CloseManager state machine, all
+> transitions, crossed close, duplicate handling, timeout behavior,
+> resource cleanup, and security considerations — is defined in
+> **Section 6.6**. Implementations MUST implement Section 6.6. The
+> behavior described below is a summary; in case of conflict,
+> Section 6.6 takes precedence.
+
+**Graceful close**: An agent sends a CLOSE frame with code 0 and a
+human-readable message. After sending CLOSE, the agent MUST NOT send
+any additional frames except a responding CLOSE. The receiver of a
+CLOSE frame SHOULD send a CLOSE frame in response and then close the
+QUIC connection. If no CLOSE is received within the close timeout
+(default 5 seconds), the initiator MUST force-close the QUIC
+connection.
+
+**Fatal error close**: An agent sends an ERROR frame with `fatal=true`
+and an appropriate error code. The receiver MUST close the QUIC
+connection immediately. The sender closes the QUIC connection after
+sending the fatal ERROR frame. No response is expected.
+
+**Transport reset**: If the QUIC connection is reset or receives an
+EOF without a prior CLOSE frame, the agent MUST transition to the
+`C_CLOSED` / `S_CLOSED` state. Outstanding RPCs and DATA streams are
+considered failed.
+
+**Crossed CLOSE**: If both agents send CLOSE frames simultaneously
+(both transition to `C_CLOSING` / `S_CLOSING`), the connection is
+gracefully closed. No error is generated.
+
+**Duplicate CLOSE**: If a CLOSE frame is received while in `C_CLOSING`
+or `S_CLOSING` state, it is treated as the peer's response and the
+connection is closed. If a second CLOSE is received, it is silently
+discarded.
+
+**ERROR after CLOSE**: If an ERROR frame is received while in
+`C_CLOSING` or `S_CLOSING` state, it is silently discarded. The
+closing process continues.
+
+**Half-closed streams**: After a CLOSE frame is sent, existing
+streams that are already open MAY continue to drain (receive
+remaining data). No new streams MAY be opened. Streams that are
+mid-transfer are terminated when the QUIC connection is closed.
+
+**Outstanding RPCs**: All outstanding RPC requests that have not
+received a response at the time of CLOSE are considered failed.
+The caller SHOULD be notified with an error indicating connection
+closed.
+
+**Outstanding DATA**: All outstanding DATA frames in flight at the
+time of CLOSE may be lost. Applications requiring reliable delivery
+SHOULD implement application-level acknowledgments.
+
+**Outstanding PING**: A PING frame that has not received a PONG at
+the time of CLOSE is considered unanswered. No error is generated;
+the connection close itself is the indication.
+
+#### 5.10.10 Cancellation
+
+Either agent MAY abort the connection at any time by closing the
+QUIC connection without sending a CLOSE frame. This is an ungraceful
+close. The peer will detect the transport reset and transition to
+`C_CLOSED` / `S_CLOSED`. This is permitted but discouraged for
+normal operation; it SHOULD be used only for emergency shutdown or
+when the peer is unresponsive.
+
+#### 5.10.11 Session State Mapping
+
+The handshake states map to the session states defined in RFC-0003
+as follows:
+
+| Handshake State (Client) | Handshake State (Server) | Session State (RFC-0003) |
+|--------------------------|--------------------------|--------------------------|
+| C_IDLE, C_CONNECTING | S_LISTENING | Connecting |
+| C_CH_SENT | S_TRANSPORT_READY, S_CH_VERIFIED | TransportEstablished |
+| C_SH_VERIFIED, C_CF_SENT | S_SH_SENT | (handshake in progress) |
+| C_AUTHORIZED | S_CF_VERIFIED, S_AUTHORIZED | IdentityVerified → AuthorizationVerified |
+| C_MESSAGING | S_MESSAGING | Authenticated → MessagingEnabled |
+| C_CLOSING | S_CLOSING | Closing |
+| C_CLOSED | S_CLOSED | Closed |
 
 ### 6.1 Extension Encoding
 
@@ -882,6 +1155,976 @@ enable the COMPRESSED flag in DATA frames.
 |------|------|-------------|
 | 0x0001 | dos-mitigation | DoS pre-verification profile (Section 5.8) |
 | 0x0002–0x3FFF | Reserved | Standards-track (assigned via RFC) |
+
+### 6.5 Normative Extension Processing Order (Rev 6)
+
+This section defines the complete, normative processing pipeline for
+all AAFP frames. Implementations MUST execute these phases in the
+exact order specified. Each phase MUST either succeed or produce a
+typed error with a specific error code. No phase MAY be skipped. No
+phase MAY be reordered.
+
+> **Security invariant**: Extension semantics MUST NOT execute before
+> successful authentication and authorization. This is the core
+> security property of the AAFP frame processing pipeline. Any
+> implementation that executes extension callbacks before signature
+> verification, AgentId binding, session validation, and authorization
+> is non-conformant and vulnerable to forgery attacks.
+
+#### 6.5.1 Processing Pipeline
+
+The following 20 phases MUST be executed in order for every frame
+received on any stream:
+
+| Phase | Name | Action | Error Code on Failure | Fatal |
+|-------|------|--------|-----------------------|-------|
+| 1 | `validate_frame_header` | Read 28-byte header. Validate version = 1. Validate reserved byte = 0. | 8006 (INVALID_VERSION), 8008 (RESERVED_FIELD_NONZERO) | Yes |
+| 2 | `validate_lengths` | Validate Payload Length ≤ 1 MiB. Validate Extension Length ≤ 64 KiB. Validate total frame size does not overflow. | 8001 (FRAME_TOO_LARGE) | No (stream-level) |
+| 3 | `reject_oversized_before_allocation` | Reject if Payload Length or Extension Length exceeds limits BEFORE any allocation. No buffer MAY be allocated for oversized frames. | 8001 (FRAME_TOO_LARGE) | No |
+| 4 | `read_payload` | Read Payload Length bytes from the frame body. | 5001 (MALFORMED_FRAME) | Yes |
+| 5 | `read_extensions` | Read Extension Length bytes from the frame body. | 5001 (MALFORMED_FRAME) | Yes |
+| 6 | `decode_canonical_cbor` | Decode payload as canonical CBOR (RFC 8949 §4.2.3). Reject indefinite-length. Reject non-shortest integer encoding. | 5003 (SERIALIZATION_ERROR) | Yes |
+| 7 | `reject_duplicate_cbor_keys` | Reject CBOR maps with duplicate keys. | 5003 (SERIALIZATION_ERROR) | Yes |
+| 8 | `reject_non_canonical_cbor` | Reject CBOR that is not length-first deterministic encoding. | 5003 (SERIALIZATION_ERROR) | Yes |
+| 9 | `validate_transcript_state` | For HANDSHAKE frames: verify the transcript hash is in the expected state. | 2006 (HANDSHAKE_FAILED) | Yes |
+| 10 | `verify_signatures` | For HANDSHAKE frames: verify the ML-DSA-65 signature over the handshake message. For DATA/RPC frames: verify AEAD authentication tag (if AEAD is active). | 2001 (INVALID_SIGNATURE) | Yes |
+| 11 | `verify_agent_id` | Verify AgentId = SHA-256(public_key) matches the claimed identity. | 2007 (INVALID_AGENT_ID) | Yes |
+| 12 | `verify_session_state` | Verify the session is in `MessagingEnabled` state (for non-handshake frames) or the correct handshake state (for handshake frames). | 8009 (PROTOCOL_VIOLATION) | Yes |
+| 13 | `verify_authorization` | Verify the peer is authorized to perform the requested action. | 3001 (UNAUTHORIZED) | Yes |
+| 14 | `verify_required_capabilities` | Verify the peer advertises the capabilities required for the requested action. | 3002 (INSUFFICIENT_CAPABILITY) | Yes |
+| 15 | `decode_extensions` | Parse the raw extension bytes into structured Extension objects. Reject malformed extension headers. Reject truncated extensions. | 5001 (MALFORMED_FRAME) | Yes |
+| 16 | `check_unknown_critical_extensions` | If any extension has Critical = 1 and is not in the negotiated set, reject. | 8005 (UNKNOWN_CRITICAL_EXTENSION) | Yes |
+| 17 | `check_non_negotiated_extensions` | If any extension type was not negotiated during the handshake, reject. | 8007 (INVALID_FLAGS) | Yes |
+| 18 | `process_extension_semantics` | Execute extension callbacks. This is the ONLY phase where extension semantics MAY execute. | (extension-specific) | (extension-specific) |
+| 19 | `validate_final_state` | Verify the frame did not cause an illegal state transition. | 8009 (PROTOCOL_VIOLATION) | Yes |
+| 20 | `deliver_to_upper_layer` | Deliver the decoded, authenticated, authorized message to the application layer. | — | — |
+
+#### 6.5.2 Phase Ordering Invariants
+
+The following invariants are normative and MUST be enforced:
+
+1. **No allocation before size validation** (Phases 1-3): No buffer
+   MAY be allocated for payload or extensions until Phase 3 has
+   succeeded. This prevents memory exhaustion attacks.
+
+2. **No CBOR semantics before structural validation** (Phases 4-8):
+   CBOR decoding MUST NOT begin until the frame has been fully read
+   and the header validated.
+
+3. **No extension parsing before authentication** (Phases 9-14):
+   Extension bytes MUST NOT be parsed into structured Extension
+   objects until signature verification, AgentId binding, session
+   validation, and authorization have all succeeded.
+
+4. **No extension semantics before extension validation** (Phases 15-17):
+   Extension callbacks MUST NOT execute until all extensions have been
+   parsed, unknown critical extensions rejected, and non-negotiated
+   extensions rejected.
+
+5. **No application delivery before extension processing** (Phase 18-20):
+   The message MUST NOT be delivered to the upper layer until all
+   extension semantics have been processed.
+
+#### 6.5.3 Sequence Diagram
+
+```
+Receiver                          Frame arrives
+  |
+  |  Phase 1: validate_frame_header
+  |  ├── version == 1?           ── no ──→ ERROR 8006, close
+  |  ├── reserved == 0?          ── no ──→ ERROR 8008, close
+  |
+  |  Phase 2: validate_lengths
+  |  ├── payload_len ≤ 1 MiB?    ── no ──→ ERROR 8001, close stream
+  |  ├── ext_len ≤ 64 KiB?       ── no ──→ ERROR 8001, close stream
+  |
+  |  Phase 3: reject_oversized_before_allocation
+  |  ├── (no allocation yet)
+  |
+  |  Phase 4: read_payload
+  |  ├── allocate payload buffer
+  |  ├── copy payload bytes      ── truncated ──→ ERROR 5001, close
+  |
+  |  Phase 5: read_extensions
+  |  ├── allocate extension buffer
+  |  ├── copy extension bytes    ── truncated ──→ ERROR 5001, close
+  |
+  |  Phase 6: decode_canonical_cbor
+  |  ├── decode payload CBOR     ── malformed ──→ ERROR 5003, close
+  |
+  |  Phase 7: reject_duplicate_cbor_keys
+  |  ├── check for dup keys      ── dup found ──→ ERROR 5003, close
+  |
+  |  Phase 8: reject_non_canonical_cbor
+  |  ├── check determinism       ── non-canon ──→ ERROR 5003, close
+  |
+  |  Phase 9: validate_transcript_state
+  |  ├── (handshake only)        ── mismatch ──→ ERROR 2006, close
+  |
+  |  Phase 10: verify_signatures
+  |  ├── verify ML-DSA-65 / AEAD ── fail ──→ ERROR 2001, close
+  |
+  |  Phase 11: verify_agent_id
+  |  ├── SHA-256(pubkey) match?  ── no ──→ ERROR 2007, close
+  |
+  |  Phase 12: verify_session_state
+  |  ├── session in correct state? ── no ──→ ERROR 8009, close
+  |
+  |  Phase 13: verify_authorization
+  |  ├── peer authorized?        ── no ──→ ERROR 3001, close
+  |
+  |  Phase 14: verify_required_capabilities
+  |  ├── capabilities sufficient? ── no ──→ ERROR 3002, close
+  |
+  |  ═══════════════════════════════════════════════════
+  |  ║ AUTHENTICATION AND AUTHORIZATION COMPLETE        ║
+  |  ║ Extension semantics MAY now execute.              ║
+  |  ═══════════════════════════════════════════════════
+  |
+  |  Phase 15: decode_extensions
+  |  ├── parse extension bytes   ── malformed ──→ ERROR 5001, close
+  |
+  |  Phase 16: check_unknown_critical_extensions
+  |  ├── unknown + critical?     ── yes ──→ ERROR 8005, close
+  |
+  |  Phase 17: check_non_negotiated_extensions
+  |  ├── not negotiated?         ── yes ──→ ERROR 8007, close
+  |
+  |  Phase 18: process_extension_semantics
+  |  ├── execute callbacks       ── error ──→ (extension-specific)
+  |
+  |  Phase 19: validate_final_state
+  |  ├── state legal?            ── no ──→ ERROR 8009, close
+  |
+  |  Phase 20: deliver_to_upper_layer
+  |  ├── deliver to application
+  |
+  v  Done
+```
+
+#### 6.5.4 Failure Ordering
+
+Each failure path MUST specify the error code, connection state, and
+close behavior:
+
+| Failure | Error Code | Connection State | Close Behavior |
+|---------|-----------|-----------------|----------------|
+| Oversized payload (Phase 2-3) | 8001 (FRAME_TOO_LARGE) | Active | Non-fatal ERROR on stream; stream closed, connection continues |
+| Oversized extension (Phase 2-3) | 8001 (FRAME_TOO_LARGE) | Active | Non-fatal ERROR on stream; stream closed, connection continues |
+| Malformed CBOR (Phase 6-8) | 5003 (SERIALIZATION_ERROR) | Active | Fatal ERROR; connection closed |
+| Invalid signature (Phase 10) | 2001 (INVALID_SIGNATURE) | Active | Fatal ERROR; connection closed |
+| Invalid AgentId (Phase 11) | 2007 (INVALID_AGENT_ID) | Active | Fatal ERROR; connection closed |
+| Invalid session state (Phase 12) | 8009 (PROTOCOL_VIOLATION) | Active | Fatal ERROR; connection closed |
+| Unauthorized (Phase 13) | 3001 (UNAUTHORIZED) | Active | Fatal ERROR; connection closed |
+| Insufficient capability (Phase 14) | 3002 (INSUFFICIENT_CAPABILITY) | Active | Fatal ERROR; connection closed |
+| Unknown critical extension (Phase 16) | 8005 (UNKNOWN_CRITICAL_EXTENSION) | Active | Fatal ERROR; connection closed |
+| Non-negotiated extension (Phase 17) | 8007 (INVALID_FLAGS) | Active | Fatal ERROR; connection closed |
+| Malformed extension header (Phase 15) | 5001 (MALFORMED_FRAME) | Active | Fatal ERROR; connection closed |
+| Truncated extension (Phase 15) | 5001 (MALFORMED_FRAME) | Active | Fatal ERROR; connection closed |
+| Invalid version (Phase 1) | 8006 (INVALID_VERSION) | Active | Fatal ERROR; connection closed |
+| Reserved field nonzero (Phase 1) | 8008 (RESERVED_FIELD_NONZERO) | Active | Fatal ERROR; connection closed |
+
+#### 6.5.5 Unknown Extension Handling
+
+| Extension Type | Critical | Negotiated | Disposition |
+|---------------|----------|------------|-------------|
+| Known | Yes | Yes | Process semantics (Phase 18) |
+| Known | Yes | No | ERROR 8007, close (Phase 17) |
+| Known | No | Yes | Process semantics (Phase 18) |
+| Known | No | No | ERROR 8007, close (Phase 17) |
+| Unknown | Yes | — | ERROR 8005, close (Phase 16) |
+| Unknown | No | — | Ignore silently, continue (Phase 18 skips this extension) |
+
+Unknown non-critical extensions MUST NOT cause extension callback
+invocation. They MUST be silently ignored. The frame processing
+continues with the remaining extensions.
+
+#### 6.5.6 Extension Callback Invocation Count
+
+For every failure in Phases 1-17, the extension callback invocation
+count MUST be zero. No extension callback MAY execute before Phase 18.
+
+For a successful frame:
+- Each known, negotiated extension invokes its callback exactly once.
+- Unknown non-critical extensions do not invoke any callback.
+- Unknown critical extensions cause rejection (Phase 16).
+
+#### 6.5.7 Handshake Frame Specialization
+
+For HANDSHAKE frames (type 0x02) on stream 0:
+- Extensions are forbidden (Extension Length MUST be 0). If
+  Extension Length > 0, the receiver MUST send ERROR 8009
+  (PROTOCOL_VIOLATION) and close the connection.
+- Phases 15-18 are skipped (no frame extensions to process).
+- Handshake-level extensions (CBOR ExtensionEntry maps in the
+  handshake payload) are processed during Phase 10 (signature
+  verification includes the full transcript, which contains the
+  handshake extensions).
+
+For DATA, RPC_REQUEST, RPC_RESPONSE, PING, PONG, CLOSE, and ERROR
+frames:
+- All 20 phases apply.
+- Phases 9 (transcript) and 10 (signature) use AEAD authentication
+  instead of ML-DSA-65 signatures when AEAD is active.
+
+#### 6.5.8 Examples
+
+**Example 1: Valid DATA frame with one known extension**
+
+```
+1. Header: version=1, type=0x01 (DATA), flags=0, stream_id=4,
+   payload_len=100, ext_len=12
+2. Lengths: 100 ≤ 1MiB ✓, 12 ≤ 64KiB ✓
+3. No oversized → proceed
+4. Read 100 bytes payload
+5. Read 12 bytes extensions
+6. Decode payload (application data, not CBOR) → skip Phase 6-8
+7-8. (skipped for DATA)
+9. (skipped for DATA)
+10. AEAD verify → ✓
+11. AgentId already verified during handshake → ✓
+12. Session = MessagingEnabled → ✓
+13. Authorized → ✓
+14. Capabilities sufficient → ✓
+15. Decode extensions: [type=0x0001, critical=false, data=4 bytes]
+16. No unknown critical extensions → ✓
+17. Extension 0x0001 was negotiated → ✓
+18. Process extension 0x0001 callback → ✓
+19. State still MessagingEnabled → ✓
+20. Deliver DATA to application → ✓
+
+Extension callback count: 1
+```
+
+**Example 2: Frame with invalid signature**
+
+```
+1. Header: version=1, type=0x02 (HANDSHAKE), stream_id=0,
+   payload_len=500, ext_len=0
+2-3. Lengths OK
+4. Read 500 bytes payload
+5. Read 0 bytes extensions
+6-8. CBOR decode OK
+9. Transcript state OK
+10. Verify signature → FAIL (signature does not match)
+
+→ ERROR 2001 (INVALID_SIGNATURE), fatal, close connection
+
+Extension callback count: 0
+```
+
+**Example 3: Frame with unknown critical extension**
+
+```
+1-14. All validation passes (authenticated, authorized)
+15. Decode extensions: [type=0xBEEF, critical=true, data=2 bytes]
+16. 0xBEEF is not in known types AND critical=true
+
+→ ERROR 8005 (UNKNOWN_CRITICAL_EXTENSION), fatal, close
+
+Extension callback count: 0
+```
+
+**Example 4: Frame with oversized extension**
+
+```
+1. Header: version=1, type=0x01, payload_len=100, ext_len=70000
+2. ext_len 70000 > 64 KiB (65536)
+
+→ ERROR 8001 (FRAME_TOO_LARGE), non-fatal, close stream
+
+Extension callback count: 0
+No allocation occurred for the 70000-byte extension.
+```
+
+### 6.6 Normative CLOSE Frame Semantics (Rev 6)
+
+This section defines the complete, normative lifecycle of a CLOSE
+frame (frame type 0x05, Section 4.5). Implementations MUST implement
+a CloseManager that tracks the close state of a connection and
+enforces the invariants specified here. The CloseManager is the
+single authority for all close-related state transitions; the
+handshake state machine (Section 5.10) consults it before accepting
+or discarding a CLOSE frame.
+
+#### 6.6.1 CloseManager State Machine
+
+The CloseManager tracks one of five states per connection:
+
+| State | Description |
+|-------|-------------|
+| `Open` | No CLOSE sent or received. Application data flows normally. |
+| `LocalCloseSent` | Local agent has sent a CLOSE frame. Awaiting peer CLOSE or timeout. |
+| `RemoteCloseReceived` | Remote agent has sent a CLOSE frame. Local agent should respond with CLOSE. |
+| `CloseReceived` | Both sides have exchanged CLOSE frames (crossed or sequential). Connection is being torn down. |
+| `Closed` | Terminal. QUIC connection has been closed. No further frames may be sent or received. |
+
+The normative transition table:
+
+| Current State | Event | Action | Next State |
+|---------------|-------|--------|------------|
+| `Open` | `initiate_close(code, msg)` | Send CLOSE frame, start close timer | `LocalCloseSent` |
+| `Open` | CLOSE frame received | Record remote code/msg, send responding CLOSE, start close timer | `RemoteCloseReceived` |
+| `LocalCloseSent` | CLOSE frame received | Stop close timer, close QUIC | `CloseReceived` → `Closed` |
+| `LocalCloseSent` | Close timer expired | Force-close QUIC | `Closed` |
+| `LocalCloseSent` | Any non-CLOSE frame received | Silently discard, remain in state | `LocalCloseSent` |
+| `RemoteCloseReceived` | `respond_close()` called | Send CLOSE frame, stop timer | `CloseReceived` → `Closed` |
+| `RemoteCloseReceived` | Close timer expired | Force-close QUIC (peer did not wait) | `Closed` |
+| `RemoteCloseReceived` | Second CLOSE frame received | Silently discard (duplicate) | `RemoteCloseReceived` |
+| `CloseReceived` | Entry action | Close QUIC connection | `Closed` |
+| `Closed` | Any event | No-op (terminal) | `Closed` |
+
+**Invariants:**
+
+1. **At most one outbound CLOSE**: A CloseManager in `LocalCloseSent`,
+   `CloseReceived`, or `Closed` state MUST NOT send a second CLOSE
+   frame. A call to `initiate_close()` in these states is a no-op
+   that returns success (idempotent).
+
+2. **At most one responding CLOSE**: A CloseManager in
+   `RemoteCloseReceived` state that transitions to `CloseReceived`
+   sends exactly one responding CLOSE. If already in `CloseReceived`
+   or `Closed`, no further CLOSE is sent.
+
+3. **No data after CLOSE sent**: Once a CloseManager enters
+   `LocalCloseSent`, the connection MUST NOT send DATA,
+   RPC_REQUEST, RPC_RESPONSE, PING, or PONG frames. Only a
+   responding CLOSE (in `RemoteCloseReceived` → `CloseReceived`) is
+   permitted. This invariant is enforced by the CloseManager's
+   `can_send(frame_type)` method.
+
+4. **Terminal state is irreversible**: Once `Closed`, no transition
+   out is possible. All events are no-ops.
+
+5. **Timer discipline**: The close timer is started when entering
+   `LocalCloseSent` or `RemoteCloseReceived`. It is stopped when the
+   peer's CLOSE is received (`LocalCloseSent`) or when the local
+   responding CLOSE is sent (`RemoteCloseReceived`). On expiry, the
+   QUIC connection is force-closed.
+
+#### 6.6.2 Close Initiation
+
+An agent initiates a graceful close by calling
+`CloseManager.initiate_close(code, message)`:
+
+1. If the CloseManager is not in `Open` state, return success
+   (idempotent — the close is already in progress).
+2. Construct a `CloseMessage` with the given `code` (uint) and
+   `message` (tstr).
+3. Encode the `CloseMessage` as canonical CBOR (Section 8).
+4. Build a CLOSE frame (type 0x05) with stream_id=0, flags=0, no
+   extensions, and the encoded payload.
+5. Send the frame on the control stream (stream 0).
+6. Transition to `LocalCloseSent` and start the close timer.
+
+**Close code semantics:**
+
+| Code | Meaning | When to use |
+|------|---------|-------------|
+| 0 | Normal shutdown | Application-initiated graceful close |
+| 1000 | Going away | Application is shutting down all connections |
+| 1001 | Protocol error | Protocol violation detected (non-fatal) |
+| 1002 | Unsupported extension | Required extension not negotiated |
+| Non-zero RFC-0005 codes | Error-specific | Match the error condition per RFC-0005 |
+
+Code 0 SHOULD be used for normal application shutdown. Non-zero
+codes indicate an abnormal close. The `message` field SHOULD be a
+human-readable ASCII or UTF-8 string not exceeding 256 bytes.
+
+#### 6.6.3 Close Reception
+
+When a CLOSE frame is received and passes pipeline validation
+(Section 6.5), the CloseManager processes it via
+`on_close_received(code, message)`:
+
+1. If the CloseManager is in `Open` state:
+   a. Record the remote close code and message.
+   b. Transition to `RemoteCloseReceived`.
+   c. Start the close timer.
+   d. The caller SHOULD call `respond_close(0, "ack")` to send a
+      responding CLOSE frame, then close the QUIC connection.
+   e. If the caller does not respond within the close timeout, the
+      CloseManager force-closes the QUIC connection.
+
+2. If the CloseManager is in `LocalCloseSent` state:
+   a. This is the peer's responding CLOSE (or a crossed CLOSE).
+   b. Stop the close timer.
+   c. Transition to `CloseReceived`, then `Closed`.
+   d. Close the QUIC connection.
+
+3. If the CloseManager is in `RemoteCloseReceived` state:
+   a. This is a duplicate CLOSE (the peer sent two). Silently
+      discard. Do not transition.
+
+4. If the CloseManager is in `CloseReceived` or `Closed` state:
+   a. Silently discard. No-op.
+
+#### 6.6.4 Crossed CLOSE (Simultaneous Close)
+
+If both agents send CLOSE frames before receiving the other's CLOSE,
+the CloseManagers on both sides will be in `LocalCloseSent` when the
+peer's CLOSE arrives. Both transition to `CloseReceived` → `Closed`.
+This is a **crossed close** and is graceful — no error is generated.
+
+The close timer on each side is stopped upon receipt of the peer's
+CLOSE, so no timeout fires.
+
+#### 6.6.5 Close Timeout
+
+The close timeout governs how long an agent waits for the peer's
+CLOSE before force-closing the QUIC connection.
+
+| Parameter | Default | Minimum | Configurable |
+|-----------|---------|---------|-------------|
+| Close timeout | 5 seconds | 1 second | Yes |
+
+On timeout in `LocalCloseSent`: The peer did not respond. Force-close
+the QUIC connection. Transition to `Closed`. Outstanding RPCs and
+streams are failed.
+
+On timeout in `RemoteCloseReceived`: The local agent did not send a
+responding CLOSE in time (this is a local bug or slow application).
+Force-close the QUIC connection. Transition to `Closed`.
+
+#### 6.6.6 Frame Disposition During Close
+
+The CloseManager cooperates with the handshake state machine
+(Section 5.10) to determine frame disposition:
+
+| CloseManager State | Frame Type | Disposition |
+|--------------------|------------|-------------|
+| `Open` | Any allowed frame | Accept (per handshake state machine) |
+| `LocalCloseSent` | CLOSE (0x05) | Accept (peer's response) |
+| `LocalCloseSent` | Any other | Discard silently |
+| `RemoteCloseReceived` | CLOSE (0x05) | Discard silently (duplicate) |
+| `RemoteCloseReceived` | Any other | Discard silently |
+| `CloseReceived` | Any | Discard silently |
+| `Closed` | Any | Discard silently |
+
+**No ERROR is sent for frames received during close.** The
+connection is being torn down; sending ERROR frames would violate
+the "no frames after CLOSE sent" invariant (for `LocalCloseSent`)
+and is pointless (for `RemoteCloseReceived`).
+
+#### 6.6.7 Outstanding Resources on Close
+
+When the CloseManager transitions to `Closed`, the following
+resource cleanup MUST occur:
+
+| Resource | Action |
+|----------|--------|
+| Outstanding RPC requests | Mark as failed with error `1003` (STREAM_CLOSED). Notify callers. |
+| Outstanding RPC responses (being sent) | Cancel. The peer will not receive them. |
+| Open DATA streams | Terminate. In-flight data may be lost. |
+| Pending PING frames | Mark as unanswered. No error generated. |
+| Close timer | Cancel. |
+| Stream receive buffers | Drain and discard. |
+| AEAD send/recv contexts | Zeroize. |
+| Session state | Transition to `Closed` (RFC-0003). |
+
+Applications requiring reliable delivery of in-flight DATA frames
+SHOULD implement application-level acknowledgments and retry on a
+new connection.
+
+#### 6.6.8 Fatal ERROR vs CLOSE
+
+A fatal ERROR frame (Section 4.6, `fatal=true`) is distinct from a
+CLOSE frame:
+
+| Property | CLOSE frame | Fatal ERROR frame |
+|----------|-------------|-------------------|
+| Frame type | 0x05 | 0x06 |
+| Payload | CloseMessage | ErrorMessage |
+| Response expected | Yes (peer SHOULD send CLOSE) | No |
+| CloseManager state after send | `LocalCloseSent` | `Closed` (immediate) |
+| Peer action | Send CLOSE, close QUIC | Close QUIC immediately |
+| Use case | Graceful shutdown | Protocol error, security violation |
+
+A fatal ERROR bypasses the CloseManager's graceful path. The
+CloseManager transitions directly to `Closed`. The peer, upon
+receiving a fatal ERROR, also transitions its CloseManager to
+`Closed` and closes the QUIC connection without sending a CLOSE.
+
+#### 6.6.9 Transport Reset (Ungraceful Close)
+
+If the QUIC connection is reset or receives an EOF without a prior
+CLOSE frame, the CloseManager transitions directly to `Closed`:
+
+1. If in `Open` or `LocalCloseSent` or `RemoteCloseReceived`:
+   transition to `Closed`.
+2. Cancel the close timer if running.
+3. Fail all outstanding RPCs and streams.
+4. This is an ungraceful close. No CLOSE frame is sent (the
+   transport is gone).
+
+#### 6.6.10 CloseManager API Summary
+
+Implementations MUST provide a CloseManager with the following
+interface (language-agnostic):
+
+```
+state: CloseState  // current state, initially Open
+remote_code: Option<u32>  // code from peer's CLOSE, if received
+remote_message: Option<String>  // message from peer's CLOSE
+close_timeout: Duration  // configurable, default 5s, min 1s
+timer_active: bool
+
+// Queries
+can_send(frame_type: u8) -> bool
+is_closed() -> bool
+is_closing() -> bool  // true if LocalCloseSent, RemoteCloseReceived, or CloseReceived
+
+// Commands
+initiate_close(code: u32, message: String) -> Result<CloseAction, Error>
+on_close_received(code: u32, message: String) -> Result<CloseAction, Error>
+on_fatal_error_received() -> CloseAction
+on_transport_reset() -> CloseAction
+on_timeout() -> CloseAction
+respond_close(code: u32, message: String) -> Result<CloseAction, Error>
+```
+
+`CloseAction` is an enum describing what the caller should do:
+
+| Variant | Meaning |
+|---------|---------|
+| `SendCloseFrame(code, message)` | Encode and send a CLOSE frame |
+| `CloseQuic` | Close the QUIC connection |
+| `None` | No action needed (e.g., duplicate, already closed) |
+
+#### 6.6.11 Sequence Diagrams
+
+**Normal graceful close (client initiates):**
+
+```
+Client                                         Server
+  |                                              |
+  |  initiate_close(0, "goodbye")                |
+  |  → SendCloseFrame                            |
+  |  state = LocalCloseSent, timer starts        |
+  |                                              |
+  |  CLOSE frame (code=0, "goodbye")             |
+  |--------------------------------------------->|
+  |                                              |  on_close_received(0, "goodbye")
+  |                                              |  state = RemoteCloseReceived
+  |                                              |  respond_close(0, "ack")
+  |                                              |  → SendCloseFrame
+  |                                              |  state = CloseReceived → Closed
+  |                                              |  → CloseQuic
+  |  CLOSE frame (code=0, "ack")                 |
+  |<---------------------------------------------|
+  |  on_close_received(0, "ack")                 |
+  |  state = CloseReceived → Closed              |
+  |  timer stopped                               |
+  |  → CloseQuic                                 |
+  |                                              |
+  X                                              X
+```
+
+**Crossed close (simultaneous):**
+
+```
+Client                                         Server
+  |                                              |
+  |  initiate_close(0, "bye")                    |  initiate_close(0, "bye")
+  |  state = LocalCloseSent                      |  state = LocalCloseSent
+  |                                              |
+  |  CLOSE frame (code=0, "bye")                 |  CLOSE frame (code=0, "bye")
+  |--------------------------------------------->|<-----------------------------|
+  |<---------------------------------------------|                              |
+  |                                              |                              |
+  |  on_close_received(0, "bye")                 |  on_close_received(0, "bye")
+  |  state = CloseReceived → Closed              |  state = CloseReceived → Closed
+  |  → CloseQuic                                 |  → CloseQuic
+  X                                              X
+```
+
+**Close timeout (peer unresponsive):**
+
+```
+Client                                         Server
+  |                                              |
+  |  initiate_close(0, "goodbye")                |
+  |  state = LocalCloseSent, timer=5s            |
+  |                                              |
+  |  CLOSE frame (code=0, "goodbye")             |
+  |--------------------------------------------->|
+  |                                              |  (server is hung / network loss)
+  |                                              |
+  |  ... 5 seconds pass ...                      |
+  |  timer expires                               |
+  |  on_timeout()                                |
+  |  state = Closed                              |
+  |  → CloseQuic (force)                         |
+  X                                              |
+```
+
+#### 6.6.12 Security Considerations for CLOSE
+
+1. **Close code validation**: The `code` field in a CLOSE frame MUST
+   be a valid uint. Unknown codes MUST NOT cause the CloseManager to
+   reject the frame — the connection is closing anyway. The code is
+   informational.
+
+2. **Message length limit**: The `message` field SHOULD be limited
+   to 256 bytes. Implementations MAY truncate or reject messages
+   longer than 256 bytes. A CLOSE frame with an oversized message
+   is still a valid CLOSE — the CloseManager SHOULD accept it and
+   truncate the message for logging.
+
+3. **No close amplification**: A single received CLOSE frame results
+   in at most one sent CLOSE frame. The CloseManager MUST NOT send
+   multiple CLOSE frames in response to a single received CLOSE
+   (duplicate CLOSE frames are silently discarded).
+
+4. **Close timer as DoS mitigation**: The close timeout (default 5s)
+   bounds the time a connection spends in the closing state. An
+   attacker cannot keep a connection half-open indefinitely by
+   sending a CLOSE and then stalling.
+
+5. **Resource cleanup is mandatory**: On transition to `Closed`, all
+   outstanding resources (RPCs, streams, timers, buffers, crypto
+   contexts) MUST be cleaned up. A CloseManager that leaks resources
+   is a denial-of-service vector.
+
+### 6.7 Normative Nonce Replay Detection (Rev 6 A-9)
+
+This section defines the complete, normative replay-protection
+mechanism for AAFP handshakes. Implementations MUST implement a
+`ReplayCache` that tracks observed handshake nonces and rejects
+replayed handshakes before cryptographic verification is performed.
+The `ReplayCache` is the single authority for cross-connection nonce
+uniqueness; the handshake state machine (Section 5.10) consults it
+upon receipt of a ClientHello (server side) or ServerHello (client
+side).
+
+#### 6.7.1 Threat Model
+
+An attacker records a legitimate handshake message (ClientHello or
+ServerHello) and retransmits it to the original recipient in a new
+QUIC connection. Without replay detection, the recipient would:
+
+1. Allocate CPU for signature verification (DoS amplification).
+2. Derive a session ID that collides with the original session
+   (session-ID aliasing).
+3. In a stateful server, consume a connection slot and handshake
+   timer.
+
+Although the attacker cannot complete the handshake (the
+ClientFinished / ServerHello signature requires the peer's private
+key), the replay itself is a resource-exhaustion and session-aliasing
+vector. The `ReplayCache` rejects replays **before** signature
+verification, conserving CPU and preventing session-ID collisions.
+
+**In-scope attacks**:
+- Replay of a recorded ClientHello to a server.
+- Replay of a recorded ServerHello to a client.
+- Cross-connection replay (same nonce on a new QUIC connection).
+
+**Out-of-scope** (mitigated by other mechanisms):
+- Intra-handshake duplicate messages (Section 5.10.6).
+- AgentRecord replay (mitigated by `record_version`, A-3).
+- Man-in-the-middle (mitigated by ML-DSA signatures + TLS 1.3).
+
+#### 6.7.2 ReplayCache Structure
+
+A `ReplayCache` is a time-bounded set of observed nonces. Each entry
+records:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nonce` | bstr (32 bytes) | The handshake nonce (ClientHello key 4 or ServerHello key 4). |
+| `agent_id` | bstr (32 bytes) | The AgentId of the peer that produced the nonce. Used as a scope key to avoid false positives across agents. |
+| `inserted_at` | timestamp | When the entry was inserted (monotonic clock). |
+| `expires_at` | timestamp | `inserted_at + retention`. Entries are eligible for eviction after this time. |
+
+The cache key is the tuple `(agent_id, nonce)`. A nonce is considered
+a replay if and only if an entry with the same `(agent_id, nonce)`
+exists and has not expired.
+
+**Rationale for `agent_id` scoping**: A 32-byte random nonce has a
+collision probability below 2^-120 for any realistic number of
+handshakes. Scoping by `agent_id` is defense-in-depth: it ensures
+that a nonce collision between two different agents (which would be
+statistically extraordinary) does not cause a false-positive replay
+rejection. It also allows per-agent cache partitioning for
+implementations that shard the cache.
+
+#### 6.7.3 Cache Parameters
+
+| Parameter | Default | Minimum | Maximum | Configurable |
+|-----------|---------|---------|---------|-------------|
+| `retention` | 300 seconds | 60 seconds | 3600 seconds | Yes |
+| `max_entries` | 100,000 | 1,000 | 10,000,000 | Yes |
+| `eviction_policy` | `expire-lru` | — | — | Yes |
+
+- **`retention`**: How long a nonce entry remains valid after
+  insertion. After `retention` elapses, the entry is eligible for
+  eviction and a replay of that nonce is no longer rejected (it is
+  treated as a fresh handshake). This bounds memory usage and
+  accommodates clock drift across connections.
+- **`max_entries`**: Upper bound on cache size. When the cache is full
+  and a new entry must be inserted, the implementation MUST evict
+  expired entries first. If no expired entries exist, the
+  least-recently-used non-expired entry is evicted (`expire-lru`
+  policy). This prevents unbounded memory growth under load.
+- **`eviction_policy`**: `expire-lru` evicts expired entries first,
+  then LRU. Implementations MAY support other policies but MUST
+  document them.
+
+#### 6.7.4 Normative Invariants
+
+1. **Check-before-verify**: The replay check MUST be performed before
+   signature verification. This ensures that a replayed handshake
+   does not consume signature-verification CPU.
+
+2. **Insert-after-verify** (server side): The server MUST insert the
+   `(agent_id, client_nonce)` entry into the cache **after** the
+   ClientHello signature is verified but **before** the ServerHello is
+   sent. This prevents an attacker from poisoning the cache with
+   invalid nonces that would block a legitimate client.
+
+3. **Insert-after-verify** (client side): The client MUST insert the
+   `(agent_id, server_nonce)` entry into the cache **after** the
+   ServerHello signature is verified but **before** the ClientFinished
+   is sent.
+
+4. **Atomicity**: The check-and-insert operation MUST be atomic with
+   respect to concurrent handshakes. If two connections arrive with
+   the same `(agent_id, nonce)` simultaneously, exactly one MUST
+   succeed and the other MUST receive `NONCE_REUSE`.
+
+5. **No silent acceptance**: If a replay is detected, the recipient
+   MUST send ERROR 2008 (NONCE_REUSE) and close the connection. The
+   recipient MUST NOT silently discard the handshake or proceed with
+   it.
+
+6. **Eviction is non-blocking**: Eviction of expired entries MAY
+   happen lazily (on access) or via a background sweep. Eviction MUST
+   not block handshake processing for longer than 1 millisecond.
+
+7. **Persistence is optional**: The `ReplayCache` MAY be in-memory
+   only. If an implementation persists the cache across restarts, it
+   MUST use a monotonic or hybrid logical clock to avoid evicting
+   entries too early after a clock reset.
+
+#### 6.7.5 Server-Side Replay Check
+
+When a server receives a ClientHello in state `S_TRANSPORT_READY`:
+
+1. Extract `client_nonce` (key 4) and `agent_id` (key 2) from the
+   ClientHello.
+2. Validate that `client_nonce` is exactly 32 bytes. If not, send
+   ERROR 2008 and close.
+3. Query the `ReplayCache` for `(agent_id, client_nonce)`.
+   - If a non-expired entry exists: send ERROR 2008 (NONCE_REUSE),
+     close the connection, and abort the handshake. Do NOT verify the
+     signature.
+   - If no entry exists (or the entry has expired): proceed to step 4.
+4. Verify the ClientHello signature (Section 5.6).
+   - If verification fails: send ERROR 2001 (INVALID_SIGNATURE) and
+     close. Do NOT insert into the cache.
+5. Insert `(agent_id, client_nonce)` into the `ReplayCache` with
+   `expires_at = now + retention`.
+6. Proceed to send ServerHello.
+
+#### 6.7.6 Client-Side Replay Check
+
+When a client receives a ServerHello in state `C_CH_SENT`:
+
+1. Extract `server_nonce` (key 4) and `agent_id` (key 2) from the
+   ServerHello.
+2. Validate that `server_nonce` is exactly 32 bytes. If not, send
+   ERROR 2008 and close.
+3. Query the `ReplayCache` for `(agent_id, server_nonce)`.
+   - If a non-expired entry exists: send ERROR 2008 (NONCE_REUSE),
+     close the connection, and abort the handshake. Do NOT verify the
+     signature.
+   - If no entry exists (or the entry has expired): proceed to step 4.
+4. Verify the ServerHello signature (Section 5.6) and session ID
+   (Section 5.7).
+   - If verification fails: send the appropriate ERROR (2001 or 2008)
+     and close. Do NOT insert into the cache.
+5. Insert `(agent_id, server_nonce)` into the `ReplayCache` with
+   `expires_at = now + retention`.
+6. Proceed to send ClientFinished.
+
+#### 6.7.7 Eviction and Resource Management
+
+The `ReplayCache` MUST NOT grow without bound. The implementation
+MUST enforce `max_entries`:
+
+1. **Lazy eviction**: On every `check()` or `insert()`, the
+   implementation MAY scan a small batch of entries and remove those
+   with `expires_at <= now`. This is the recommended approach for
+   in-memory caches.
+2. **Background sweep**: A background task MAY periodically sweep the
+   cache and remove expired entries. The sweep interval SHOULD be
+   `retention / 4` but not less than 10 seconds.
+3. **LRU fallback**: When the cache is at `max_entries` and no expired
+   entries can be evicted, the least-recently-accessed entry is
+   evicted. The evicted entry's nonce becomes eligible for replay
+   again; this is an accepted trade-off to prevent OOM.
+
+**Memory budget**: At `max_entries = 100,000`, each entry is
+approximately 96 bytes (32-byte nonce + 32-byte agent_id + 16-byte
+timestamps + 16-byte overhead), yielding ~9.6 MB. Implementations
+SHOULD document their memory budget.
+
+#### 6.7.8 Concurrency Requirements
+
+The `ReplayCache` MUST be safe for concurrent access from multiple
+handshake goroutines / tasks. The check-and-insert operation (steps
+3-5 in §6.7.5 / §6.7.6) MUST be atomic: if two handshakes with the
+same `(agent_id, nonce)` arrive concurrently, exactly one MUST
+proceed and the other MUST receive `NONCE_REUSE`.
+
+Implementations SHOULD use a sharded lock or lock-free data structure
+to minimize contention. A single global mutex is acceptable for
+correctness but may become a bottleneck under high load.
+
+#### 6.7.9 ReplayCache API Summary
+
+```
+struct ReplayCache {
+    fn new(retention: Duration, max_entries: usize) -> Self;
+    fn with_capacity(retention: Duration, max_entries: usize, capacity: usize) -> Self;
+
+    /// Check if (agent_id, nonce) is a replay. Does NOT insert.
+    /// Returns true if a non-expired entry exists (replay detected).
+    fn check(&self, agent_id: &[u8], nonce: &[u8; 32]) -> bool;
+
+    /// Atomically check-and-insert. Returns Ok(()) if the nonce is
+    /// fresh (inserted), Err(()) if it is a replay (already present).
+    fn check_and_insert(&mut self, agent_id: &[u8], nonce: &[u8; 32]) -> Result<(), ()>;
+
+    /// Insert a nonce without checking. Used when the caller has
+    /// already verified uniqueness via check().
+    fn insert(&mut self, agent_id: &[u8], nonce: &[u8; 32]);
+
+    /// Evict all expired entries. Returns the number evicted.
+    fn evict_expired(&mut self) -> usize;
+
+    /// Current number of entries (including expired, not yet swept).
+    fn len(&self) -> usize;
+
+    /// Whether the cache is empty.
+    fn is_empty(&self) -> bool;
+
+    /// Configured retention duration.
+    fn retention(&self) -> Duration;
+
+    /// Configured max entries.
+    fn max_entries(&self) -> usize;
+}
+```
+
+The `check_and_insert` method is the primary entry point for
+handshake integration (§6.7.5 step 3-5, §6.7.6 step 3-5). It
+combines the replay check and cache insertion into a single atomic
+operation, satisfying Invariant 4.
+
+#### 6.7.10 Sequence Diagrams
+
+**Normal handshake (no replay)**:
+```
+Client                          Server
+  |                               |
+  |--- ClientHello (nonce=N1) --->|
+  |                               | check_and_insert(A, N1) -> Ok
+  |                               | verify signature -> Ok
+  |<--- ServerHello (nonce=N2) ---|
+  | check_and_insert(B, N2) -> Ok |
+  | verify signature -> Ok        |
+  |--- ClientFinished ------------>|
+  |                               | handshake complete
+```
+
+**Replayed ClientHello (server-side detection)**:
+```
+Attacker                        Server
+  |                               |
+  |--- ClientHello (nonce=N1) --->|  (recorded from prior session)
+  |                               | check_and_insert(A, N1) -> Err (replay)
+  |                               | send ERROR 2008
+  |<--- ERROR 2008 ---------------|
+  |                               | close connection
+  |  (signature NOT verified)     |
+```
+
+**Replayed ServerHello (client-side detection)**:
+```
+Server                          Client(Attacker target)
+  |                               |
+  |--- ServerHello (nonce=N2) --->|  (recorded from prior session)
+  |                               | check_and_insert(B, N2) -> Err (replay)
+  |                               | send ERROR 2008
+  |<--- ERROR 2008 ---------------|
+  |                               | close connection
+  |  (signature NOT verified)     |
+```
+
+**Concurrent replay (race resolution)**:
+```
+Attacker A  ──ClientHello(N1)──>  Server
+Attacker B  ──ClientHello(N1)──>  Server
+                                     |
+                                     | check_and_insert(A, N1):
+                                     |   A wins -> Ok,  B gets Err
+                                     | A: verify sig -> Ok -> ServerHello
+                                     | B: send ERROR 2008 -> close
+```
+
+#### 6.7.11 Security Considerations for Replay Detection
+
+1. **Check-before-verify is critical**: If signature verification
+   precedes the replay check, an attacker can amplify CPU consumption
+   by replaying the same ClientHello many times. Each replay would
+   trigger a full ML-DSA-65 verification (~1 ms). The replay check
+   MUST be O(1) or O(log n) and MUST precede verification.
+
+2. **Cache poisoning prevention**: By inserting into the cache only
+   after signature verification (Invariant 2, 3), an attacker cannot
+   block a legitimate client by sending a forged ClientHello with the
+   client's `agent_id` and a guessed nonce. The forged message would
+   fail signature verification and would not be inserted.
+
+3. **Retention window trade-off**: A longer `retention` provides
+   stronger replay protection but consumes more memory. The default
+   of 300 seconds is chosen to cover the maximum expected handshake
+   duration (30 s timeout × 3 phases = 90 s) with a safety margin.
+   A retention shorter than the handshake timeout creates a window
+   where a nonce can be reused after the original handshake has
+   timed out but before the peer has cleaned up; implementations
+   SHOULD set `retention >= 4 × handshake_timeout`.
+
+4. **False positives are impossible**: Because nonces are 32 random
+   bytes, the probability of a legitimate client generating the same
+   nonce twice within the retention window is negligible
+   (birthday bound: ~2^-120 for 100,000 handshakes). False positives
+   would only occur if the client's RNG is broken, which is a
+   separate security failure.
+
+5. **Cache exhaustion**: Under a DDoS with many unique nonces, the
+   cache may reach `max_entries` and begin LRU eviction. This
+   degrades replay protection but does not break the protocol: the
+   signature verification still prevents an attacker from completing
+   a replayed handshake. The `max_entries` limit is a safety valve,
+   not a security boundary.
+
+6. **Cross-restart persistence**: If the cache is in-memory only, a
+   server restart clears all entries, allowing replays of nonces
+   from before the restart. This is acceptable because the
+   legitimate client's nonce is fresh per connection; a replay
+   would only succeed if the attacker replays within the new
+   retention window, which requires the original client to have
+   connected immediately before the restart. Implementations with
+   strict replay requirements MAY persist the cache to disk.
+
+7. **Interaction with session resumption**: AAFP does not currently
+   define session resumption. If a future extension allows session
+   resumption (reusing a session ID across connections), the replay
+   cache MUST be consulted before resumption to prevent replay of
+   the resumption ticket.
 
 ## 7. Stream Multiplexing
 
@@ -1064,9 +2307,12 @@ provides transport encryption.
 ### 9.2 Extension Security
 
 Extensions may carry security-sensitive data (e.g., authorization
-tokens). Implementations MUST process extensions before the payload
-if the extension is critical. Non-critical extensions MAY be processed
-after the payload.
+tokens). Implementations MUST process extensions according to the
+normative processing pipeline defined in Section 6.5. Extension
+semantics MUST NOT execute before successful authentication and
+authorization (Section 6.5.2, invariant 3). Critical extensions
+MUST be rejected if unknown (Section 6.5.5). Non-negotiated
+extensions MUST be rejected (Section 6.5.5).
 
 ### 9.3 DoS Mitigation
 
