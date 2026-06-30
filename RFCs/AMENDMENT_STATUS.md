@@ -215,7 +215,7 @@ This is informative (SHOULD/MAY), not normative, because the signing mode does n
 **Finding**: The IETF CFRG hybrid signature considerations draft states: "The only way to avoid [key reuse problems] is to introduce a domain separator from a prefix-free set."
 
 **Verification**: AAFP's domain separators:
-- "aafp-v1-handshake" (18 bytes)
+- "aafp-v1-handshake" (17 bytes)
 - "aafp-v1-record" (15 bytes)
 - "aafp-v1-ucan" (13 bytes)
 

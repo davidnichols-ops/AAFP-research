@@ -66,7 +66,7 @@ implementable and interoperable.
 ## Current Status
 
 **Baseline tag:** `v0.1-mvp-freeze` — frozen MVP snapshot before architectural
-evolution begins.
+evolution begins. Phase 2/3 development is ongoing.
 
 The full objective status assessment is in
 [`docs/status/PHASE2_STATUS_REPORT.md`](docs/status/PHASE2_STATUS_REPORT.md).
@@ -77,30 +77,30 @@ Summary of readiness:
 | CBOR encoding | Stable MVP |
 | Frame format | Stable MVP |
 | Error codes | Stable MVP |
-| Identity (AgentId, AgentRecord) | Stable MVP |
+| Identity (AgentId, AgentRecord) | Stable (v1 RFC-compliant) |
 | Identity (UCAN) | Functional Prototype |
-| Cryptography (ML-DSA-65) | Functional Prototype (release blocker: unmaintained dep) |
+| Cryptography (ML-DSA-65) | Stable (migrated to `fips204` + `aws-lc-rs`) |
 | Cryptography (AEAD) | Stable MVP |
-| Handshake | Functional Prototype (state machine not wired into transport) |
-| Transport (QUIC) | Functional Prototype |
+| Handshake (v1, RFC-0002 §5) | Implemented — state machine wired into SDK |
+| Transport (QUIC) | Functional Prototype (ALPN `aafp/1` enforced) |
 | Messaging (framing) | Stable MVP |
-| Messaging (RPC) | Functional Prototype |
+| Messaging (RPC) | Functional Prototype (v1 types RFC-compliant) |
+| Messaging (ERROR/CLOSE frames) | Implemented — SDK sends ERROR and CLOSE frames |
 | Messaging (PubSub) | Not Started |
 | Discovery (DHT) | Functional Prototype (in-memory only) |
 | NAT traversal | Not Started (stubs) |
-| SDK | Functional Prototype |
+| SDK | Functional Prototype (authenticated sessions, graceful shutdown) |
 | CLI | Functional Prototype |
-| Conformance testing | Stable MVP |
-| Interoperability (wire-format) | Stable MVP |
+| Conformance testing | Stable MVP (17 golden traces) |
+| Interoperability (wire-format) | Stable MVP (Go verifies all Rust traces) |
 | RFCs | Stable MVP (6 RFCs, Rev 5, all ambiguities resolved) |
 | CI/CD | Not Started |
 
-**Test suite (verified at freeze):** 461 Rust tests + 7 Go test packages, all
-passing. 0 failures.
+**Test suite:** 995 Rust tests + 13 Go test packages, all passing. 0 failures.
+17 golden wire traces verified by both implementations.
 
-**Release criteria:** 7 of 10 met. Remaining: cross-signature verification
-(Go lacks ML-DSA-65), security (unmaintained `pqcrypto-mldsa`), performance
-validation (network-level benchmarks pending).
+**Release criteria:** 10 of 10 met. All Category A protocol amendments implemented
+and verified. Cross-signature verification (ML-DSA-65) confirmed between Rust and Go.
 
 ---
 
@@ -133,7 +133,7 @@ CLI, conformance tests, benchmarks, and integration tests.
 
 ```bash
 cd implementations/rust
-cargo test --workspace        # 461 tests
+cargo test --workspace        # 995 tests
 cargo run --bin aafp -- init  # generate an agent identity
 ```
 
