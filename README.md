@@ -46,6 +46,11 @@ AAFP-research/
 ├── implementations/
 │   ├── rust/   (submodule → github.com/davidnichols-ops/aafp)
 │   └── go/     (submodule → github.com/davidnichols-ops/aafp-go)
+├── research/                  Strategic architecture research (informative)
+│   ├── CONCLUDING-PAPER.md
+│   ├── phase-reports/         16 phase reports
+│   ├── deliverables/          12 architectural deliverables
+│   └── reference/             AAFP architecture reference
 └── examples/                  Usage examples (placeholder)
 ```
 
@@ -60,6 +65,21 @@ AAFP-research/
 The protocol — not any single implementation — is the primary artifact. RFCs
 define the protocol; implementations are references that prove the RFCs are
 implementable and interoperable.
+
+### Normative vs. informative material
+
+| Material | Status | Location |
+|----------|--------|----------|
+| **RFCs** | **Normative** — define the protocol requirements | `RFCs/` |
+| **Source code** | **Normative** — reference implementations of the RFCs | `implementations/` |
+| **Research papers** | **Informative** — analysis, recommendations, and future proposals | `research/` |
+
+The `research/` directory contains strategic architecture studies, ecosystem
+comparisons, and roadmap proposals. These documents are informational only.
+They do not modify the protocol specification, define protocol requirements,
+or represent the current state of the implementation. Architectural
+recommendations in research documents may become future RFCs through the
+normal RFC process, but until then they are proposals, not requirements.
 
 ---
 
