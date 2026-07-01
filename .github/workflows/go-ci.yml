@@ -15,6 +15,8 @@ jobs:
         working-directory: implementations/go
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
@@ -34,6 +36,8 @@ jobs:
         working-directory: implementations/go
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
@@ -51,6 +55,8 @@ jobs:
         working-directory: implementations/go
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
@@ -68,6 +74,8 @@ jobs:
         working-directory: implementations/go
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
