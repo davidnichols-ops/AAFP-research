@@ -134,11 +134,9 @@ Blockers** (Category A) or **Post-v1 Enhancements** (Category B).
 | B-4 | Browser/WASM support | Future target, not v1 blocker |
 | B-5 | Adaptive connection limits | Optimization, not correctness |
 
-All currently scoped Rev 6 Category A protocol amendments (A-1 through
-A-7) have been implemented and are passing local conformance tests.
-3 of 10 Category A items remain pending (A-8 through A-10). This does
-not constitute full v1 readiness — see the Outstanding Items section
-below.
+All 10 Rev 6 Category A protocol amendments (A-1 through A-10) have been
+implemented and are passing local conformance tests. See the Outstanding
+Items section below for post-v1 work.
 
 ## Outstanding Items (not addressed by Rev 6)
 
