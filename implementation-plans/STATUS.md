@@ -10,7 +10,7 @@
 - `[!]` — Blocked (add note)
 - `[-]` — Skipped / N/A (add reason)
 
-**Last updated:** 2026-07-02 (A1 in progress)
+**Last updated:** 2026-07-02 (Tracks C-F added for 10-week execution)
 
 ---
 
@@ -162,6 +162,277 @@ module itself). Build 0 warnings, clippy 0 warnings, all tests pass.
 
 ---
 
+## Track C — Fixes & Push (Week 1-2)
+
+### C1: Fix pyo3 segfault + B2.11 interop test
+- [x] **C1.1** Diagnose the segfault (build, run, backtrace)
+- [x] **C1.2** Implement the fix (Approach A: dedicated runtime, B: __del__, C: atexit)
+- [x] **C1.3** Verify the fix (no segfault on clean exit)
+- [x] **C1.4** Commit the fix in Rust submodule + update umbrella
+- [x] **C1.5** Create tests/test_cross_sdk.py (Rust client → Python server)
+- [x] **C1.6** Run all tests
+- [x] **C1.7** Commit interop test
+- [x] **C1.8** VERIFY: No segfault on exit
+- [x] **C1.9** VERIFY: All tests pass, clean exit
+
+**C1 status:** COMPLETE
+**C1 blocked by:** nothing
+**C1 notes:** Root cause: quinn::Endpoint spawns background tasks on the tokio
+runtime. When Python interpreter begins teardown, the GIL state, tokio runtime,
+and quinn internal state are torn down in an unsafe order if the endpoint is
+still active. Fix: (1) dedicated tokio runtime registered with pyo3_async_runtimes
+via init_with_runtime(), (2) async PyAgent.shutdown() that calls transport.close()
++ transport.wait_idle() to drain quinn background tasks, (3) sync PyAgent.close()
+fallback, (4) __del__ safety net. Added QuicTransport::wait_idle(). Users must
+call "await agent.shutdown()" before process exit. All Rust tests pass (0 failures),
+clippy clean, fmt clean. Python tests pass: test_transport_basic,
+test_clean_shutdown_no_segfault, test_rust_client_python_server (cross-SDK interop).
+Also added mcp_client.rs example for the Rust client side of the cross-SDK test.
+B2.11 (Rust client to Python server interop) is now COMPLETE.
+
+### C2: Clean 910MB git history (NEEDS USER APPROVAL)
+- [ ] **C2.1** Backup the Rust submodule
+- [ ] **C2.2** Run git-filter-repo to remove fuzz/target/ from history
+- [ ] **C2.3** Run git gc to reclaim space
+- [ ] **C2.4** Verify history is clean (no fuzz/target/ in any commit)
+- [ ] **C2.5** Verify all tests still pass
+- [ ] **C2.6** Force-push Rust submodule (DESTRUCTIVE — needs approval)
+- [ ] **C2.7** Update umbrella submodule pointer
+- [ ] **C2.8** Clean up backup
+- [ ] **C2.9** VERIFY: Fresh clone is under 100MB
+- [ ] **C2.10** VERIFY: Tags still exist
+
+**C2 status:** NOT STARTED — ⚠️ REQUIRES EXPLICIT USER APPROVAL
+**C2 blocked by:** C1
+**C2 notes:** If user does not approve, skip and mark [-]
+
+### C3: Push all repos + tags to GitHub
+- [ ] **C3.1** Verify clean working state (all 3 repos)
+- [ ] **C3.2** Push Rust submodule + tags
+- [ ] **C3.3** Push Go submodule + tags
+- [ ] **C3.4** Push umbrella repo + tags
+- [ ] **C3.5** Verify pushes succeeded (remote matches local)
+- [ ] **C3.6** Verify tags on remote
+- [ ] **C3.7** Verify GitHub repos are accessible
+- [ ] **C3.8** Make repos public (manual user step, if desired)
+- [ ] **C3.9** VERIFY: Fresh clone works and builds
+
+**C3 status:** NOT STARTED
+**C3 blocked by:** C1 (don't push known bugs)
+**C3 notes:**
+
+### C4: Update stale documentation
+- [ ] **C4.1** Update ROADMAP.md (P1-3, P1-4, A2A, criteria)
+- [ ] **C4.2** Verify PROTOCOL_CANDIDATE_CHECKLIST.md
+- [ ] **C4.3** Update README.md (new crates, status)
+- [ ] **C4.4** Update INTEROPERABILITY_PLAN.md (phase status)
+- [ ] **C4.5** Update TRANSPORT_ARCHITECTURE_REVIEW.md (resolved items)
+- [ ] **C4.6** Update RELEASE_READINESS.md
+- [ ] **C4.7** Commit documentation updates
+- [ ] **C4.8** VERIFY: No stale "Pending" for done items
+- [ ] **C4.9** VERIFY: README mentions new crates
+
+**C4 status:** NOT STARTED
+**C4 blocked by:** nothing
+**C4 notes:**
+
+---
+
+## Track D — External Interop (Week 2-4)
+
+### D1: Test against real Python MCP SDK
+- [ ] **D1.1** Install and inspect the Python MCP SDK Transport interface
+- [ ] **D1.2** Update the adapter if the interface differs
+- [ ] **D1.3** Write real interop test (test_mcp_sdk_interop.py)
+- [ ] **D1.4** Run the interop test
+- [ ] **D1.5** Document interop results
+- [ ] **D1.6** Commit
+- [ ] **D1.7** VERIFY: Test passes
+- [ ] **D1.8** VERIFY: Clean exit (no segfault)
+
+**D1 status:** NOT STARTED
+**D1 blocked by:** C3 (repos pushed)
+**D1 notes:**
+
+### D2: Test against A2A reference implementation
+- [ ] **D2.1** Research A2A reference implementations
+- [ ] **D2.2** Determine test strategy (A: real SDK, B: spec examples, C: conformance)
+- [ ] **D2.3** Implement the test
+- [ ] **D2.4** Run the tests
+- [ ] **D2.5** Document results
+- [ ] **D2.6** Commit
+- [ ] **D2.7** VERIFY: All A2A tests pass
+
+**D2 status:** NOT STARTED
+**D2 blocked by:** C3
+**D2 notes:**
+
+### D3: Rust ↔ Go cross-language interop over QUIC
+- [ ] **D3.1** Assess Go QUIC transport capability
+- [ ] **D3.2** Determine interop test level (1: live QUIC, 2: frame-level, 3: CBOR)
+- [ ] **D3.3** Implement interop test (Go server or frame encoder)
+- [ ] **D3.4** Implement reverse test (Go client or frame decoder)
+- [ ] **D3.5** Run both tests
+- [ ] **D3.6** Commit
+- [ ] **D3.7** VERIFY: Tests pass
+- [ ] **D3.8** VERIFY: Results documented
+
+**D3 status:** NOT STARTED
+**D3 blocked by:** C3
+**D3 notes:**
+
+### D4: MCP conformance suite integration
+- [ ] **D4.1** Research the MCP conformance suite
+- [ ] **D4.2** Install the conformance suite
+- [ ] **D4.3** Configure AAFP as a transport for the suite
+- [ ] **D4.4** Run the conformance suite
+- [ ] **D4.5** Document results (or create own conformance tests)
+- [ ] **D4.6** Commit
+- [ ] **D4.7** VERIFY: Conformance tests pass
+- [ ] **D4.8** VERIFY: Results documented
+
+**D4 status:** NOT STARTED
+**D4 blocked by:** D1
+**D4 notes:**
+
+---
+
+## Track E — Protocol Features (Week 4-7)
+
+### E1: PING/PONG keep-alive (RFC-0002 §4.7-4.8, P1-1)
+- [ ] **E1.1** Create keepalive.rs module (PingTracker, KeepAliveConfig)
+- [ ] **E1.2** Add module to aafp-messaging
+- [ ] **E1.3** Implement PING/PONG frame handling in SDK
+- [ ] **E1.4** Add keep-alive configuration to AgentBuilder
+- [ ] **E1.5** Write unit + integration tests
+- [ ] **E1.6** Update RFC-0002 implementation status
+- [ ] **E1.7** Commit
+- [ ] **E1.8** VERIFY: Unit tests pass
+- [ ] **E1.9** VERIFY: Integration tests pass
+- [ ] **E1.10** VERIFY: Full workspace tests pass
+- [ ] **E1.11** VERIFY: Clippy clean
+
+**E1 status:** NOT STARTED
+**E1 blocked by:** nothing
+**E1 notes:**
+
+### E2: Discovery announce/lookup over QUIC (RFC-0004 §3, P1-2)
+- [ ] **E2.1** Implement discovery RPC server handler
+- [ ] **E2.2** Implement discovery RPC client
+- [ ] **E2.3** Wire discovery into the SDK
+- [ ] **E2.4** Implement bootstrap node connection
+- [ ] **E2.5** Write tests
+- [ ] **E2.6** Commit
+- [ ] **E2.7** VERIFY: Tests pass
+- [ ] **E2.8** VERIFY: Clippy clean
+
+**E2 status:** NOT STARTED
+**E2 blocked by:** E1
+**E2 notes:**
+
+### E3: Networked PubSub (gossipsub/floodsub over QUIC)
+- [ ] **E3.1** Write RFC 0009 (PubSub Protocol)
+- [ ] **E3.2** Implement networked PubSub (floodsub)
+- [ ] **E3.3** Wire PubSub into the SDK
+- [ ] **E3.4** Write tests
+- [ ] **E3.5** Commit
+- [ ] **E3.6** VERIFY: Tests pass
+- [ ] **E3.7** VERIFY: Clippy clean
+
+**E3 status:** NOT STARTED
+**E3 blocked by:** E2
+**E3 notes:**
+
+### E4: Relay protocol / NAT traversal (P1-8)
+- [ ] **E4.1** Write RFC 0010 (Circuit Relay Protocol)
+- [ ] **E4.2** Implement relay reservation protocol
+- [ ] **E4.3** Implement relayed data forwarding
+- [ ] **E4.4** Implement relay client
+- [ ] **E4.5** Implement AutoNAT (automatic NAT detection)
+- [ ] **E4.6** Implement DCUtR (direct connection upgrade)
+- [ ] **E4.7** Write tests
+- [ ] **E4.8** Commit
+- [ ] **E4.9** VERIFY: Tests pass
+- [ ] **E4.10** VERIFY: Clippy clean
+
+**E4 status:** NOT STARTED
+**E4 blocked by:** E2
+**E4 notes:**
+
+---
+
+## Track F — Production Readiness (Week 7-10)
+
+### F1: Performance validation + benchmark framework (P1-5)
+- [ ] **F1.1** Create benchmark framework (module structure)
+- [ ] **F1.2** Implement crypto benchmarks (keygen, sign, verify)
+- [ ] **F1.3** Implement framing benchmarks (encode, decode at various sizes)
+- [ ] **F1.4** Implement transport benchmarks (handshake, throughput)
+- [ ] **F1.5** Implement session/memory benchmarks
+- [ ] **F1.6** Run benchmarks and collect results
+- [ ] **F1.7** Create PERFORMANCE_REPORT.md
+- [ ] **F1.8** Commit
+- [ ] **F1.9** VERIFY: Benchmarks run
+- [ ] **F1.10** VERIFY: Report exists
+
+**F1 status:** NOT STARTED
+**F1 blocked by:** E1-E4 (need features to benchmark)
+**F1 notes:**
+
+### F2: Rustdoc documentation for all public APIs (P1-7)
+- [ ] **F2.1** Audit documentation coverage
+- [ ] **F2.2** Document aafp-sdk (highest priority)
+- [ ] **F2.3** Document aafp-core
+- [ ] **F2.4** Document aafp-crypto
+- [ ] **F2.5** Document aafp-identity
+- [ ] **F2.6** Document aafp-messaging
+- [ ] **F2.7** Document aafp-transport-quic
+- [ ] **F2.8** Document transport binding crates (verify existing)
+- [ ] **F2.9** Document aafp-discovery, aafp-nat
+- [ ] **F2.10** Verify docs build cleanly (0 warnings)
+- [ ] **F2.11** Verify doc tests pass
+- [ ] **F2.12** Commit
+- [ ] **F2.13** VERIFY: Zero doc warnings
+- [ ] **F2.14** VERIFY: Doc tests pass
+
+**F2 status:** NOT STARTED
+**F2 blocked by:** nothing (can run parallel)
+**F2 notes:**
+
+### F3: Revocation mechanism (CRL-based, RFC-0003 amendment)
+- [ ] **F3.1** Write RFC amendment for revocation
+- [ ] **F3.2** Implement CRL types (RevocationEntry, RevocationList)
+- [ ] **F3.3** Implement CRL store (RevocationStore)
+- [ ] **F3.4** Integrate with handshake (reject revoked AgentIds)
+- [ ] **F3.5** Integrate with discovery (CRL distribution)
+- [ ] **F3.6** Write tests
+- [ ] **F3.7** Commit
+- [ ] **F3.8** VERIFY: Tests pass
+- [ ] **F3.9** VERIFY: Clippy clean
+
+**F3 status:** NOT STARTED
+**F3 blocked by:** nothing
+**F3 notes:**
+
+### F4: Persistent DHT backend (SQLite)
+- [ ] **F4.1** Add rusqlite dependency
+- [ ] **F4.2** Create CapabilityDhtBackend trait
+- [ ] **F4.3** Implement SQLite backend (PersistentDht)
+- [ ] **F4.4** Make CapabilityDht generic over backend
+- [ ] **F4.5** Add DhtError type
+- [ ] **F4.6** Write tests (including persistence across reopen)
+- [ ] **F4.7** Update AgentBuilder to support persistent DHT
+- [ ] **F4.8** Commit
+- [ ] **F4.9** VERIFY: Tests pass
+- [ ] **F4.10** VERIFY: Clippy clean
+- [ ] **F4.11** VERIFY: Persistence verified (records survive reopen)
+
+**F4 status:** NOT STARTED
+**F4 blocked by:** E2 (discovery must exist first)
+**F4 notes:**
+
+---
+
 ## Summary
 
 | Plan | Status | Blocked by | Steps complete |
@@ -172,8 +443,24 @@ module itself). Build 0 warnings, clippy 0 warnings, all tests pass.
 | B1 | COMPLETE | A1 | 18/18 |
 | B2 | COMPLETE | B1 | 13/14 |
 | B3 | COMPLETE | B1 | 12/12 |
+| C1 | COMPLETE | — | 9/9 |
+| C2 | NOT STARTED | C1 | 0/10 |
+| C3 | NOT STARTED | C1 | 0/9 |
+| C4 | NOT STARTED | — | 0/9 |
+| D1 | NOT STARTED | C3 | 0/8 |
+| D2 | NOT STARTED | C3 | 0/7 |
+| D3 | NOT STARTED | C3 | 0/8 |
+| D4 | NOT STARTED | D1 | 0/8 |
+| E1 | NOT STARTED | — | 0/11 |
+| E2 | NOT STARTED | E1 | 0/8 |
+| E3 | NOT STARTED | E2 | 0/7 |
+| E4 | NOT STARTED | E2 | 0/10 |
+| F1 | NOT STARTED | E1-E4 | 0/10 |
+| F2 | NOT STARTED | — | 0/14 |
+| F3 | NOT STARTED | — | 0/9 |
+| F4 | NOT STARTED | E2 | 0/11 |
 
-**Total steps:** 70
-**Completed:** 69
+**Total steps:** 218 (70 from Tracks A-B + 148 from Tracks C-F)
+**Completed:** 78
 **In progress:** 0
 **Blocked:** 0
