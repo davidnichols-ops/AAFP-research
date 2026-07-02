@@ -137,9 +137,10 @@ before implementation.
 7. **Semantic vector index** for capability matching
 8. **Reputation system** (EigenTrust-style)
 9. **io_uring connection management** (Linux, for 100K+ connections)
-10. **MCP transport binding** — AAFP as an MCP transport
-11. **Onion routing** — privacy layer
-12. **Autonomous contracting protocol**
+10. **MCP transport binding** — AAFP as an MCP transport — **DONE** (RFC 0007, `aafp-transport-mcp` crate)
+11. **A2A transport binding** — AAFP as an A2A transport — **DESIGNED** (RFC 0008, implementation pending)
+12. **Onion routing** — privacy layer
+13. **Autonomous contracting protocol**
 
 ### Explicit Non-Goals (v1.0)
 

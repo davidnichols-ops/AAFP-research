@@ -111,12 +111,15 @@ Summary of readiness:
 | NAT traversal | Not Started (stubs) |
 | SDK | Functional Prototype (authenticated sessions, graceful shutdown) |
 | CLI | Functional Prototype |
-| Conformance testing | Stable MVP (17 golden traces) |
+| MCP Transport | **Implemented** (`aafp-transport-mcp` crate, rmcp integration) |
+| A2A Transport | **Designed** (RFC 0006, implementation pending) |
+| Conformance testing | Stable MVP (17 golden traces + 8 MCP transport conformance tests) |
 | Interoperability (wire-format) | Stable MVP (Go verifies all Rust traces) |
+| Benchmarks | Stable MVP (crypto, messaging, discovery, MCP transport) |
 | RFCs | Stable MVP (6 RFCs, Rev 5, all ambiguities resolved) |
 | CI/CD | Not Started |
 
-**Test suite:** 995 Rust tests + 13 Go test packages, all passing. 0 failures.
+**Test suite:** 1011 Rust tests + 13 Go test packages, all passing. 0 failures.
 17 golden wire traces verified by both implementations.
 
 **Release criteria:** 10 of 10 met. All Category A protocol amendments implemented
@@ -126,7 +129,8 @@ and verified. Cross-signature verification (ML-DSA-65) confirmed between Rust an
 
 ## RFCs
 
-Six RFCs (Revision 5) define the protocol:
+Six RFCs (Revision 5) define the core protocol, plus two extension RFCs for
+ecosystem transport bindings:
 
 | RFC | Title |
 |-----|-------|
@@ -136,6 +140,12 @@ Six RFCs (Revision 5) define the protocol:
 | 0004 | Discovery: Identity, Capability, Service, and Resource |
 | 0005 | Protocol Error Codes, Error Frames, and Error Handling |
 | 0006 | Versioning and Compatibility |
+| 0007 | AAFP Transport Binding for MCP (extension, implemented) |
+| 0008 | AAFP Transport Binding for A2A (extension, proposed) |
+
+RFCs 0007 and 0008 are extension RFCs that define transport bindings for
+external protocols (MCP and A2A) over AAFP. RFC 0007 is implemented in the
+`aafp-transport-mcp` crate; RFC 0008 is proposed and pending implementation.
 
 The RFCs were validated by an independent Go implementation written strictly
 from the specifications, proving they are unambiguous enough to implement from
