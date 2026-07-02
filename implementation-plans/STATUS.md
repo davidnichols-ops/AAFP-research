@@ -212,19 +212,23 @@ tests pass. Umbrella submodule pointer unchanged (latest commits did not touch
 fuzz/target/, so SHAs were preserved by filter-repo). Backup cleaned up.
 
 ### C3: Push all repos + tags to GitHub
-- [ ] **C3.1** Verify clean working state (all 3 repos)
-- [ ] **C3.2** Push Rust submodule + tags
-- [ ] **C3.3** Push Go submodule + tags
-- [ ] **C3.4** Push umbrella repo + tags
-- [ ] **C3.5** Verify pushes succeeded (remote matches local)
-- [ ] **C3.6** Verify tags on remote
-- [ ] **C3.7** Verify GitHub repos are accessible
-- [ ] **C3.8** Make repos public (manual user step, if desired)
-- [ ] **C3.9** VERIFY: Fresh clone works and builds
+- [x] **C3.1** Verify clean working state (all 3 repos)
+- [x] **C3.2** Push Rust submodule + tags
+- [x] **C3.3** Push Go submodule + tags
+- [x] **C3.4** Push umbrella repo + tags
+- [x] **C3.5** Verify pushes succeeded (remote matches local)
+- [x] **C3.6** Verify tags on remote
+- [x] **C3.7** Verify GitHub repos are accessible
+- [x] **C3.8** Make repos public (manual user step, if desired)
+- [x] **C3.9** VERIFY: Fresh clone works and builds
 
-**C3 status:** NOT STARTED
-**C3 blocked by:** C1 (don't push known bugs)
-**C3 notes:**
+**C3 status:** COMPLETE
+**C3 blocked by:** C1 — C1 COMPLETE
+**C3 notes:** All 3 repos pushed to GitHub. Rust was force-pushed in C2 (history
+rewrite). Go was already up-to-date. Umbrella pushed with implementation-plans
+directory. All tags present on remotes (rev6-rc1, v0.1-mvp-freeze, v0.3-phase3-snapshot).
+All 3 repos return HTTP 200. User confirmed repos are already public. Fresh clone
+is 12MB (down from ~1GB before C2). All crates present in fresh clone.
 
 ### C4: Update stale documentation
 - [ ] **C4.1** Update ROADMAP.md (P1-3, P1-4, A2A, criteria)
@@ -450,7 +454,7 @@ fuzz/target/, so SHAs were preserved by filter-repo). Backup cleaned up.
 | B3 | COMPLETE | B1 | 12/12 |
 | C1 | COMPLETE | — | 9/9 |
 | C2 | COMPLETE | C1 | 10/10 |
-| C3 | NOT STARTED | C1 | 0/9 |
+| C3 | COMPLETE | C1 | 9/9 |
 | C4 | NOT STARTED | — | 0/9 |
 | D1 | NOT STARTED | C3 | 0/8 |
 | D2 | NOT STARTED | C3 | 0/7 |
@@ -466,6 +470,6 @@ fuzz/target/, so SHAs were preserved by filter-repo). Backup cleaned up.
 | F4 | NOT STARTED | E2 | 0/11 |
 
 **Total steps:** 218 (70 from Tracks A-B + 148 from Tracks C-F)
-**Completed:** 88
+**Completed:** 97
 **In progress:** 0
 **Blocked:** 0
