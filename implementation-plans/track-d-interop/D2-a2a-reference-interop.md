@@ -136,7 +136,45 @@ cargo test -p aafp-transport-a2a --test external_interop --test spec_conformance
 
 ### D2.5: Document results
 
-Update `implementations/rust/crates/aafp-transport-a2a/INTEROP_RESULTS.md`:
+Write a JSON result file to `test-results/interop/a2a-reference.json`:
+
+```python
+import json
+from datetime import datetime
+
+result = {
+    "test_name": "a2a-reference-interop",
+    "test_category": "interop",
+    "timestamp": datetime.now().isoformat(),
+    "environment": {
+        "os": "<from uname>",
+        "cpu": "<from sysctl>",
+        "rust_version": "<from rustc --version>",
+        "aafp_version": "rev6-rc1",
+        "commit": "<from git rev-parse HEAD>",
+    },
+    "status": "pass",  # or "fail"
+    "duration_ms": <measured>,
+    "summary": "A2A transport tested against <strategy used>",
+    "details": [
+        {"step": "send_message", "status": "pass", "notes": "spec example correctly dispatched"},
+        {"step": "get_task", "status": "pass", "notes": "spec example correctly dispatched"},
+        {"step": "list_tasks", "status": "pass", "notes": "spec example correctly dispatched"},
+        # ... all 11 operations
+    ],
+    "metrics": {"operations_tested": 11, "operations_passed": 11},
+}
+
+with open("test-results/interop/a2a-reference.json", "w") as f:
+    json.dump(result, f, indent=2)
+```
+
+Then regenerate the dashboard:
+```bash
+python3 test-results/generate_dashboard.py
+```
+
+Also update `implementations/rust/crates/aafp-transport-a2a/INTEROP_RESULTS.md`:
 
 ```markdown
 # AAFP A2A Transport Interop Results

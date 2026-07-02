@@ -168,7 +168,47 @@ cargo test -p aafp-transport-mcp --test official_conformance -v
 
 ### D4.8: Results documented
 
-Create or update `implementations/rust/crates/aafp-transport-mcp/CONFORMANCE_RESULTS.md`:
+Write a JSON result file to `test-results/conformance/mcp-conformance.json`:
+
+```python
+import json
+from datetime import datetime
+
+result = {
+    "test_name": "mcp-conformance-suite",
+    "test_category": "conformance",
+    "timestamp": datetime.now().isoformat(),
+    "environment": {
+        "os": "<from uname>",
+        "cpu": "<from sysctl>",
+        "rust_version": "<from rustc --version>",
+        "aafp_version": "rev6-rc1",
+        "commit": "<from git rev-parse HEAD>",
+    },
+    "status": "pass",
+    "duration_ms": <measured>,
+    "summary": "MCP conformance suite — all tests pass",
+    "details": [
+        {"step": "transport_connect", "status": "pass", "notes": "Transport establishes connection"},
+        {"step": "transport_send_receive", "status": "pass", "notes": "JSON-RPC messages sent and received"},
+        {"step": "transport_close", "status": "pass", "notes": "Graceful close"},
+        {"step": "initialize_handshake", "status": "pass", "notes": "MCP initialize handshake works"},
+        {"step": "tools_list", "status": "pass", "notes": "tools/list returns tools"},
+        {"step": "tools_call", "status": "pass", "notes": "tools/call executes and returns results"},
+    ],
+    "metrics": {"tests": 6, "passed": 6, "failed": 0},
+}
+
+with open("test-results/conformance/mcp-conformance.json", "w") as f:
+    json.dump(result, f, indent=2)
+```
+
+Then regenerate the dashboard:
+```bash
+python3 test-results/generate_dashboard.py
+```
+
+Also create or update `implementations/rust/crates/aafp-transport-mcp/CONFORMANCE_RESULTS.md`:
 
 ```markdown
 # MCP Conformance Results

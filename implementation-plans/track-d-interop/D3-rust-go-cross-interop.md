@@ -192,7 +192,45 @@ cargo test --test go_frame_interop -v
 
 ### D3.5-alt: Document the interop level achieved
 
-Create `implementations/rust/crates/aafp-tests/GO_INTEROP_RESULTS.md`:
+Write a JSON result file to `test-results/interop/rust-go-cross.json`:
+
+```python
+import json
+from datetime import datetime
+
+result = {
+    "test_name": "rust-go-cross-interop",
+    "test_category": "interop",
+    "timestamp": datetime.now().isoformat(),
+    "environment": {
+        "os": "<from uname>",
+        "cpu": "<from sysctl>",
+        "rust_version": "<from rustc --version>",
+        "go_version": "<from go version>",
+        "aafp_version": "rev6-rc1",
+        "commit": "<from git rev-parse HEAD>",
+    },
+    "status": "pass",
+    "duration_ms": <measured>,
+    "summary": "Rust ↔ Go cross-language interop at Level <X>",
+    "details": [
+        {"step": "frame_encode_go_decode_rust", "status": "pass", "notes": "All frame types verified"},
+        {"step": "frame_encode_rust_decode_go", "status": "pass", "notes": "All frame types verified"},
+        {"step": "mldsa65_cross_signature", "status": "pass", "notes": "19/19 + 15/15 + 100/100 vectors verified"},
+    ],
+    "metrics": {"interop_level": 2, "golden_traces_verified": 17},
+}
+
+with open("test-results/interop/rust-go-cross.json", "w") as f:
+    json.dump(result, f, indent=2)
+```
+
+Then regenerate the dashboard:
+```bash
+python3 test-results/generate_dashboard.py
+```
+
+Also create `implementations/rust/crates/aafp-tests/GO_INTEROP_RESULTS.md`:
 
 ```markdown
 # Rust ↔ Go Cross-Language Interop Results

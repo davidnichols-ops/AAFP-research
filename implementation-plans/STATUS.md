@@ -10,7 +10,24 @@
 - `[!]` — Blocked (add note)
 - `[-]` — Skipped / N/A (add reason)
 
-**Last updated:** 2026-07-02 (Tracks C-F added for 10-week execution)
+**Last updated:** 2026-07-02 (Track C complete, D1 starting, test-results infrastructure added)
+
+**Test Results Infrastructure:** A `test-results/` directory has been added to the
+umbrella repo with:
+- `generate_dashboard.py` — generates a modern HTML dashboard from JSON results
+- `run_all_tests.py` — runs all test suites and writes JSON results
+- `dashboards/index.html` — auto-generated dashboard (open in browser)
+- `interop/`, `performance/`, `conformance/`, `unit/` — JSON result subdirectories
+
+Every test plan (D1-D4, F1) now includes a step to write JSON results to the
+appropriate subdirectory. After any test run, regenerate the dashboard:
+```bash
+python3 test-results/generate_dashboard.py
+open test-results/dashboards/index.html
+```
+
+**Build Guide:** See `BUILD.md` in the repo root for complete build, test, and
+benchmark instructions. Anyone can clone and build from scratch following that guide.
 
 ---
 

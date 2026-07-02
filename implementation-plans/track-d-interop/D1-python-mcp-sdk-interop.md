@@ -186,7 +186,45 @@ If the test fails, debug the failure:
 
 ### D1.5: Document the interop result
 
-Create or update `implementations/rust/crates/aafp-py/INTEROP_RESULTS.md`:
+Write a JSON result file to `test-results/interop/python-mcp-sdk.json`:
+
+```python
+import json
+from datetime import datetime
+
+result = {
+    "test_name": "python-mcp-sdk-interop",
+    "test_category": "interop",
+    "timestamp": datetime.now().isoformat(),
+    "environment": {
+        "os": "<from uname>",
+        "cpu": "<from sysctl>",
+        "rust_version": "<from rustc --version>",
+        "aafp_version": "rev6-rc1",
+        "commit": "<from git rev-parse HEAD>",
+    },
+    "status": "pass",  # or "fail"
+    "duration_ms": <measured>,
+    "summary": "Python MCP SDK client connected to Rust rmcp server over AAFP",
+    "details": [
+        {"step": "transport_connect", "status": "pass", "duration_ms": 120, "notes": "AAFP handshake completed"},
+        {"step": "mcp_initialize", "status": "pass", "duration_ms": 15, "notes": "protocolVersion 2025-11-25 negotiated"},
+        {"step": "tools_list", "status": "pass", "duration_ms": 8, "notes": "1 tool returned"},
+        {"step": "graceful_close", "status": "pass", "duration_ms": 5, "notes": "No segfault"},
+    ],
+    "metrics": {},
+}
+
+with open("test-results/interop/python-mcp-sdk.json", "w") as f:
+    json.dump(result, f, indent=2)
+```
+
+Then regenerate the dashboard:
+```bash
+python3 test-results/generate_dashboard.py
+```
+
+Also create or update `implementations/rust/crates/aafp-py/INTEROP_RESULTS.md`:
 
 ```markdown
 # AAFP Python ↔ Rust MCP Interop Results

@@ -179,6 +179,63 @@ cargo bench --workspace
 
 Save results to `crates/aafp-benchmark/results/` with timestamps.
 
+**Also write JSON result files to `test-results/performance/`:**
+
+Create a script `crates/aafp-benchmark/src/export_results.rs` or use a Python
+script to parse Criterion output and write JSON:
+
+```python
+# test-results/performance/crypto.json
+{
+    "test_name": "crypto-benchmarks",
+    "test_category": "performance",
+    "timestamp": "2026-07-XX",
+    "environment": { ... },
+    "status": "pass",
+    "summary": "ML-DSA-65 crypto benchmarks",
+    "metrics": {
+        "ml_dsa_65_keygen_ms": <measured>,
+        "ml_dsa_65_sign_ms": <measured>,
+        "ml_dsa_65_verify_ms": <measured>,
+    }
+}
+
+# test-results/performance/framing.json
+{
+    "test_name": "framing-benchmarks",
+    "metrics": {
+        "frame_encode_1kb_us": <measured>,
+        "frame_decode_1kb_us": <measured>,
+        "frame_encode_64kb_us": <measured>,
+        "frame_decode_64kb_us": <measured>,
+    }
+}
+
+# test-results/performance/transport.json
+{
+    "test_name": "transport-benchmarks",
+    "metrics": {
+        "handshake_ms": <measured>,
+        "throughput_single_stream_msgs": <measured>,
+        "throughput_multi_stream_msgs": <measured>,
+    }
+}
+
+# test-results/performance/session.json
+{
+    "test_name": "session-benchmarks",
+    "metrics": {
+        "memory_per_session_kb": <measured>,
+        "concurrent_sessions": <measured>,
+    }
+}
+```
+
+Then regenerate the dashboard:
+```bash
+python3 test-results/generate_dashboard.py
+```
+
 ### F1.7: Create performance report
 
 Create `PERFORMANCE_REPORT.md` in the umbrella repo:
