@@ -1,0 +1,141 @@
+{
+  "test_name": "a2a-reference-interop",
+  "test_category": "interop",
+  "timestamp": "2026-07-02T20:00:00Z",
+  "environment": {
+    "os": "macOS 15.5.0 (Darwin 25.5.0)",
+    "cpu": "Apple M4",
+    "rust_version": "1.96.0",
+    "aafp_version": "rev6-rc1",
+    "a2a_spec_version": "v1.0.0",
+    "commit": "d0112ca"
+  },
+  "status": "pass",
+  "duration_ms": 180,
+  "summary": "A2A transport binding tested against A2A v1.0.0 specification examples (Strategy B). Data model updated to match v1.0: flat Part (no kind discriminator), SCREAMING_SNAKE_CASE TaskState/Role enums, SendMessageRequest params wrapping, response wrapping ({task:...}, {tasks:...}). All 11 operations verified with spec JSON examples. 40 tests pass (3 unit + 14 conformance + 5 integration + 18 spec conformance). Official A2A SDKs (Python, Go, JS, Java, .NET, Rust) exist but all use HTTP/gRPC/JSON-RPC transports — none support QUIC, so live SDK interop was not feasible. The A2A TCK (a2a-tck) also operates over HTTP. Strategy B (spec examples) was used instead, verifying byte-for-byte payload preservation and correct method dispatch against exact v1.0 spec JSON.",
+  "details": [
+    {
+      "step": "research_a2a_sdks",
+      "status": "pass",
+      "notes": "Found 6 official A2A SDKs (Python a2a-sdk v1.1.0, Go a2a-go v2.0.0, JS, Java, .NET, Rust) + TCK at a2aproject/a2a-tck. All use HTTP/gRPC/JSON-RPC transports, none support QUIC."
+    },
+    {
+      "step": "strategy_selection",
+      "status": "pass",
+      "notes": "Strategy B (spec examples) chosen — live SDK interop not feasible without custom QUIC transport adapter. TCK operates over HTTP only."
+    },
+    {
+      "step": "types_rs_v1_0_update",
+      "status": "pass",
+      "notes": "Updated types.rs to A2A v1.0: Part flat OneOf (no kind), TaskState SCREAMING_SNAKE_CASE (9 states), Role enum (3 values), Message with extensions/referenceTaskIds, Task.contextId optional, AgentInterface for binding declaration, SendMessageResponse/ListTasksResponse wrappers."
+    },
+    {
+      "step": "dispatch_v1_0_update",
+      "status": "pass",
+      "notes": "Updated server.rs dispatch: SendMessage/SendStreamingMessage extract params.message, responses wrapped in {task:...} and {tasks:...} per v1.0 §9.4."
+    },
+    {
+      "step": "spec_6_1_basic_task_execution",
+      "status": "pass",
+      "notes": "SendMessage with ROLE_USER, text part, messageId — response wraps Task in {task:...} with TASK_STATE_COMPLETED, artifact with flat part (no kind)"
+    },
+    {
+      "step": "spec_6_2_streaming_task_execution",
+      "status": "pass",
+      "notes": "SendStreamingMessage returns 3 events: WORKING status, artifact update, COMPLETED status with final:true"
+    },
+    {
+      "step": "spec_6_3_input_required_state",
+      "status": "pass",
+      "notes": "TASK_STATE_INPUT_REQUIRED serializes correctly as SCREAMING_SNAKE_CASE"
+    },
+    {
+      "step": "spec_6_5_list_tasks_pagination",
+      "status": "pass",
+      "notes": "ListTasks with contextId/status/pageSize params, response wraps in {tasks:...], totalSize, pageSize, nextPageToken}"
+    },
+    {
+      "step": "spec_6_6_push_notification_config",
+      "status": "pass",
+      "notes": "CreateTaskPushNotificationConfig with url/token/authentication.schemes — config round-trips correctly"
+    },
+    {
+      "step": "spec_6_7_file_part_raw_and_url",
+      "status": "pass",
+      "notes": "Part with raw (base64) and url fields, mediaType — no kind discriminator"
+    },
+    {
+      "step": "spec_6_8_data_part",
+      "status": "pass",
+      "notes": "Part with structured data field — no kind discriminator"
+    },
+    {
+      "step": "spec_9_4_3_get_task_jsonrpc",
+      "status": "pass",
+      "notes": "GetTask JSON-RPC with id + historyLength, response wraps Task in {task:...}"
+    },
+    {
+      "step": "spec_9_4_4_list_tasks_jsonrpc",
+      "status": "pass",
+      "notes": "ListTasks JSON-RPC with status=TASK_STATE_WORKING, pageSize, pageToken"
+    },
+    {
+      "step": "spec_9_4_5_cancel_task_jsonrpc",
+      "status": "pass",
+      "notes": "CancelTask JSON-RPC, response Task with TASK_STATE_CANCELED"
+    },
+    {
+      "step": "spec_9_4_6_subscribe_to_task_jsonrpc",
+      "status": "pass",
+      "notes": "SubscribeToTask JSON-RPC dispatches correctly"
+    },
+    {
+      "step": "spec_9_4_8_get_extended_agent_card_jsonrpc",
+      "status": "pass",
+      "notes": "GetExtendedAgentCard returns AgentCard with supportedInterfaces declaring AAFP binding URI"
+    },
+    {
+      "step": "spec_5_4_error_codes",
+      "status": "pass",
+      "notes": "All 9 A2A-specific error codes (-32001 to -32009) + 4 JSON-RPC standard codes verified"
+    },
+    {
+      "step": "spec_5_5_camel_case_naming",
+      "status": "pass",
+      "notes": "All JSON fields use camelCase (messageId, contextId, taskId, etc.) per §5.5"
+    },
+    {
+      "step": "spec_4_1_3_all_task_states",
+      "status": "pass",
+      "notes": "All 9 TaskState values serialize/deserialize as SCREAMING_SNAKE_CASE: UNSPECIFIED, SUBMITTED, WORKING, COMPLETED, FAILED, CANCELED, INPUT_REQUIRED, REJECTED, AUTH_REQUIRED"
+    },
+    {
+      "step": "spec_4_1_5_all_roles",
+      "status": "pass",
+      "notes": "All 3 Role values: ROLE_UNSPECIFIED, ROLE_USER, ROLE_AGENT"
+    },
+    {
+      "step": "adr_0002_byte_preservation",
+      "status": "pass",
+      "notes": "Spec-conformant JSON-RPC message preserves all fields through serialize/deserialize round-trip"
+    },
+    {
+      "step": "integration_tests",
+      "status": "pass",
+      "notes": "5 integration tests pass: send_message, get/list/cancel, streaming, error_mapping, graceful_close — all over real QUIC with AAFP handshake"
+    }
+  ],
+  "metrics": {
+    "operations_tested": 11,
+    "operations_passed": 11,
+    "total_a2a_tests": 40,
+    "total_a2a_tests_passed": 40,
+    "spec_sections_covered": ["4.1.3", "4.1.5", "5.3", "5.4", "5.5", "6.1", "6.2", "6.3", "6.5", "6.6", "6.7", "6.8", "9.4.3", "9.4.4", "9.4.5", "9.4.6", "9.4.8"],
+    "task_states_verified": 9,
+    "roles_verified": 3,
+    "error_codes_verified": 13,
+    "strategy": "B (spec examples)",
+    "sdks_found": ["Python (a2a-sdk v1.1.0)", "Go (a2a-go v2.0.0)", "JS (a2a-js)", "Java (a2a-java)", ".NET (a2a-dotnet)", "Rust (a2a-rs)"],
+    "tck_found": "a2aproject/a2a-tck (HTTP/gRPC/JSON-RPC only, no QUIC support)"
+  }
+}
