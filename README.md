@@ -112,7 +112,7 @@ Summary of readiness:
 | SDK | Functional Prototype (authenticated sessions, graceful shutdown) |
 | CLI | Functional Prototype |
 | MCP Transport | **Implemented** (`aafp-transport-mcp` crate, rmcp integration) |
-| A2A Transport | **Designed** (RFC 0006, implementation pending) |
+| A2A Transport | **Implemented** (`aafp-transport-a2a` crate, RFC 0008) |
 | Conformance testing | Stable MVP (17 golden traces + 8 MCP transport conformance tests) |
 | Interoperability (wire-format) | Stable MVP (Go verifies all Rust traces) |
 | Benchmarks | Stable MVP (crypto, messaging, discovery, MCP transport) |
@@ -141,11 +141,12 @@ ecosystem transport bindings:
 | 0005 | Protocol Error Codes, Error Frames, and Error Handling |
 | 0006 | Versioning and Compatibility |
 | 0007 | AAFP Transport Binding for MCP (extension, implemented) |
-| 0008 | AAFP Transport Binding for A2A (extension, proposed) |
+| 0008 | AAFP Transport Binding for A2A (extension, implemented) |
 
 RFCs 0007 and 0008 are extension RFCs that define transport bindings for
 external protocols (MCP and A2A) over AAFP. RFC 0007 is implemented in the
-`aafp-transport-mcp` crate; RFC 0008 is proposed and pending implementation.
+`aafp-transport-mcp` crate; RFC 0008 is implemented in the
+`aafp-transport-a2a` crate.
 
 The RFCs were validated by an independent Go implementation written strictly
 from the specifications, proving they are unambiguous enough to implement from
