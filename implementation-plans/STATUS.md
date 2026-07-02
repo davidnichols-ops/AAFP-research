@@ -10,7 +10,7 @@
 - `[!]` — Blocked (add note)
 - `[-]` — Skipped / N/A (add reason)
 
-**Last updated:** 2026-07-02 (Track C complete, D1 starting, test-results infrastructure added)
+**Last updated:** 2026-07-02 (D1 complete — Python MCP SDK interop verified)
 
 **Test Results Infrastructure:** A `test-results/` directory has been added to the
 umbrella repo with:
@@ -272,18 +272,49 @@ reflected in all relevant docs.
 ## Track D — External Interop (Week 2-4)
 
 ### D1: Test against real Python MCP SDK
-- [ ] **D1.1** Install and inspect the Python MCP SDK Transport interface
-- [ ] **D1.2** Update the adapter if the interface differs
-- [ ] **D1.3** Write real interop test (test_mcp_sdk_interop.py)
-- [ ] **D1.4** Run the interop test
-- [ ] **D1.5** Document interop results
-- [ ] **D1.6** Commit
-- [ ] **D1.7** VERIFY: Test passes
-- [ ] **D1.8** VERIFY: Clean exit (no segfault)
+- [x] **D1.1** Install and inspect the Python MCP SDK Transport interface
+      *(Installed mcp 1.28.1. The SDK uses anyio MemoryObjectStream pairs, NOT
+      read/write callables. ClientSession takes read_stream/write_stream. The
+      adapter needed a complete rewrite to match this interface.)*
+- [x] **D1.2** Update the adapter if the interface differs
+      *(Rewrote mcp_adapter.py: added aafp_mcp_client async context manager that
+      yields (read_stream, write_stream) of anyio MemoryObjectStream carrying
+      SessionMessage objects. Kept legacy AafpMcpTransport class for raw tests.
+      Also fixed a critical PyO3 transport mutex deadlock: send and receive now
+      use separate locks via send_handle(). Added send_handle() and
+      send_raw_json_on_handle() to AafpMcpTransport.)*
+- [x] **D1.3** Write real interop test (test_mcp_sdk_interop.py)
+      *(2 tests: test_mcp_sdk_client_to_rust_server and
+      test_mcp_sdk_clean_shutdown_no_segfault. Also created mcp_server.rs
+      standalone server example and fixed path bug in test_aafp_mcp.py.)*
+- [x] **D1.4** Run the interop test
+      *(Both tests pass. Python MCP SDK 1.28.1 client → Rust rmcp 1.8.0 server
+      over AAFP. initialize, tools/list, tools/call (echo) all succeed.)*
+- [x] **D1.5** Document interop results
+      *(JSON result written to test-results/interop/python-mcp-sdk.json.
+      INTEROP_RESULTS.md written to aafp-py crate. Dashboard regenerated.)*
+- [x] **D1.6** Commit
+- [x] **D1.7** VERIFY: Test passes
+      *(6/6 Python tests pass: 2 MCP SDK interop + 1 raw JSON-RPC + 1 basic +
+      1 clean shutdown + 1 cross-SDK. 1011 Rust tests pass, 0 failures.)*
+- [x] **D1.8** VERIFY: Clean exit (no segfault)
+      *(test_mcp_sdk_clean_shutdown_no_segfault passes. C1 fix verified through
+      the real MCP SDK path.)*
 
-**D1 status:** NOT STARTED
-**D1 blocked by:** C3 (repos pushed)
-**D1 notes:**
+**D1 status:** COMPLETE
+**D1 blocked by:** C3 (repos pushed) — C3 COMPLETE
+**D1 notes:** The Python MCP SDK 1.28.1 uses anyio memory object streams (not
+read/write callables). The adapter was rewritten as an async context manager
+(aafp_mcp_client) following the same pattern as stdio_client/websocket_client.
+A critical PyO3 transport mutex deadlock was discovered and fixed: the original
+PyAafpTransport wrapped the entire AafpMcpTransport in a single mutex, which
+serialized send and receive. When the MCP SDK's reader task blocked waiting
+for a response, the writer task could not send the request. Fix: added
+send_handle() method to AafpMcpTransport and restructured PyAafpTransport to
+use separate locks for send and receive. Also created mcp_server.rs standalone
+server example (the existing mcp_over_aafp example runs its own client, causing
+a race condition when used as a subprocess server). All 6 Python tests pass,
+all 1011 Rust tests pass.
 
 ### D2: Test against A2A reference implementation
 - [ ] **D2.1** Research A2A reference implementations

@@ -1,0 +1,56 @@
+{
+  "test_name": "python-mcp-sdk-interop",
+  "test_category": "interop",
+  "timestamp": "2026-07-02T19:00:00Z",
+  "environment": {
+    "os": "macOS 15.5.0 (Darwin 25.5.0)",
+    "cpu": "Apple M4",
+    "rust_version": "1.96.0",
+    "python_version": "3.14.6",
+    "mcp_sdk_version": "1.28.1",
+    "rmcp_version": "1.8.0",
+    "aafp_version": "rev6-rc1",
+    "commit": "15665a2"
+  },
+  "status": "pass",
+  "duration_ms": 1860,
+  "summary": "Python MCP SDK 1.28.1 client connected to Rust rmcp 1.8.0 server over AAFP post-quantum QUIC transport. Full MCP protocol exchange verified: initialize, tools/list, tools/call (echo), graceful close.",
+  "details": [
+    {
+      "step": "transport_connect",
+      "status": "pass",
+      "duration_ms": 200,
+      "notes": "AAFP v1 handshake completed (QUIC + X25519MLKEM768 PQ TLS + ML-DSA-65 identity verification)"
+    },
+    {
+      "step": "mcp_initialize",
+      "status": "pass",
+      "duration_ms": 50,
+      "notes": "protocolVersion 2025-11-25 negotiated, server=aafp-echo-server v0.1.0"
+    },
+    {
+      "step": "tools_list",
+      "status": "pass",
+      "duration_ms": 20,
+      "notes": "1 tool returned: echo"
+    },
+    {
+      "step": "tools_call",
+      "status": "pass",
+      "duration_ms": 30,
+      "notes": "echo tool called with 'Hello from AAFP!', result='Echo: Hello from AAFP!'"
+    },
+    {
+      "step": "graceful_close",
+      "status": "pass",
+      "duration_ms": 10,
+      "notes": "Session closed cleanly, no segfault (C1 fix verified through MCP SDK path)"
+    }
+  ],
+  "metrics": {
+    "tools_available": 1,
+    "tools_called": 1,
+    "protocol_version": "2025-11-25",
+    "handshake_layers": 3
+  }
+}

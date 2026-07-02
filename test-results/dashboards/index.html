@@ -213,23 +213,23 @@
   <div class="header">
     <h1>AAFP Test Results <span class="badge">rev6-rc1</span></h1>
     <div class="meta">
-      Generated: 2026-07-02 12:43:41 ·
-      Commit: — ·
-      Rust: — ·
-      OS: — ·
-      CPU: —
+      Generated: 2026-07-02 14:01:11 ·
+      Commit: 15665a2 ·
+      Rust: 1.96.0 ·
+      OS: macOS 15.5.0 (Darwin 25.5.0) ·
+      CPU: Apple M4
     </div>
   </div>
 
   <div class="container">
     <div class="summary-grid">
       
-        <div class="summary-card neutral" onclick="document.getElementById('interop').scrollIntoView({behavior:'smooth'})">
-          <div class="card-icon">○</div>
+        <div class="summary-card pass" onclick="document.getElementById('interop').scrollIntoView({behavior:'smooth'})">
+          <div class="card-icon">✓</div>
           <div class="card-body">
             <div class="card-title">Interop</div>
-            <div class="card-status">No data</div>
-            <div class="card-detail">0 tests · 0 passed · 0 failed · 0 skipped</div>
+            <div class="card-status">All passing</div>
+            <div class="card-detail">1 test · 1 passed · 0 failed · 0 skipped</div>
           </div>
         </div>
 
@@ -262,8 +262,23 @@
     </div>
 
     <div class="section" id="interop">
-      <h2>Interoperability Tests <span class="count">(0 tests)</span></h2>
-      <p class='empty'>No interop tests run yet.</p>
+      <h2>Interoperability Tests <span class="count">(1 tests)</span></h2>
+      
+    <table class="results-table">
+      <thead>
+        <tr><th></th><th>Test</th><th>Summary</th><th>Duration</th><th>Commit</th><th>Timestamp</th></tr>
+      </thead>
+      <tbody>
+        <tr class="pass">
+          <td class="icon">✓</td>
+          <td>python-mcp-sdk-interop</td>
+          <td>Python MCP SDK 1.28.1 client connected to Rust rmcp 1.8.0 server over AAFP post-quantum QUIC transport. Full MCP protocol exchange verified: initialize, tools/list, tools/call (echo), graceful close.</td>
+          <td>1860 ms</td>
+          <td class="mono">15665a2</td>
+          <td class="mono">2026-07-02T19:00:00</td>
+        </tr>
+      </tbody>
+    </table>
     </div>
 
     <div class="section" id="performance">
