@@ -1,7 +1,7 @@
 # RFC-0002: AAFP Transport & Framing
 
 ```
-Status:         Freeze Candidate (Revision 5)
+Status:         Release Candidate (Revision 6)
 Number:         0002
 Title:          Transport, Framing, Stream Multiplexing, and Wire Format
 Author:         AAFP Project

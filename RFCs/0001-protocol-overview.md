@@ -1,7 +1,7 @@
 # RFC-0001: AAFP Protocol Overview
 
 ```
-Status:         Freeze Candidate (Revision 5)
+Status:         Release Candidate (Revision 6)
 Number:         0001
 Title:          Protocol Overview, Goals, and Layer Architecture
 Author:         AAFP Project

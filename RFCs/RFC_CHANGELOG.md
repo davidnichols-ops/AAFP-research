@@ -2,11 +2,55 @@
 
 ```
 Document:         RFC_CHANGELOG.md
-Date:             2025-01-16
+Date:             2026-07-01
 Status:           Current
 Scope:            Records all changes to AAFP RFCs from initial draft
-                  (Revision 1) through the current revision (Revision 5).
+                  (Revision 1) through the current revision (Revision 6).
 ```
+
+---
+
+## Revision 6 (2026-07-01) — Release Candidate (rev6-rc1)
+
+Revision 6 incorporates all Category A protocol amendments (A-1 through
+A-10) discovered during implementation and cross-language interoperability
+testing. The specification status advances from Freeze Candidate to
+Release Candidate.
+
+### Amendments Applied
+
+- **A-1**: RPC params must be canonical CBOR item, not null
+- **A-2**: Optional fields: omit-when-absent (not null)
+- **A-3**: AgentRecord record_version for replay protection
+- **A-4**: Bind session ID to server AgentId
+- **A-5**: Frame extension limits enforced before allocation
+- **A-6**: Normative handshake state machine (RFC-0002 §5.10)
+- **A-7**: Extension processing order (sig before semantics)
+- **A-8**: CLOSE frame semantics (RFC-0002 §6.6)
+- **A-9**: Nonce reuse detection (5-min retention, RFC-0002 §6.7)
+- **A-10**: Go ML-DSA-65 cross-signature verification
+
+### Verification
+
+- 1011 Rust tests, 0 failures
+- 664 Go tests, 0 failures
+- 17 golden wire traces verified by both implementations
+- 37 interop fixtures round-trip verified
+- ML-DSA-65 cross-verification: 19/19 Rust vectors verify in Go,
+  15/15 Go vectors verify in Rust, 100/100 diff traces cross-verify
+
+### RFC-0001 through RFC-0006 Changes
+
+| RFC | Change |
+|-----|--------|
+| 0001 | Header: Revision 5 → Revision 6, status → Release Candidate |
+| 0002 | Header: Revision 5 → Revision 6, status → Release Candidate. Content includes Rev 6 amendments (A-1, A-5, A-6, A-8, A-9) |
+| 0003 | Header: Revision 5 → Revision 6, status → Release Candidate. Content includes Rev 6 amendments (A-2, A-3, A-4) |
+| 0004 | Header: Revision 5 → Revision 6, status → Release Candidate |
+| 0005 | Header: Revision 5 → Revision 6, status → Release Candidate |
+| 0006 | Header: Revision 5 → Revision 6, status → Release Candidate |
+
+**Status:** Freeze Candidate → Release Candidate (rev6-rc1)
 
 ---
 

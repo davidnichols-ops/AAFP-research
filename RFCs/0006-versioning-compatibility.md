@@ -1,7 +1,7 @@
 # RFC-0006: AAFP Versioning & Compatibility
 
 ```
-Status:         Freeze Candidate (Revision 5)
+Status:         Release Candidate (Revision 6)
 Number:         0006
 Title:          Protocol Versioning, Extension Registry, and
                 Compatibility Rules

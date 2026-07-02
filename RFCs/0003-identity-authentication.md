@@ -1,7 +1,7 @@
 # RFC-0003: AAFP Identity & Authentication
 
 ```
-Status:         Freeze Candidate (Revision 5)
+Status:         Release Candidate (Revision 6)
 Number:         0003
 Title:          Agent Identity, AgentRecord, Capability Descriptors,
                 Authorization, and Session Lifecycle

@@ -1,7 +1,7 @@
 # RFC-0005: AAFP Error Model
 
 ```
-Status:         Freeze Candidate (Revision 5)
+Status:         Release Candidate (Revision 6)
 Number:         0005
 Title:          Protocol Error Codes, Error Frames, and Error Handling
 Author:         AAFP Project
