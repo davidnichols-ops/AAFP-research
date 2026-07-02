@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Write(**)",
+      "Exec(cargo)",
+      "Exec(go)",
+      "Exec(git)",
+      "Exec(rustup)",
+      "Exec(rustc)",
+      "Exec(ls)",
+      "Exec(cat)",
+      "Exec(wc)",
+      "Exec(head)",
+      "Exec(tail)",
+      "Exec(mkdir)",
+      "Exec(cp)",
+      "Exec(mv)",
+      "Exec(touch)",
+      "Exec(echo)",
+      "Exec(pwd)",
+      "Exec(which)",
+      "Exec(env)"
+    ],
+    "deny": [
+      "Exec(rm -rf /)",
+      "Exec(sudo)",
+      "Write(.env*)"
+    ]
+  }
+}
