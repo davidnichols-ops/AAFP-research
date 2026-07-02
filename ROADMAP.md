@@ -3,6 +3,9 @@
 **Baseline:** `v0.1-mvp-freeze`
 **Full assessment:** [`docs/status/PHASE2_STATUS_REPORT.md`](docs/status/PHASE2_STATUS_REPORT.md)
 
+> **Updated 2026-07-02:** Tracks A and B complete. See
+> [`implementation-plans/STATUS.md`](implementation-plans/STATUS.md) for current state.
+
 This roadmap orders work by **architectural value** (highest first), not feature
 count. Each item states its objective, rationale, complexity, dependencies,
 protocol impact, and breaking status.
@@ -81,8 +84,8 @@ shutdown.
 |---|------|-----------|----------|-----------------|--------|
 | P1-1 | PING/PONG keep-alive | Low | Non-breaking | Implements RFC-0002 §4.7-4.8 | Pending |
 | P1-2 | Discovery announce/lookup over QUIC | Medium | Non-breaking | Implements RFC-0004 §3 | Pending |
-| P1-3 | CI pipeline (GitHub Actions) | Low | Non-breaking | None | Pending |
-| P1-4 | ML-DSA-65 in Go implementation | Medium | Non-breaking | None (Go gap) | Pending |
+| P1-3 | CI pipeline (GitHub Actions) | Low | Non-breaking | None | **DONE** (A2 fixed workflows, submodules initialized) |
+| P1-4 | ML-DSA-65 in Go implementation | Medium | Non-breaking | None (Go gap) | **DONE** (A-10, cross-signature verified) |
 | P1-5 | Validate performance targets | Medium | Non-breaking | None | Pending |
 | P1-6 | Fix compiler warnings and dead code | Low | Non-breaking | None | **DONE** (0 warnings, 0 clippy lints) |
 | P1-7 | Rustdoc documentation | Medium | Non-breaking | None | Pending |
@@ -138,7 +141,7 @@ before implementation.
 8. **Reputation system** (EigenTrust-style)
 9. **io_uring connection management** (Linux, for 100K+ connections)
 10. **MCP transport binding** — AAFP as an MCP transport — **DONE** (RFC 0007, `aafp-transport-mcp` crate)
-11. **A2A transport binding** — AAFP as an A2A transport — **DESIGNED** (RFC 0008, implementation pending)
+11. **A2A transport binding** — AAFP as an A2A transport — **DONE** (RFC 0008, `aafp-transport-a2a` crate, B1)
 12. **Onion routing** — privacy layer
 13. **Autonomous contracting protocol**
 
@@ -166,7 +169,7 @@ These are out of scope and should not be pursued.
 |---|-----------|--------|
 | 1 | Two independent implementations | MET |
 | 2 | Bidirectional wire interop | MET |
-| 3 | Cross-signature verification | NOT MET (Go lacks ML-DSA-65 → P1-4) |
+| 3 | Cross-signature verification | MET (A-10: Go ML-DSA-65 implemented, cross-verified) |
 | 4 | Published test vectors | MET |
 | 5 | Published golden traces | MET |
 | 6 | No unresolved ambiguities | MET |
@@ -175,7 +178,9 @@ These are out of scope and should not be pursued.
 | 9 | Performance targets | NOT MET (network perf untested → P1-5) |
 | 10 | Supply-chain review | MET (unmaintained `pqcrypto-*` crates removed; using `fips204` + `aws-lc-rs`) |
 
-**8 of 10 met.** The P1 work above closes the remaining two.
+**9 of 10 met.** The remaining criterion is "Independent third-party interop
+testing" (Track D addresses this). Performance validation (P1-5) is in progress
+(Track F1).
 
 ---
 
@@ -187,7 +192,7 @@ Rev 6 categorizes remaining work into **Rev 6 Protocol Amendments**
 ambiguities and gaps identified in the Rev 6 review. It does **not**
 cover all remaining release criteria — see Outstanding Items below.
 
-### Category A — Rev 6 Protocol Amendments (5 of 10 implemented)
+### Category A — Rev 6 Protocol Amendments (10 of 10 implemented)
 
 | ID | Item | Status |
 |----|------|--------|
@@ -206,7 +211,7 @@ cover all remaining release criteria — see Outstanding Items below.
 
 | ID | Item | Target |
 |----|------|--------|
-| B-1 | Go ML-DSA-65 cross-signature verification | v1.1 |
+| B-1 | Go ML-DSA-65 cross-signature verification | **DONE** (A-10) |
 | B-2 | Go QUIC transport | v1.1 |
 | B-3 | Network performance validation | v1.1 |
 | B-4 | Browser/WASM support | v1.2 |
@@ -220,14 +225,20 @@ These items must be resolved before v1 production readiness:
 
 | Item | Status |
 |------|--------|
-| Revocation mechanism (CRL/OCSP-like) | NOT IMPLEMENTED |
+| Revocation mechanism (CRL/OCSP-like) | NOT IMPLEMENTED (Track F3) |
 | Normative handshake state machine diagram | DONE (RFC-0002 §5.10) |
-| Go ML-DSA-65 cross-signature verification | NOT MET |
-| Performance validation (network benchmarks) | NOT MET |
-| Independent third-party interop testing | NOT DONE |
+| Go ML-DSA-65 cross-signature verification | **DONE** (A-10) |
+| Performance validation (network benchmarks) | NOT MET (Track F1) |
+| Independent third-party interop testing | IN PROGRESS (Track D) |
 | Production deployment experience | NONE |
-| NAT traversal production validation | PARTIAL |
-| Persistent/networked DHT | NOT IMPLEMENTED |
-| PubSub | NOT IMPLEMENTED |
+| NAT traversal production validation | PARTIAL (Track E4) |
+| Persistent/networked DHT | NOT IMPLEMENTED (Track F4) |
+| PubSub | NOT IMPLEMENTED (Track E3) |
+| MCP transport binding | **DONE** (RFC 0007, `aafp-transport-mcp`) |
+| A2A transport binding | **DONE** (RFC 0008, `aafp-transport-a2a`, B1) |
+| Python PyO3 adapter | **DONE** (`aafp-py` crate, B2) |
+| Shared establish_session() | **DONE** (B3, extracted to `aafp-sdk`) |
+| pyo3 segfault on cleanup | **FIXED** (C1, async shutdown + wait_idle) |
 
-**Current status: Rev 6 protocol candidate pending production validation.**
+**Current status: Rev 6 protocol candidate pending production validation.
+Tracks C-F in progress (see `implementation-plans/STATUS.md`).**

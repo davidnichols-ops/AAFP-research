@@ -52,10 +52,10 @@ protocol freeze.
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Rust implementation conforms | [x] | 995 tests, 0 failures |
-| Go implementation conforms | [ ] | Pending Phase C-3 |
-| Rust ↔ Go authenticated interoperability | [ ] | Pending Go conformance |
-| Wire compatibility tests | [ ] | Pending golden trace generation |
+| Rust implementation conforms | [x] | 1011 tests, 0 failures |
+| Go implementation conforms | [x] | 13 packages, 664 tests, 0 failures |
+| Rust ↔ Go authenticated interoperability | [x] | ML-DSA-65 cross-verified (A-10) |
+| Wire compatibility tests | [x] | 17 golden traces verified by both |
 
 ## Testing
 
@@ -89,18 +89,14 @@ protocol freeze.
 
 ## Summary
 
-- **Complete**: 29 items
-- **Pending**: 3 items
+- **Complete**: 32 items
+- **Pending**: 0 items
 - **In progress**: 0 items
 
-The 3 pending items are:
-1. Go implementation conformance
-2. Rust ↔ Go authenticated interoperability
-3. Wire compatibility tests (golden traces)
-
-The protocol specification is complete. The remaining work is
-implementation-side: porting to Go and generating golden traces
-for cross-implementation validation.
+All protocol candidate checklist items are complete. The protocol
+specification is fully implemented and cross-verified between Rust and Go.
+Remaining work is in Tracks D-F (external interop, protocol extensions,
+production hardening).
 
 ---
 
@@ -147,9 +143,9 @@ full v1 production readiness:
 |------|--------|-------|
 | Revocation mechanism | NOT IMPLEMENTED | Compromised keys remain valid until expiry; no CRL/OCSP-like mechanism |
 | Normative handshake state machine | DONE (A-6) | RFC-0002 §5.10 normative state machine; Rust + Go implementations with 61 tests |
-| Go ML-DSA-65 cross-signature verification | NOT MET | Go lacks native ML-DSA-65; release criterion #3 still unmet |
-| Performance validation | NOT MET | Network benchmarks untested; release criterion #9 still unmet |
-| Independent third-party interop testing | NOT DONE | Only author-maintained implementations exist |
+| Go ML-DSA-65 cross-signature verification | **DONE** (A-10) | Go ML-DSA-65 implemented; cross-verified with Rust |
+| Performance validation | NOT MET | Network benchmarks untested; release criterion #9 still unmet (Track F1) |
+| Independent third-party interop testing | IN PROGRESS | Python cross-SDK interop verified (B2, C1); external SDK testing pending (Track D) |
 | Production deployment experience | NONE | No real-world deployment data |
 | NAT traversal | PARTIAL | Implementation exists but not validated in production |
 | Persistent/networked DHT | NOT IMPLEMENTED | Only in-memory discovery; no persistent DHT |

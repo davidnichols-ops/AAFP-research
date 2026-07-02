@@ -32,7 +32,7 @@ multiple development cycles:
 ### 1.3 Documentation and Analysis
 
 - **RFC-0007**: AAFP Transport Binding for MCP (implemented, with citations)
-- **RFC-0008**: AAFP Transport Binding for A2A (proposed, not implemented)
+- **RFC-0008**: AAFP Transport Binding for A2A (implemented, B1)
 - **TRANSPORT_ARCHITECTURE_REVIEW.md**: Dependency graph, API analysis, concerns
 - **COMPATIBILITY_LAYER_ANALYSIS.md**: Design principle documentation
 - **INTEROPERABILITY_PLAN.md**: Phased validation roadmap
@@ -47,6 +47,15 @@ multiple development cycles:
   guidance to use `export_tls_binding()`. Retained for backwards compatibility.
 - **All callers updated**: `aafp-transport-mcp`, `aafp-sdk` (client, server,
   handshake_driver) now use `export_tls_binding()` instead of `raw()`.
+- **`aafp-transport-a2a` crate** (B1): A2A transport binding for RFC 0008.
+  Uses shared `establish_session()` from `aafp-sdk::transport_binding`.
+- **`aafp-py` crate** (B2): Python PyO3 adapter exposing AAFP Agent and
+  AafpTransport to Python. Cross-SDK interop verified (Rust ↔ Python).
+- **Shared `establish_session()`** (B3): Extracted to
+  `aafp-sdk::transport_binding`. All 4 transport binding call sites
+  (MCP connect/accept, A2A connect/accept) now use the shared function.
+- **pyo3 segfault fix** (C1): Async `shutdown()` method drains quinn
+  background tasks via `wait_idle()` before runtime drop.
 
 ---
 
@@ -58,7 +67,7 @@ multiple development cycles:
 |------------|----------|--------|
 | `raw()` still exists (deprecated) | Low | Backwards compat; can be removed in 0.2 |
 | `build_server_config()` / `build_client_config()` return quinn types | Low | Pre-existing; not a regression |
-| Duplicated handshake logic between SDK and transport | Low-Medium | Maintenance risk; wait for A2A binding to abstract |
+| ~~Duplicated handshake logic between SDK and transport~~ | ~~Low-Medium~~ | **RESOLVED** (B3): Shared `establish_session()` extracted |
 | No AAFP CLOSE frame in transport close() | Low | Uses QUIC stream finish + connection close instead |
 
 ### 2.2 Functional
@@ -74,10 +83,10 @@ multiple development cycles:
 
 | Limitation | Severity | Impact |
 |------------|----------|--------|
-| No cross-SDK interop tests | High | Only rmcp ↔ rmcp tested |
-| No official MCP conformance tests | Medium | Protocol-level tests only |
+| ~~No cross-SDK interop tests~~ | ~~High~~ | **RESOLVED** (B2, C1): Rust ↔ Python interop verified both directions |
+| No official MCP conformance tests | Medium | Protocol-level tests only (Track D4) |
 | `neg_byte_swap_in_signature` is flaky | Low | Pre-existing; ML-DSA-65 probabilistic edge case |
-| No CI automation | Medium | Manual testing only |
+| ~~No CI automation~~ | ~~Medium~~ | **RESOLVED** (A2): GitHub Actions workflows exist |
 
 ---
 
@@ -132,13 +141,14 @@ to use the new `export_tls_binding()` method.
 | Test | Status |
 |------|--------|
 | rmcp client ↔ rmcp server over AAFP | ✅ Verified (16 tests) |
-| rmcp client ↔ Python MCP server over AAFP | ❌ Not tested (no Python adapter) |
-| rmcp client ↔ TypeScript MCP server over AAFP | ❌ Not tested (no TS adapter) |
-| AAFP transport vs. official MCP conformance suite | ❌ Not tested |
+| Python client ↔ Rust server over AAFP | ✅ Verified (B2.10, `test_aafp_mcp.py`) |
+| Rust client ↔ Python server over AAFP | ✅ Verified (B2.11/C1, `test_cross_sdk.py`) |
+| rmcp client ↔ TypeScript MCP server over AAFP | ❌ Not tested (no TS adapter, Track D) |
+| AAFP transport vs. official MCP conformance suite | ❌ Not tested (Track D4) |
 | AAFP transport with MCP protocol 2026-07-28 | ❌ Not tested (not yet released) |
 
-**Assessment: rmcp-only interop is verified. Cross-SDK interop is the next
-milestone (Phase 2 of the validation roadmap).**
+**Assessment: Rust-only and Rust ↔ Python cross-SDK interop verified.
+External SDK testing (TypeScript, Go, Java, Kotlin) is pending (Track D).**
 
 ---
 

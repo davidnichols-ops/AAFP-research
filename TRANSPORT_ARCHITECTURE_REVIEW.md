@@ -172,6 +172,9 @@ This encapsulates the quinn dependency. The MCP transport would then call
 **Severity:** Medium. Functionally correct but creates coupling that will
 break if quinn's API changes. Also affects any future transport binding.
 
+> **RESOLVED** (B3): Added `QuicConnection::export_tls_binding()`. Transport
+> crates no longer call `raw()`. The `raw()` method is now deprecated.
+
 ### 5.2 CONCERN: Stream ID violation (RFC-0002 §7.1)
 
 **Location:** `lib.rs:92`
@@ -241,6 +244,10 @@ and `AafpMcpTransport::connect_with_auth` / `accept_with_auth`.
 risk. Not a blocker for public release but should be addressed before
 adding more transport bindings (A2A, etc.).
 
+> **RESOLVED** (B3): Extracted `establish_session()` to
+> `aafp-sdk::transport_binding`. All 4 call sites (MCP connect/accept, A2A
+> connect/accept) now use the shared function.
+
 ---
 
 ## 6. Reusability for Future Transport Bindings
@@ -286,6 +293,11 @@ the shared code has dependencies that shouldn't be in `aafp-sdk`.
 **Do not implement this now.** Wait until the A2A binding is actually
 built to avoid premature abstraction. The current duplication is
 tolerable for a single binding.
+
+> **RESOLVED** (B1+B3): Second transport binding (A2A) implemented in B1,
+> then shared code extracted in B3 using Option A (`aafp-sdk::transport_binding`
+> module with `establish_session()`). The A2A binding validated the abstraction
+> before extraction, avoiding premature design.
 
 ---
 

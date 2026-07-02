@@ -106,30 +106,34 @@ Summary of readiness:
 | Messaging (framing) | Stable MVP |
 | Messaging (RPC) | Functional Prototype (v1 types RFC-compliant) |
 | Messaging (ERROR/CLOSE frames) | Implemented — SDK sends ERROR and CLOSE frames |
-| Messaging (PubSub) | Not Started |
-| Discovery (DHT) | Functional Prototype (in-memory only) |
-| NAT traversal | Not Started (stubs) |
-| SDK | Functional Prototype (authenticated sessions, graceful shutdown) |
+| Messaging (PubSub) | Not Started (in-memory only, Track E3 adds networked) |
+| Discovery (DHT) | Functional Prototype (in-memory only, Track E2 adds QUIC protocol) |
+| NAT traversal | Not Started (stubs, Track E4 implements relay + DCUtR) |
+| SDK | Functional Prototype (authenticated sessions, graceful shutdown, shared `establish_session()`) |
 | CLI | Functional Prototype |
 | MCP Transport | **Implemented** (`aafp-transport-mcp` crate, rmcp integration) |
 | A2A Transport | **Implemented** (`aafp-transport-a2a` crate, RFC 0008) |
+| Python Adapter | **Implemented** (`aafp-py` crate, PyO3, B2) |
 | Conformance testing | Stable MVP (17 golden traces + 8 MCP transport conformance tests) |
 | Interoperability (wire-format) | Stable MVP (Go verifies all Rust traces) |
+| Interoperability (cross-SDK) | **Verified** (Python client ↔ Rust server, Rust client ↔ Python server) |
 | Benchmarks | Stable MVP (crypto, messaging, discovery, MCP transport) |
-| RFCs | Stable MVP (6 RFCs, Rev 5, all ambiguities resolved) |
-| CI/CD | Not Started |
+| RFCs | Stable MVP (8 RFCs, Rev 6, all ambiguities resolved) |
+| CI/CD | Functional (GitHub Actions: cargo test, cargo clippy, go test) |
 
 **Test suite:** 1011 Rust tests + 13 Go test packages, all passing. 0 failures.
-17 golden wire traces verified by both implementations.
+17 golden wire traces verified by both implementations. Python cross-SDK interop
+tests passing (Rust ↔ Python over AAFP QUIC transport).
 
-**Release criteria:** 10 of 10 met. All Category A protocol amendments implemented
+**Release criteria:** 9 of 10 met. All Category A protocol amendments implemented
 and verified. Cross-signature verification (ML-DSA-65) confirmed between Rust and Go.
+Remaining: independent third-party interop testing (Track D in progress).
 
 ---
 
 ## RFCs
 
-Six RFCs (Revision 5) define the core protocol, plus two extension RFCs for
+Six RFCs (Revision 6) define the core protocol, plus two extension RFCs for
 ecosystem transport bindings:
 
 | RFC | Title |
@@ -158,8 +162,9 @@ without reference to the Rust source.
 
 ### Rust reference (`implementations/rust`)
 
-13-crate Cargo workspace covering the full protocol stack: CBOR, crypto,
-identity, core traits, QUIC transport, discovery, NAT (stubs), messaging, SDK,
+14-crate Cargo workspace (plus 1 standalone `aafp-py` crate) covering the full
+protocol stack: CBOR, crypto, identity, core traits, QUIC transport, discovery,
+NAT (stubs), messaging, SDK, MCP transport, A2A transport, Python PyO3 adapter,
 CLI, conformance tests, benchmarks, and integration tests.
 
 ```bash

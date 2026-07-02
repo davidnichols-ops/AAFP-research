@@ -35,7 +35,7 @@ SDKs, then run cross-SDK conformance tests.
 |-----|----------|------------|--------|
 | **rmcp** | Rust | https://crates.io/crates/rmcp | **Already integrated** (AAFP transport implemented) |
 | **@modelcontextprotocol/sdk** | TypeScript | https://github.com/modelcontextprotocol/typescript-sdk | Not integrated |
-| **mcp** | Python | https://github.com/modelcontextprotocol/python-sdk | Not integrated |
+| **mcp** | Python | https://github.com/modelcontextprotocol/python-sdk | **Integrated (B2)** — PyO3 adapter, cross-SDK interop verified |
 | **go-sdk** | Go | https://github.com/modelcontextprotocol/go-sdk | Not integrated |
 | **java-sdk** | Java | https://github.com/modelcontextprotocol/java-sdk | Not integrated |
 | **kotlin-sdk** | Kotlin | https://github.com/modelcontextprotocol/kotlin-sdk | Not integrated |
@@ -157,7 +157,10 @@ test suite. They would:
 
 ## 5. Automated CI Approach
 
-### 5.1 Phase 1: Rust-only CI (immediate)
+### 5.1 Phase 1: Rust-only CI (immediate) — **DONE** (A2)
+
+GitHub Actions workflows exist and were fixed in A2. CI runs `cargo test`,
+`cargo clippy`, and `go test` on every push and PR.
 
 ```yaml
 # .github/workflows/mcp-transport.yml
@@ -175,7 +178,11 @@ jobs:
         run: cargo bench --bench mcp_transport -- --warm-up-time 1 --measurement-time 2 --sample-size 10
 ```
 
-### 5.2 Phase 2: Protocol-level conformance (short-term)
+### 5.2 Phase 2: Protocol-level conformance (short-term) — **PARTIAL**
+
+Conformance tests exist for MCP transport (`aafp-transport-mcp` conformance
+tests) and A2A transport (`aafp-transport-a2a` conformance tests). Full
+protocol-level conformance suite integration is pending (Track D4).
 
 Add a `tests/protocol_conformance.rs` test that:
 1. Starts an rmcp server with the AAFP transport
@@ -183,9 +190,16 @@ Add a `tests/protocol_conformance.rs` test that:
 3. Exchanges MCP messages (initialize, tools/list, tools/call)
 4. Asserts that the JSON-RPC messages match MCP specification examples
 
-### 5.3 Phase 3: Cross-SDK interop (medium-term)
+### 5.3 Phase 3: Cross-SDK interop (medium-term) — **IN PROGRESS**
 
-When the Python AAFP adapter is available:
+The Python AAFP adapter (`aafp-py` crate, B2) is available. Cross-SDK interop
+has been verified in both directions:
+- Python client → Rust server (B2.10, `test_aafp_mcp.py`)
+- Rust client → Python server (B2.11/C1, `test_cross_sdk.py`)
+
+External SDK testing (against the real Python MCP SDK, A2A reference impl,
+etc.) is pending (Track D).
+
 1. Start an rmcp server with AAFP transport (Rust)
 2. Connect a Python MCP client with AAFP transport (Python)
 3. Exchange MCP messages
@@ -193,10 +207,10 @@ When the Python AAFP adapter is available:
 
 This requires:
 - A Python AAFP transport implementation (wrapping the AAFP Rust crate via
-  PyO3, or a pure-Python QUIC + ML-DSA-65 implementation)
+  PyO3, or a pure-Python QUIC + ML-DSA-65 implementation) — **DONE** (`aafp-py`)
 - A CI runner with both Rust and Python installed
 
-### 5.4 Phase 4: Full conformance suite (long-term)
+### 5.4 Phase 4: Full conformance suite (long-term) — **PENDING** (Track D4)
 
 Integrate with `@modelcontextprotocol/conformance` by implementing an AAFP
 transport adapter for the conformance runner. This is the gold standard but
