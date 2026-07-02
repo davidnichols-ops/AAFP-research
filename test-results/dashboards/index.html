@@ -213,7 +213,7 @@
   <div class="header">
     <h1>AAFP Test Results <span class="badge">rev6-rc1</span></h1>
     <div class="meta">
-      Generated: 2026-07-02 17:11:14 ·
+      Generated: 2026-07-02 17:26:42 ·
       Commit: d0112ca ·
       Rust: 1.96.0 ·
       OS: macOS 15.5.0 (Darwin 25.5.0) ·
@@ -229,7 +229,7 @@
           <div class="card-body">
             <div class="card-title">Interop</div>
             <div class="card-status">All passing</div>
-            <div class="card-detail">2 tests · 2 passed · 0 failed · 0 skipped</div>
+            <div class="card-detail">3 tests · 3 passed · 0 failed · 0 skipped</div>
           </div>
         </div>
 
@@ -262,7 +262,7 @@
     </div>
 
     <div class="section" id="interop">
-      <h2>Interoperability Tests <span class="count">(2 tests)</span></h2>
+      <h2>Interoperability Tests <span class="count">(3 tests)</span></h2>
       
     <table class="results-table">
       <thead>
@@ -284,6 +284,14 @@
           <td>1860 ms</td>
           <td class="mono">15665a2</td>
           <td class="mono">2026-07-02T19:00:00</td>
+        </tr>
+        <tr class="pass">
+          <td class="icon">✓</td>
+          <td>rust-go-cross-interop</td>
+          <td>Rust ↔ Go cross-language interop at Level 2 (frame-level). Go implementation is a wire-format library (no QUIC transport), so Level 1 (live QUIC) is not possible. 7 Rust tests spawn the Go fixture generator, decode Go-produced CBOR/frame/handshake/AgentRecord fixtures in Rust, and verify byte-for-byte equality after re-encoding. All 39 fixtures pass. Additionally, 48 Go test vector tests, 17 golden trace cross-verifications, and ML-DSA-65 cross-signature verification (19/19 + 15/15 + 100/100) all pass. Stale Go fixtures were regenerated to include A-3 record_version and A-4 session_id binding.</td>
+          <td>60 ms</td>
+          <td class="mono">3a00274</td>
+          <td class="mono">2026-07-02T21:00:00</td>
         </tr>
       </tbody>
     </table>

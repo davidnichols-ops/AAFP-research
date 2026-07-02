@@ -1,0 +1,91 @@
+{
+  "test_name": "rust-go-cross-interop",
+  "test_category": "interop",
+  "timestamp": "2026-07-02T21:00:00Z",
+  "environment": {
+    "os": "macOS 15.5.0 (Darwin 25.5.0)",
+    "cpu": "Apple M4",
+    "rust_version": "1.96.0",
+    "go_version": "1.26.4",
+    "aafp_version": "rev6-rc1",
+    "commit": "3a00274"
+  },
+  "status": "pass",
+  "duration_ms": 60,
+  "summary": "Rust ↔ Go cross-language interop at Level 2 (frame-level). Go implementation is a wire-format library (no QUIC transport), so Level 1 (live QUIC) is not possible. 7 Rust tests spawn the Go fixture generator, decode Go-produced CBOR/frame/handshake/AgentRecord fixtures in Rust, and verify byte-for-byte equality after re-encoding. All 39 fixtures pass. Additionally, 48 Go test vector tests, 17 golden trace cross-verifications, and ML-DSA-65 cross-signature verification (19/19 + 15/15 + 100/100) all pass. Stale Go fixtures were regenerated to include A-3 record_version and A-4 session_id binding.",
+  "details": [
+    {
+      "step": "go_quic_assessment",
+      "status": "pass",
+      "notes": "Go implementation has no QUIC transport layer (explicitly transport-agnostic). Level 1 (live QUIC interop) not possible. Level 2 (frame-level) is the appropriate interop level."
+    },
+    {
+      "step": "go_tests_pass",
+      "status": "pass",
+      "notes": "All Go tests pass: 48 test vectors, 17 golden traces, handshake, identity, frame, closemanager, pipeline, replaycache, mldsa, versionneg, racestress, interop"
+    },
+    {
+      "step": "fixture_regeneration",
+      "status": "pass",
+      "notes": "Regenerated stale Go interop fixtures. Previous fixtures were missing A-3 record_version (key 10) in AgentRecord and A-4 server_agent_id binding in session ID. After regeneration, 39/39 fixtures pass in Rust."
+    },
+    {
+      "step": "cbor_roundtrip",
+      "status": "pass",
+      "notes": "16 CBOR fixtures: Go encodes, Rust decodes and re-encodes, bytes match. Covers uint, negative, bool, null, bstr, tstr, empty array/map, int map, string map."
+    },
+    {
+      "step": "frame_roundtrip",
+      "status": "pass",
+      "notes": "6 frame fixtures: DATA (empty, with payload, with flags), HANDSHAKE, RPC_REQUEST, PING. Go encodes, Rust decodes and re-encodes, bytes match."
+    },
+    {
+      "step": "handshake_decode",
+      "status": "pass",
+      "notes": "3 handshake messages: ClientHello (without sig), ServerHello (without sig), ClientFinished (without sig). Go encodes, Rust decodes, verifies all fields, re-encodes, bytes match."
+    },
+    {
+      "step": "agent_record_decode",
+      "status": "pass",
+      "notes": "2 AgentRecord fixtures: without_sig (manual field extraction, key 8 absent) and with_sig (full from_cbor, 3309-byte signature). Both round-trip byte-for-byte."
+    },
+    {
+      "step": "transcript_hash_verification",
+      "status": "pass",
+      "notes": "4 transcript hash stages: init, after ClientHello, after ServerHello, after ClientFinished. Rust independently computes from Go-produced CBOR, values match."
+    },
+    {
+      "step": "session_id_verification",
+      "status": "pass",
+      "notes": "Session ID derived from h_after_clienthello + client_nonce + server_nonce + server_agent_id. Rust independently computes, value matches Go-produced fixture."
+    },
+    {
+      "step": "rpc_roundtrip",
+      "status": "pass",
+      "notes": "6 RPC fixtures: request_basic, request_with_params, response_success, response_error, close_message, error_message_fatal. All round-trip byte-for-byte."
+    },
+    {
+      "step": "mldsa65_cross_verification",
+      "status": "pass",
+      "notes": "ML-DSA-65 cross-signature verification: 19/19 Rust vectors verify in Go, 15/15 Go vectors verify in Rust, 100/100 diff traces cross-verify (A-10, previously completed)."
+    }
+  ],
+  "metrics": {
+    "interop_level": 2,
+    "rust_tests": 7,
+    "rust_tests_passed": 7,
+    "go_fixtures_verified": 39,
+    "go_fixtures_passed": 39,
+    "go_tests_passed": "all (48 test vectors + 17 golden traces + others)",
+    "mldsa65_rust_vectors_in_go": 19,
+    "mldsa65_go_vectors_in_rust": 15,
+    "mldsa65_diff_traces": 100,
+    "golden_traces_verified": 17,
+    "cbor_types_tested": 16,
+    "frame_types_tested": 6,
+    "handshake_messages_tested": 3,
+    "agent_records_tested": 2,
+    "transcript_stages_tested": 4,
+    "rpc_messages_tested": 6
+  }
+}
