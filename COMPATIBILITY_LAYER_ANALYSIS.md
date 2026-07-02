@@ -23,6 +23,47 @@ intended use for application protocols.
 
 ---
 
+## 1.1 The Core Design Principle: Payload Preservation
+
+The transport's most important architectural decision is that it **preserves
+application payloads byte-for-byte**. This is not merely a compatibility
+convenience. It is a direct consequence of proper architectural layering.
+
+**AAFP is a secure session and transport layer.** Its responsibilities are:
+- Establishing a cryptographically authenticated session (ML-DSA-65 identity)
+- Providing post-quantum transport security (X25519MLKEM768)
+- Length-delimited message framing (28-byte header + opaque payload)
+- Session lifecycle management (handshake, close, error)
+
+**MCP and A2A own their application payloads.** Their responsibilities are:
+- Defining the message format (JSON-RPC 2.0)
+- Defining the method vocabulary (tools/list, SendMessage, etc.)
+- Defining the semantics of each operation
+- Managing application-level state (tasks, resources, prompts)
+
+**The transport must not rewrite application semantics.** When a transport
+starts interpreting, transcoding, or modifying application payloads, it
+violates the separation between transport and application layers. This
+leads to:
+- Tight coupling between transport and application protocol versions
+- Loss of compatibility with application SDKs that expect their native format
+- Maintenance burden: every application protocol change requires a transport
+  change
+- Ambiguity about which layer owns a given behavior
+
+By preserving payloads byte-for-byte, the AAFP transport binding:
+- Remains agnostic to application protocol versions (MCP 2025-11-25, 2026-07-28)
+- Remains compatible with any application SDK that produces JSON-RPC messages
+- Requires no changes when the application protocol adds new methods or fields
+- Maintains a clean boundary: AAFP owns the frame header, the application
+  owns the payload
+
+This principle generalizes to all AAFP transport bindings: MCP, A2A, and
+any future application protocol. The binding's job is to carry application
+messages securely, not to participate in application semantics.
+
+---
+
 ## 2. Current Design
 
 ### 2.1 What the transport does

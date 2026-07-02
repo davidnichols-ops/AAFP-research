@@ -10,13 +10,13 @@ This RFC defines a transport binding for the Model Context Protocol (MCP) over
 the Agent Agent Federation Protocol (AAFP). MCP is a JSON-RPC 2.0 protocol for
 agent-to-tool communication. This binding allows MCP clients and servers to
 communicate over AAFP's post-quantum secure QUIC transport, replacing the
-default stdio and HTTP+SSE transports with a cryptographically authenticated,
+default stdio and Streamable HTTP transports with a cryptographically authenticated,
 post-quantum secure channel.
 
 ## Motivation
 
-MCP [1] defines several transport mechanisms (stdio, HTTP+SSE, Streamable
-HTTP) that are suitable for local and cloud deployments. However, these
+MCP [1] defines two standard transport mechanisms (stdio and Streamable
+HTTP) that are suitable for local and cloud deployments [4]. However, these
 transports have limitations for distributed agent-to-tool communication:
 
 1. **No identity verification**: stdio relies on process isolation; HTTP
@@ -27,6 +27,20 @@ transports have limitations for distributed agent-to-tool communication:
 
 3. **No P2P connectivity**: stdio requires co-location; HTTP requires a
    publicly addressable endpoint.
+
+The MCP specification explicitly permits custom transports [4]:
+
+> "Clients and servers MAY implement additional custom transport mechanisms
+> to suit their specific needs. The protocol is transport-agnostic and can
+> be implemented over any communication channel that supports bidirectional
+> message exchange."
+
+> "Implementers who choose to support custom transports MUST ensure they
+> preserve the JSON-RPC message format and lifecycle requirements defined
+> by MCP."
+
+This binding satisfies those requirements: it preserves JSON-RPC messages
+byte-for-byte and supports bidirectional message exchange over QUIC streams.
 
 AAFP addresses these by providing:
 - **ML-DSA-65 agent identity**: Verified during the AAFP handshake
@@ -100,8 +114,9 @@ The frame header includes:
   JSON payload, deserialize as a JSON-RPC message. Returns `None` when the
   peer closes the stream.
 
-- **`close()`**: Send an AAFP CLOSE frame, close the QUIC stream, and close
-  the QUIC connection.
+- **`close()`**: Finish the QUIC send stream (signals end-of-stream to the
+  peer), then close the QUIC connection with a 0x00 error code and
+  "mcp transport closed" reason.
 
 ### Address Scheme
 
@@ -206,7 +221,7 @@ header obtains the exact JSON-RPC message that was sent.
 
 ### Compatibility with Standard MCP Transports
 
-This binding is **not wire-compatible** with stdio or HTTP+SSE transports.
+This binding is **not wire-compatible** with stdio or Streamable HTTP transports.
 An MCP client using stdio cannot connect to an MCP server using AAFP, and
 vice versa. The transports use different framing and connection mechanisms.
 
@@ -261,7 +276,7 @@ transport is not involved.
 | Peer resets stream | `receive()` returns `None` |
 | Peer closes connection | `receive()` returns `None` |
 | Frame parse error | `receive()` logs error, returns `None` |
-| JSON parse error | `receive()` logs warning, skips frame, continues |
+| JSON parse error | `receive()` logs at `debug` (syntax/EOF) or `warn` (data/Io) level, skips frame, continues |
 | Send after close | `send()` returns `AafpMcpError::Closed` |
 
 ### Error Recovery
@@ -328,9 +343,18 @@ in DATA frames without changes to the AAFP layer.
 
 This binding depends on the rmcp `Transport<R>` trait. If rmcp changes
 the trait signature (e.g., adds new methods), the binding must be updated.
-The `Transport<R>` trait has been stable since rmcp 1.0.
+The `Transport<R>` trait was introduced in rmcp 1.0 and has not changed
+in versions 1.0 through 1.7 (the current version at time of writing).
 
 ## Implementation Requirements
+
+> **Scope:** The requirements in this section apply to implementations of
+> the MCP-over-AAFP transport binding. They do not impose new requirements
+> on AAFP Core, which is defined by RFC-0002 and related core RFCs.
+> Where a requirement references an AAFP Core behavior (e.g., handshake,
+> session states, stream IDs), the requirement is that the binding must
+> correctly use the existing AAFP Core mechanism, not that AAFP Core must
+> change to accommodate the binding.
 
 ### Mandatory
 
@@ -370,7 +394,8 @@ The `Transport<R>` trait has been stable since rmcp 1.0.
 
 2. **Graceful close**: The implementation SHOULD send an AAFP CLOSE frame
    before closing the QUIC connection, allowing the peer to drain in-flight
-   messages.
+   messages. (The current implementation finishes the send stream and closes
+   the connection directly; a future version MAY add an explicit CLOSE frame.)
 
 3. **Error logging**: The implementation SHOULD log frame parse errors and
    JSON parse errors at `warn` or `debug` level, not `error` level, to

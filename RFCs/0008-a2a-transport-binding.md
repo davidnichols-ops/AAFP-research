@@ -39,6 +39,26 @@ AAFP addresses these issues by providing:
 - **QUIC transport**: Low-latency, multiplexed, head-of-line-blocking-free
 - **Bidirectional streams**: Native support for streaming operations
 
+The A2A specification explicitly supports custom protocol bindings [2]:
+
+> "The A2A protocol ships with three standard bindings (JSON-RPC, gRPC, and
+> HTTP+JSON/REST) that cover the majority of deployment scenarios. Custom
+> protocol bindings let implementers expose A2A operations over additional
+> transport mechanisms not covered by the standard set."
+
+Custom bindings must satisfy two key requirements [2]:
+
+> "All core operations must be supported. The binding must expose every
+> operation defined in the abstract operations layer."
+
+> "The data model must be preserved. All data structures must be
+> functionally equivalent to the canonical Protocol Buffer definitions. JSON
+> serializations must use camelCase field names, and timestamps must be ISO
+> 8601 strings in UTC."
+
+This binding satisfies those requirements: it exposes all 11 core operations
+and preserves the JSON data model byte-for-byte within AAFP DATA frames.
+
 ## Design
 
 ### Layer Mapping
@@ -139,7 +159,7 @@ JSON field in the JSON-RPC request:
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "message/send",
+  "method": "SendMessage",
   "params": {
     "message": { ... },
     "configuration": { ... },
@@ -157,28 +177,33 @@ JSON field in the JSON-RPC request:
 ### Method Mapping
 
 All A2A core operations are mapped to JSON-RPC 2.0 method names, identical to
-the A2A JSON-RPC binding:
+the A2A JSON-RPC binding. Per the A2A v1.0 specification, JSON-RPC method
+names use PascalCase, matching the gRPC method names [1]:
 
 | A2A Operation | JSON-RPC Method |
 |---------------|----------------|
-| Send Message | `message/send` |
-| Send Streaming Message | `message/stream` |
-| Get Task | `tasks/get` |
-| List Tasks | `tasks/list` |
-| Cancel Task | `tasks/cancel` |
-| Subscribe to Task | `tasks/subscribe` |
-| Create Push Notification Config | `tasks/pushNotificationConfig/set` |
-| Get Push Notification Config | `tasks/pushNotificationConfig/get` |
-| List Push Notification Configs | `tasks/pushNotificationConfig/list` |
-| Delete Push Notification Config | `tasks/pushNotificationConfig/delete` |
-| Get Extended Agent Card | `agentcard/getExtended` |
+| Send Message | `SendMessage` |
+| Send Streaming Message | `SendStreamingMessage` |
+| Get Task | `GetTask` |
+| List Tasks | `ListTasks` |
+| Cancel Task | `CancelTask` |
+| Subscribe to Task | `SubscribeToTask` |
+| Create Push Notification Config | `CreateTaskPushNotificationConfig` |
+| Get Push Notification Config | `GetTaskPushNotificationConfig` |
+| List Push Notification Configs | `ListTaskPushNotificationConfigs` |
+| Delete Push Notification Config | `DeleteTaskPushNotificationConfig` |
+| Get Extended Agent Card | `GetExtendedAgentCard` |
+
+> **Note:** A2A v0.3.0 used category/action method names (e.g.,
+> `message/send`, `tasks/get`). A2A v1.0 renamed these to PascalCase to
+> align with gRPC method names [1]. This binding targets A2A v1.0.
 
 ### Streaming
 
 AAFP's QUIC transport provides native bidirectional streams, making streaming
 natural and efficient:
 
-- **Stream mechanism**: The `message/stream` and `tasks/subscribe` operations
+- **Stream mechanism**: The `SendStreamingMessage` and `SubscribeToTask` operations
   use the same bidirectional QUIC stream as other operations. The server sends
   `TaskStatusUpdateEvent` and `TaskArtifactUpdateEvent` as sequential JSON-RPC
   responses (with the same request ID) on the stream.
@@ -196,7 +221,8 @@ natural and efficient:
 
 ### Error Mapping
 
-A2A errors are mapped to JSON-RPC 2.0 error responses:
+A2A errors are mapped to JSON-RPC 2.0 error responses per the A2A v1.0
+specification [1]:
 
 | A2A Error Type | JSON-RPC Code | Meaning |
 |----------------|--------------|---------|
@@ -205,10 +231,15 @@ A2A errors are mapped to JSON-RPC 2.0 error responses:
 | `PushNotificationNotSupportedError` | -32003 | Push notifications not supported |
 | `UnsupportedOperationError` | -32004 | Operation not supported |
 | `ContentTypeNotSupportedError` | -32005 | Content type not supported |
-| `InvalidParamsError` | -32602 | Invalid method parameters |
-| `InternalError` | -32603 | Internal server error |
+| `InvalidAgentResponseError` | -32006 | Invalid agent response |
+| `ExtendedAgentCardNotConfiguredError` | -32007 | Extended agent card not configured |
+| `ExtensionSupportRequiredError` | -32008 | Extension support required |
+| `VersionNotSupportedError` | -32009 | Protocol version not supported |
 | `ParseError` | -32700 | JSON parse error |
+| `InvalidRequest` | -32600 | Invalid JSON-RPC request |
 | `MethodNotFound` | -32601 | Method not found |
+| `InvalidParams` | -32602 | Invalid method parameters |
+| `InternalError` | -32603 | Internal server error |
 
 ### Authentication and Authorization
 
@@ -254,7 +285,7 @@ binding (RFC 0007), with key differences:
 | Aspect | MCP-over-AAFP | A2A-over-AAFP |
 |--------|---------------|---------------|
 | Protocol | MCP (JSON-RPC 2.0) | A2A (JSON-RPC 2.0) |
-| Methods | `tools/list`, `tools/call`, etc. | `message/send`, `tasks/get`, etc. |
+| Methods | `tools/list`, `tools/call`, etc. | `SendMessage`, `GetTask`, etc. |
 | Streaming | Not in MCP spec | Native via bidirectional streams |
 | Identity | AAFP agent identity | AAFP agent identity |
 | Framing | AAFP DATA frames | AAFP DATA frames |
@@ -321,7 +352,7 @@ or HTTP+JSON/REST bindings. Those bindings operate over HTTP(S); this
 binding operates over QUIC with AAFP framing.
 
 However, the binding is **protocol-compatible** at the JSON-RPC level. The
-same A2A operations (message/send, tasks/get, etc.) are exchanged with
+same A2A operations (SendMessage, GetTask, etc.) are exchanged with
 identical JSON-RPC method names and parameter structures.
 
 ### Compatibility with Standard A2A Bindings
@@ -384,7 +415,7 @@ For non-streaming operations: the client can retry the request on a new
 connection.
 
 For streaming operations: if the connection is lost mid-stream, the client
-must re-establish the connection and re-subscribe. A2A's `tasks/get` can
+must re-establish the connection and re-subscribe. A2A's `GetTask` can
 be used to retrieve the current task state after reconnection.
 
 ## Extension Policy
@@ -424,6 +455,14 @@ in DATA frames without changes to the AAFP layer.
 
 ## Implementation Requirements
 
+> **Scope:** The requirements in this section apply to implementations of
+> the A2A-over-AAFP transport binding. They do not impose new requirements
+> on AAFP Core, which is defined by RFC-0002 and related core RFCs.
+> Where a requirement references an AAFP Core behavior (e.g., handshake,
+> session states, stream IDs), the requirement is that the binding must
+> correctly use the existing AAFP Core mechanism, not that AAFP Core must
+> change to accommodate the binding.
+
 ### Mandatory
 
 1. **AAFP v1 handshake**: Same as RFC-0007.
@@ -457,7 +496,7 @@ in DATA frames without changes to the AAFP layer.
 
 2. **Streaming via bidirectional streams**: The implementation SHOULD use
    QUIC's bidirectional streams for streaming operations
-   (`message/stream`, `tasks/subscribe`).
+   (`SendStreamingMessage`, `SubscribeToTask`).
 
 3. **Push notification support**: The implementation SHOULD support A2A's
    push notification mechanism, using a separate QUIC stream or a callback

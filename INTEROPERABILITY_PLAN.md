@@ -278,16 +278,43 @@ This is verified by:
 
 ## 8. Recommended Next Steps
 
-| Step | Effort | Value |
-|------|--------|-------|
-| 1. Fix stream ID to 4 (RFC compliance) | Low | High |
-| 2. Add protocol-level conformance tests | Medium | High |
-| 3. Set up CI with Rust-only tests | Low | High |
-| 4. Build Python AAFP transport adapter (PyO3) | High | Medium |
-| 5. Run cross-SDK interop tests (rmcp ↔ Python) | Medium | High |
-| 6. Integrate with official MCP conformance suite | High | Medium |
+The goal is independent verification by another implementation. The
+recommended order is:
 
-Steps 1-3 can be done immediately. Step 4 is the key enabler for steps 5-6.
+| Phase | Step | Effort | Value | Dependency |
+|-------|------|--------|-------|------------|
+| 1 | Fix stream ID to 4 (RFC compliance) | Low | High | None — **DONE** |
+| 1 | Add protocol-level conformance tests | Medium | High | None |
+| 1 | Set up CI with Rust-only tests | Low | High | None |
+| 2 | Build Python AAFP transport adapter (PyO3) | High | High | Phase 1 |
+| 2 | Run Rust ↔ Python interoperability tests | Medium | High | Python adapter |
+| 3 | Build Go AAFP transport adapter | High | Medium | Phase 1 |
+| 3 | Run Rust ↔ Go interoperability tests | Medium | Medium | Go adapter |
+| 4 | Run official MCP conformance tests | High | High | Phase 2 |
+| 4 | Set up CI automation for cross-SDK tests | Medium | High | Phase 2 |
+| 5 | Implement A2A transport binding (RFC-0008) | High | High | Phase 1 |
+
+**Phase 1** (Rust-only) can be done immediately. **Phase 2** (Python) is
+the key milestone — it proves the AAFP transport works outside the Rust
+ecosystem. **Phase 3** (Go) leverages the existing AAFP Go implementation.
+**Phase 4** (official conformance) is the gold standard. **Phase 5** (A2A)
+extends the approach to a second application protocol.
+
+### 8.1 Validation Milestone Criteria
+
+Each phase has a clear "done" criterion:
+
+- **Phase 1 done**: Rust-only tests pass in CI, including protocol-level
+  conformance tests that verify JSON-RPC message correctness.
+- **Phase 2 done**: A Python MCP client can connect to a Rust rmcp server
+  over AAFP, exchange MCP messages (initialize, tools/list, tools/call),
+  and receive correct responses. The reverse (Rust client, Python server)
+  also works.
+- **Phase 3 done**: Same as Phase 2 but with Go instead of Python.
+- **Phase 4 done**: The AAFP transport passes the official MCP conformance
+  test suite (adapted for custom transports).
+- **Phase 5 done**: The A2A transport binding is implemented and tested
+  with at least one non-Rust A2A SDK.
 
 ---
 
