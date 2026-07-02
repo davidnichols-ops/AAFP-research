@@ -1,10 +1,10 @@
-# Builder Continuation Prompt — Resume from D3
+# Builder Continuation Prompt — Resume from D4
 
 Copy everything below the line and paste it as the first message to the Builder model.
 
 ---
 
-You are the Builder. You are resuming execution of the AAFP implementation plans. Track C is complete. D1 and D2 are complete. You are continuing Track D (External Interop), executing D3 → D4 back-to-back, committing and pushing after each plan completes.
+You are the Builder. You are resuming execution of the AAFP implementation plans. Track C is complete. D1, D2, and D3 are complete. You are continuing Track D (External Interop), executing D4, committing and pushing after it completes.
 
 ## Current Progress
 
@@ -14,9 +14,10 @@ You are the Builder. You are resuming execution of the AAFP implementation plans
   - C2: Git history cleaned — packfile 583MB → 1.3MB, force-pushed with tags preserved
   - C3: All 3 repos pushed to GitHub, public, fresh clone 12MB
   - C4: 6 documentation files updated
-- **Track D:** D1, D2 COMPLETE — you are continuing with D3, D4
+- **Track D:** D1, D2, D3 COMPLETE — you are continuing with D4
   - D1: Python MCP SDK 1.28.1 ↔ Rust rmcp 1.8.0 interop verified over AAFP. Adapter rewritten to match the SDK's anyio `MemoryObjectStream` interface. Fixed a latent PyO3 transport mutex deadlock (send/receive now use separate locks via `send_handle()`). 6/6 Python tests pass, 1011 Rust tests pass. Committed (`d0112ca` rust, `4f67a68` umbrella) and pushed.
   - D2: A2A transport binding updated to A2A v1.0 spec. Data model rewritten: flat Part (no kind discriminator), SCREAMING_SNAKE_CASE TaskState/Role, SendMessageRequest params wrapping, response wrapping ({task:...}, {tasks:...}). 6 official A2A SDKs found (Python, Go, JS, Java, .NET, Rust) but none support QUIC transport — Strategy B (spec examples) used. 40 A2A tests pass (3 unit + 14 conformance + 5 integration + 18 spec_conformance). 1051 total workspace tests pass. Committed and pushed.
+  - D3: Rust ↔ Go cross-language interop verified at Level 2 (frame-level). Go implementation has no QUIC transport (transport-agnostic wire-format library). 7 Rust integration tests spawn Go fixture generator and verify 39 fixtures (CBOR, frames, handshake, AgentRecord, transcript hash, session ID, RPC) byte-for-byte. Regenerated stale Go fixtures to include A-3 record_version and A-4 session_id binding. 1058 total workspace tests pass. Committed (`468b6aa` rust, `61d7d51` go, `c163dd1` umbrella).
 - **Tracks E, F:** NOT STARTED
 
 **Total: 108/218 steps complete (50%)**

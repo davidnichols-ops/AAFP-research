@@ -330,18 +330,18 @@ all 1011 Rust tests pass.
 **D2 notes:**
 
 ### D3: Rust ↔ Go cross-language interop over QUIC
-- [ ] **D3.1** Assess Go QUIC transport capability
-- [ ] **D3.2** Determine interop test level (1: live QUIC, 2: frame-level, 3: CBOR)
-- [ ] **D3.3** Implement interop test (Go server or frame encoder)
-- [ ] **D3.4** Implement reverse test (Go client or frame decoder)
-- [ ] **D3.5** Run both tests
-- [ ] **D3.6** Commit
-- [ ] **D3.7** VERIFY: Tests pass
-- [ ] **D3.8** VERIFY: Results documented
+- [x] **D3.1** Assess Go QUIC transport capability
+- [x] **D3.2** Determine interop test level (1: live QUIC, 2: frame-level, 3: CBOR)
+- [x] **D3.3** Implement interop test (Go server or frame encoder)
+- [x] **D3.4** Implement reverse test (Go client or frame decoder)
+- [x] **D3.5** Run both tests
+- [x] **D3.6** Commit
+- [x] **D3.7** VERIFY: Tests pass
+- [x] **D3.8** VERIFY: Results documented
 
-**D3 status:** NOT STARTED
+**D3 status:** COMPLETE
 **D3 blocked by:** C3
-**D3 notes:**
+**D3 notes:** Level 2 (frame-level) interop. Go has no QUIC transport (transport-agnostic wire-format library). 7 Rust integration tests spawn Go fixture generator, verify 39 fixtures byte-for-byte (CBOR, frames, handshake, AgentRecord, transcript hash, session ID, RPC). Regenerated stale Go fixtures for A-3/A-4 changes. 1058 total workspace tests pass. Commits: rust `468b6aa`, go `61d7d51`, umbrella `c163dd1`.
 
 ### D4: MCP conformance suite integration
 - [ ] **D4.1** Research the MCP conformance suite
