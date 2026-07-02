@@ -231,19 +231,24 @@ All 3 repos return HTTP 200. User confirmed repos are already public. Fresh clon
 is 12MB (down from ~1GB before C2). All crates present in fresh clone.
 
 ### C4: Update stale documentation
-- [ ] **C4.1** Update ROADMAP.md (P1-3, P1-4, A2A, criteria)
-- [ ] **C4.2** Verify PROTOCOL_CANDIDATE_CHECKLIST.md
-- [ ] **C4.3** Update README.md (new crates, status)
-- [ ] **C4.4** Update INTEROPERABILITY_PLAN.md (phase status)
-- [ ] **C4.5** Update TRANSPORT_ARCHITECTURE_REVIEW.md (resolved items)
-- [ ] **C4.6** Update RELEASE_READINESS.md
-- [ ] **C4.7** Commit documentation updates
-- [ ] **C4.8** VERIFY: No stale "Pending" for done items
-- [ ] **C4.9** VERIFY: README mentions new crates
+- [x] **C4.1** Update ROADMAP.md (P1-3, P1-4, A2A, criteria)
+- [x] **C4.2** Verify PROTOCOL_CANDIDATE_CHECKLIST.md
+- [x] **C4.3** Update README.md (new crates, status)
+- [x] **C4.4** Update INTEROPERABILITY_PLAN.md (phase status)
+- [x] **C4.5** Update TRANSPORT_ARCHITECTURE_REVIEW.md (resolved items)
+- [x] **C4.6** Update RELEASE_READINESS.md
+- [x] **C4.7** Commit documentation updates
+- [x] **C4.8** VERIFY: No stale "Pending" for done items
+- [x] **C4.9** VERIFY: README mentions new crates
 
-**C4 status:** NOT STARTED
+**C4 status:** COMPLETE
 **C4 blocked by:** nothing
-**C4 notes:**
+**C4 notes:** Updated 6 documentation files: ROADMAP.md, README.md,
+INTEROPERABILITY_PLAN.md, TRANSPORT_ARCHITECTURE_REVIEW.md,
+PROTOCOL_CANDIDATE_CHECKLIST.md, RELEASE_READINESS.md. All stale "Pending"
+items for done work updated. RESOLVED notes added to architecture review
+concerns. Test counts updated (1011 Rust, 664 Go). Cross-SDK interop status
+reflected in all relevant docs.
 
 ---
 
@@ -455,7 +460,7 @@ is 12MB (down from ~1GB before C2). All crates present in fresh clone.
 | C1 | COMPLETE | — | 9/9 |
 | C2 | COMPLETE | C1 | 10/10 |
 | C3 | COMPLETE | C1 | 9/9 |
-| C4 | NOT STARTED | — | 0/9 |
+| C4 | COMPLETE | — | 9/9 |
 | D1 | NOT STARTED | C3 | 0/8 |
 | D2 | NOT STARTED | C3 | 0/7 |
 | D3 | NOT STARTED | C3 | 0/8 |
@@ -470,6 +475,6 @@ is 12MB (down from ~1GB before C2). All crates present in fresh clone.
 | F4 | NOT STARTED | E2 | 0/11 |
 
 **Total steps:** 218 (70 from Tracks A-B + 148 from Tracks C-F)
-**Completed:** 97
+**Completed:** 106
 **In progress:** 0
 **Blocked:** 0
