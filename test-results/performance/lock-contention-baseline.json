@@ -1,0 +1,55 @@
+{
+  "track": "H",
+  "step": "H1",
+  "description": "Lock contention baseline — concurrent sender throughput",
+  "date": "2026-07-03",
+  "platform": "Apple M4, release build",
+  "methodology": {
+    "framework": "criterion",
+    "warmup": "2s",
+    "measurement_time": "3s",
+    "sample_size": 10,
+    "msgs_per_sender": 1000,
+    "send_path": "send_raw_json_on_handle_zero_copy (acquires Arc<Mutex<Option<QuicSendStream>>>)",
+    "recv_path": "recv_raw_json_zero_copy"
+  },
+  "results": {
+    "senders_1": {
+      "total_msgs": 1000,
+      "time_median_ms": 2.5994,
+      "throughput_msg_per_s": 384700,
+      "throughput_per_sender_msg_per_s": 384700
+    },
+    "senders_2": {
+      "total_msgs": 2000,
+      "time_median_ms": 17.937,
+      "throughput_msg_per_s": 111500,
+      "throughput_per_sender_msg_per_s": 55750
+    },
+    "senders_4": {
+      "total_msgs": 4000,
+      "time_median_ms": 32.455,
+      "throughput_msg_per_s": 123250,
+      "throughput_per_sender_msg_per_s": 30813
+    },
+    "senders_8": {
+      "total_msgs": 8000,
+      "time_median_ms": 42.722,
+      "throughput_msg_per_s": 187260,
+      "throughput_per_sender_msg_per_s": 23408
+    }
+  },
+  "analysis": {
+    "scaling": "NEGATIVE — throughput degrades with concurrency",
+    "contention": "CONFIRMED — Arc<Mutex<Option<QuicSendStream>>> serializes all sends",
+    "1_to_2_senders": "Total throughput drops 3.4x (385K -> 111K) — mutex contention overhead dominates",
+    "2_to_8_senders": "Total throughput stays flat (~111K-187K) — serialized by mutex",
+    "per_sender_throughput": "Drops from 385K (1 sender) to 23K (8 senders) — 16x degradation",
+    "bottleneck": "tokio::sync::Mutex acquisition on every send",
+    "fix": "H2: Replace Mutex with mpsc::Sender<BytesMut> + dedicated writer task"
+  },
+  "target_after_h2": {
+    "senders_8": ">800K msg/s total (linear scaling)",
+    "per_sender": "~100K msg/s each (8 senders)"
+  }
+}
