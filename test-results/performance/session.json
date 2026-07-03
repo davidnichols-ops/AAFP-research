@@ -1,0 +1,20 @@
+{
+    "test_name": "session-benchmarks",
+    "test_category": "performance",
+    "timestamp": "2026-07-02",
+    "environment": {
+        "cpu": "Apple M4",
+        "os": "Darwin",
+        "rust": "1.96.0"
+    },
+    "status": "pass",
+    "summary": "Session memory and creation benchmarks — all targets met",
+    "metrics": {
+        "sizeof_session_bytes": 168,
+        "session_creation_ns": 30,
+        "create_1000_sessions_us": 19
+    },
+    "targets": {
+        "memory_per_session_kb": 1024
+    }
+}

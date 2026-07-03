@@ -1,0 +1,24 @@
+{
+    "test_name": "framing-benchmarks",
+    "test_category": "performance",
+    "timestamp": "2026-07-02",
+    "environment": {
+        "cpu": "Apple M4",
+        "os": "Darwin",
+        "rust": "1.96.0"
+    },
+    "status": "pass",
+    "summary": "Frame encode/decode benchmarks at various sizes — all targets met",
+    "metrics": {
+        "frame_encode_64b_ns": 28,
+        "frame_encode_1kb_ns": 66,
+        "frame_encode_64kb_us": 1.81,
+        "frame_decode_64b_ns": 15,
+        "frame_decode_1kb_ns": 35,
+        "frame_decode_64kb_us": 1.60
+    },
+    "targets": {
+        "frame_encode_1kb_us": 10,
+        "frame_decode_1kb_us": 10
+    }
+}

@@ -1,0 +1,25 @@
+{
+    "test_name": "crypto-benchmarks",
+    "test_category": "performance",
+    "timestamp": "2026-07-02",
+    "environment": {
+        "cpu": "Apple M4",
+        "os": "Darwin",
+        "rust": "1.96.0"
+    },
+    "status": "pass",
+    "summary": "ML-DSA-65 crypto benchmarks — all targets met",
+    "metrics": {
+        "ml_dsa_65_keygen_us": 133,
+        "ml_dsa_65_sign_us": 272,
+        "ml_dsa_65_verify_us": 76,
+        "pq_handshake_full_us": 709,
+        "aead_encrypt_1kb_us": 1.63,
+        "aead_decrypt_1kb_us": 1.64
+    },
+    "targets": {
+        "ml_dsa_65_keygen_ms": 50,
+        "ml_dsa_65_sign_ms": 10,
+        "ml_dsa_65_verify_ms": 15
+    }
+}
