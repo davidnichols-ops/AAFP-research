@@ -21,7 +21,7 @@
 | ML-DSA-65 sign | 272 µs | crypto benchmark |
 | ML-DSA-65 verify | 76 µs | crypto benchmark |
 | sizeof(Session) | 168 bytes | `session` benchmark |
-| Allocations per message | 2 (send), 7 (recv), 9 (round-trip) | `alloc_profile` benchmark |
+| Allocations per message | 0 (send, zero-copy), 7 (recv, JSON deser) | `alloc_profile` benchmark |
 | Lock acquisitions per send | 1 | Code analysis |
 
 ---
@@ -30,7 +30,7 @@
 
 | Track | Name | Status | Steps | Duration |
 |-------|------|--------|-------|----------|
-| G | Zero-Copy Data Path | IN PROGRESS | 6/8 | Q1 |
+| G | Zero-Copy Data Path | COMPLETE | 8/8 | Q1 |
 | H | Lock-Free Concurrency | NOT STARTED | 0/7 | Q1-Q2 |
 | I | Connection Lifecycle | NOT STARTED | 0/8 | Q2 |
 | J | QUIC Transport Tuning | NOT STARTED | 0/7 | Q2-Q3 |
@@ -39,7 +39,7 @@
 | M | Benchmarking & Profiling | IN PROGRESS | 2/7 | Ongoing |
 
 **Total steps:** 52
-**Completed:** 8
+**Completed:** 10
 **In progress:** 2
 **Blocked:** 0
 
