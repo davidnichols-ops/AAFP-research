@@ -497,24 +497,37 @@ all 1011 Rust tests pass.
 **F1 notes:** 8 criterion benchmarks covering crypto (ML-DSA-65 keygen/sign/verify, PQ handshake, AEAD), framing (encode/decode at 6 sizes), session (memory, creation), MCP transport, close manager, replay cache, discovery. All performance targets met: keygen 133µs (target <50ms), sign 272µs (target <10ms), verify 76µs (target <15ms), frame encode 1KB 66ns (target <10µs), frame decode 1KB 35ns (target <10µs), session 168B (target <1MB). 1126 total workspace tests pass.
 
 ### F2: Rustdoc documentation for all public APIs (P1-7)
-- [ ] **F2.1** Audit documentation coverage
-- [ ] **F2.2** Document aafp-sdk (highest priority)
-- [ ] **F2.3** Document aafp-core
-- [ ] **F2.4** Document aafp-crypto
-- [ ] **F2.5** Document aafp-identity
-- [ ] **F2.6** Document aafp-messaging
-- [ ] **F2.7** Document aafp-transport-quic
-- [ ] **F2.8** Document transport binding crates (verify existing)
-- [ ] **F2.9** Document aafp-discovery, aafp-nat
-- [ ] **F2.10** Verify docs build cleanly (0 warnings)
-- [ ] **F2.11** Verify doc tests pass
-- [ ] **F2.12** Commit
-- [ ] **F2.13** VERIFY: Zero doc warnings
-- [ ] **F2.14** VERIFY: Doc tests pass
+- [x] **F2.1** Audit documentation coverage
+      *(Initial audit: 373+ missing docs across 9 crates. Fixed 3 HTML/link warnings in aafp-discovery, aafp-core.)*
+- [x] **F2.2** Document aafp-sdk (highest priority)
+      *(24 items: SdkError enum + 12 variants, ControlFrame variants, ServerPeerConnection fields.)*
+- [x] **F2.3** Document aafp-core
+      *(111 items: ErrorCategory, ProtocolError, Error, codes module, HandshakeState, Session, Transport, Swarm.)*
+- [x] **F2.4** Document aafp-crypto
+      *(75 items: ClientHello/ServerHello fields, HandshakeError variants, ReplayCacheError, SignatureScheme/KeyEncapsulation traits, CryptoError.)*
+- [x] **F2.5** Document aafp-identity
+      *(47 items: AgentRecord fields, CapabilityDescriptor, MetadataValue, IdentityError, UcanToken.)*
+- [x] **F2.6** Document aafp-messaging
+      *(151 items: all modules — framing, rpc_v1, stream, extensions, pipeline, close_manager, keepalive, pubsub, pubsub_v1.)*
+- [x] **F2.7** Document aafp-transport-quic
+      *(7 items: ConfigError, TlsIdentity.)*
+- [x] **F2.8** Document transport binding crates (verify existing)
+      *(aafp-transport-mcp: 6 AafpMcpError variants. aafp-transport-a2a: 132 items — A2aError, AafpA2aError, Task, TaskStatus, Message, Part, Artifact, AgentCard, etc.)*
+- [x] **F2.9** Document aafp-discovery, aafp-nat
+      *(aafp-discovery: 41 items — DiscoveryError, AnnounceParams, LookupParams, etc. aafp-nat: 61 items — RelayV1Error, Reservation, RelayedConnection, NatStatusV1, etc.)*
+- [x] **F2.10** Verify docs build cleanly (0 warnings)
+      *(cargo doc --workspace --no-deps → 0 warnings. RUSTDOCFLAGS="-D missing_docs" → 0 errors.)*
+- [x] **F2.11** Verify doc tests pass
+      *(cargo test --workspace → 1126 tests, 0 failures.)*
+- [x] **F2.12** Commit
+- [x] **F2.13** VERIFY: Zero doc warnings
+      *(cargo doc --workspace --no-deps → 0 warnings.)*
+- [x] **F2.14** VERIFY: Doc tests pass
+      *(1126 tests pass, 0 failures.)*
 
-**F2 status:** NOT STARTED
+**F2 status:** COMPLETE
 **F2 blocked by:** nothing (can run parallel)
-**F2 notes:**
+**F2 notes:** All public APIs across 11 crates documented with Rustdoc. RUSTDOCFLAGS="-D missing_docs" cargo doc --workspace --no-deps produces 0 errors. cargo doc produces 0 warnings. aafp-conformance uses #![allow(missing_docs)] as it's a test-only crate. 1126 total workspace tests pass.
 
 ### F3: Revocation mechanism (CRL-based, RFC-0003 amendment)
 - [ ] **F3.1** Write RFC amendment for revocation
@@ -573,11 +586,11 @@ all 1011 Rust tests pass.
 | E3 | COMPLETE | E2 | 7/7 |
 | E4 | COMPLETE | E2 | 10/10 |
 | F1 | COMPLETE | E1-E4 | 10/10 |
-| F2 | NOT STARTED | — | 0/14 |
+| F2 | COMPLETE | — | 14/14 |
 | F3 | NOT STARTED | — | 0/9 |
 | F4 | NOT STARTED | E2 | 0/11 |
 
 **Total steps:** 218 (70 from Tracks A-B + 148 from Tracks C-F)
-**Completed:** 176
+**Completed:** 190
 **In progress:** 0
 **Blocked:** 0
