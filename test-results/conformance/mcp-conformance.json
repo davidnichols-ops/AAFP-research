@@ -1,0 +1,82 @@
+{
+  "test_name": "mcp-conformance-suite",
+  "test_category": "conformance",
+  "timestamp": "2026-07-02T22:00:00Z",
+  "environment": {
+    "os": "macOS 15.5.0 (Darwin 25.5.0)",
+    "cpu": "Apple M4",
+    "rust_version": "1.96.0",
+    "rmcp_version": "1.8.0",
+    "aafp_version": "rev6-rc1",
+    "commit": "468b6aa"
+  },
+  "status": "pass",
+  "duration_ms": 200,
+  "summary": "MCP conformance tests based on the official MCP specification. The official @modelcontextprotocol/conformance suite only supports HTTP/stdio transports and cannot directly test QUIC-based transports. 10 spec-based conformance tests verify the AAFP MCP transport binding meets MCP spec requirements: transport connect, initialize handshake, tools/list, tools/call, resources/list+read, JSON-RPC ping, error handling, graceful close, sequential operations, and large result transmission. All 10 tests pass.",
+  "details": [
+    {
+      "step": "research_official_suite",
+      "status": "pass",
+      "notes": "Official @modelcontextprotocol/conformance suite exists (github.com/modelcontextprotocol/conformance, v0.1.11). Run via npx or GitHub Action. Supports server mode (HTTP URL) and client mode (subprocess command). Only supports HTTP/stdio transports — cannot plug in QUIC. Falls back to spec-based conformance tests."
+    },
+    {
+      "step": "transport_connect",
+      "status": "pass",
+      "notes": "Transport establishes QUIC connection with AAFP handshake. Client service is not closed after connect."
+    },
+    {
+      "step": "initialize_handshake",
+      "status": "pass",
+      "notes": "MCP initialize handshake completes. Server info (name=aafp-conformance-server, version=1.0.0) available via peer_info()."
+    },
+    {
+      "step": "tools_list",
+      "status": "pass",
+      "notes": "tools/list returns echo tool with name, description, and input schema."
+    },
+    {
+      "step": "tools_call",
+      "status": "pass",
+      "notes": "tools/call executes echo tool with message argument, returns 'Echo: conformance test' text content."
+    },
+    {
+      "step": "resources_list_and_read",
+      "status": "pass",
+      "notes": "resources/list returns Hello Resource (test://conformance/hello). resources/read returns 'Hello, conformance world!' text content."
+    },
+    {
+      "step": "ping_roundtrip",
+      "status": "pass",
+      "notes": "JSON-RPC level ping (not AAFP PING) sent via peer.send_request(PingRequest). Response received successfully."
+    },
+    {
+      "step": "error_invalid_tool",
+      "status": "pass",
+      "notes": "Calling non-existent tool returns METHOD_NOT_FOUND error."
+    },
+    {
+      "step": "graceful_close",
+      "status": "pass",
+      "notes": "client_service.cancel() succeeds. Server terminates within 10s. No panic or hang."
+    },
+    {
+      "step": "sequential_operations",
+      "status": "pass",
+      "notes": "6 sequential operations (list tools, call tool, list resources, read resource, call tool again, ping) all succeed on same connection."
+    },
+    {
+      "step": "large_tool_result",
+      "status": "pass",
+      "notes": "50KB message echoed back correctly. Result content length matches expected (50007 bytes = 'Echo: ' + 50000)."
+    }
+  ],
+  "metrics": {
+    "tests": 10,
+    "passed": 10,
+    "failed": 0,
+    "official_suite_used": false,
+    "official_suite_reason": "Only supports HTTP/stdio, not QUIC. Spec-based tests created instead.",
+    "mcp_spec_version": "2025-06-18",
+    "rmcp_version": "1.8.0"
+  }
+}

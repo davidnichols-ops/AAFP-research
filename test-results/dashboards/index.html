@@ -213,7 +213,7 @@
   <div class="header">
     <h1>AAFP Test Results <span class="badge">rev6-rc1</span></h1>
     <div class="meta">
-      Generated: 2026-07-02 17:26:42 ·
+      Generated: 2026-07-02 21:49:34 ·
       Commit: d0112ca ·
       Rust: 1.96.0 ·
       OS: macOS 15.5.0 (Darwin 25.5.0) ·
@@ -242,12 +242,12 @@
           </div>
         </div>
 
-        <div class="summary-card neutral" onclick="document.getElementById('conformance').scrollIntoView({behavior:'smooth'})">
-          <div class="card-icon">○</div>
+        <div class="summary-card pass" onclick="document.getElementById('conformance').scrollIntoView({behavior:'smooth'})">
+          <div class="card-icon">✓</div>
           <div class="card-body">
             <div class="card-title">Conformance</div>
-            <div class="card-status">No data</div>
-            <div class="card-detail">0 tests · 0 passed · 0 failed · 0 skipped</div>
+            <div class="card-status">All passing</div>
+            <div class="card-detail">1 test · 1 passed · 0 failed · 0 skipped</div>
           </div>
         </div>
 
@@ -303,8 +303,22 @@
     </div>
 
     <div class="section" id="conformance">
-      <h2>Conformance Tests <span class="count">(0 suites)</span></h2>
-      <p class='empty'>No conformance tests run yet.</p>
+      <h2>Conformance Tests <span class="count">(1 suites)</span></h2>
+      
+    <table class="results-table">
+      <thead>
+        <tr><th></th><th>Suite</th><th>Passed</th><th>Summary</th><th>Timestamp</th></tr>
+      </thead>
+      <tbody>
+        <tr class="pass">
+          <td class="icon">✓</td>
+          <td>mcp-conformance-suite</td>
+          <td>11/11</td>
+          <td>MCP conformance tests based on the official MCP specification. The official @modelcontextprotocol/conformance suite only supports HTTP/stdio transports and cannot directly test QUIC-based transports. 10 spec-based conformance tests verify the AAFP MCP transport binding meets MCP spec requirements: transport connect, initialize handshake, tools/list, tools/call, resources/list+read, JSON-RPC ping, error handling, graceful close, sequential operations, and large result transmission. All 10 tests pass.</td>
+          <td class="mono">2026-07-02T22:00:00</td>
+        </tr>
+      </tbody>
+    </table>
     </div>
 
     <div class="section" id="unit">

@@ -351,18 +351,25 @@ all 1011 Rust tests pass.
 **D3 notes:** Level 2 (frame-level) interop. Go has no QUIC transport (transport-agnostic wire-format library). 7 Rust integration tests spawn Go fixture generator, verify 39 fixtures byte-for-byte (CBOR, frames, handshake, AgentRecord, transcript hash, session ID, RPC). Regenerated stale Go fixtures for A-3/A-4 changes. 1058 total workspace tests pass. Commits: rust `468b6aa`, go `61d7d51`, umbrella `c163dd1`.
 
 ### D4: MCP conformance suite integration
-- [ ] **D4.1** Research the MCP conformance suite
-- [ ] **D4.2** Install the conformance suite
-- [ ] **D4.3** Configure AAFP as a transport for the suite
-- [ ] **D4.4** Run the conformance suite
-- [ ] **D4.5** Document results (or create own conformance tests)
-- [ ] **D4.6** Commit
-- [ ] **D4.7** VERIFY: Conformance tests pass
-- [ ] **D4.8** VERIFY: Results documented
+- [x] **D4.1** Research the MCP conformance suite
+      *(Official @modelcontextprotocol/conformance v0.1.11 exists. Supports HTTP/stdio only — cannot test QUIC. Spec-based tests created instead.)*
+- [x] **D4.2** Install the conformance suite
+      *(N/A — official suite incompatible with QUIC transport. Spec-based tests used.)*
+- [x] **D4.3** Configure AAFP as a transport for the suite
+      *(N/A — official suite only supports HTTP URL (server mode) or subprocess (client mode).)*
+- [x] **D4.4** Run the conformance suite
+      *(10 spec-based conformance tests run: transport connect, initialize, tools/list, tools/call, resources/list+read, ping, error handling, graceful close, sequential ops, large result.)*
+- [x] **D4.5** Document results (or create own conformance tests)
+      *(JSON result: test-results/conformance/mcp-conformance.json. CONFORMANCE_RESULTS.md written.)*
+- [x] **D4.6** Commit
+- [x] **D4.7** VERIFY: Conformance tests pass
+      *(10/10 tests pass.)*
+- [x] **D4.8** VERIFY: Results documented
+      *(CONFORMANCE_RESULTS.md and JSON result written. Dashboard regenerated.)*
 
-**D4 status:** NOT STARTED
-**D4 blocked by:** D1
-**D4 notes:**
+**D4 status:** COMPLETE
+**D4 blocked by:** D1 — D1 COMPLETE
+**D4 notes:** Official MCP conformance suite only supports HTTP/stdio, not QUIC. 10 spec-based conformance tests created covering transport, initialize, tools, resources, ping, error handling, graceful close, sequential operations, and large results. All pass.
 
 ---
 
@@ -519,7 +526,7 @@ all 1011 Rust tests pass.
 | D1 | COMPLETE | C3 | 8/8 |
 | D2 | COMPLETE | C3 | 7/7 |
 | D3 | COMPLETE | C3 | 8/8 |
-| D4 | NOT STARTED | D1 | 0/8 |
+| D4 | COMPLETE | D1 | 8/8 |
 | E1 | NOT STARTED | — | 0/11 |
 | E2 | NOT STARTED | E1 | 0/8 |
 | E3 | NOT STARTED | E2 | 0/7 |
@@ -530,6 +537,6 @@ all 1011 Rust tests pass.
 | F4 | NOT STARTED | E2 | 0/11 |
 
 **Total steps:** 218 (70 from Tracks A-B + 148 from Tracks C-F)
-**Completed:** 122
+**Completed:** 130
 **In progress:** 0
 **Blocked:** 0
