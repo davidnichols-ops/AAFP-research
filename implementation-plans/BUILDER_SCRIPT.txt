@@ -1,0 +1,519 @@
+================================================================================
+AAFP PERFORMANCE OPTIMIZATION — BUILDER PROMPT
+================================================================================
+Date: 2026-07-03
+Project: AAFP (Agent-to-Agent Framing Protocol)
+Repo: /Users/david/projects/AAFP-research
+GitHub: https://github.com/davidnichols-ops/AAFP-research
+Rust submodule: https://github.com/davidnichols-ops/aafp
+Go submodule: https://github.com/davidnichols-ops/aafp-go
+
+================================================================================
+SECTION 1: WHAT IS THIS PROJECT
+================================================================================
+
+AAFP is a post-quantum, QUIC-based transport protocol for agent-to-agent
+communication. It implements:
+
+- QUIC transport (via quinn 0.11) with post-quantum TLS (X25519MLKEM768 hybrid)
+- ML-DSA-65 digital signatures for agent identity
+- A custom binary framing layer (28-byte header + CBOR/JSON payload)
+- AAFP v1 cryptographic handshake (ClientHello -> ServerHello -> ClientFinished)
+- MCP (Model Context Protocol) transport binding
+- A2A (Agent-to-Agent) transport binding
+- Capability-based DHT for peer discovery
+- Networked PubSub
+- Relay protocol / NAT traversal
+- CRL-based revocation
+- Persistent DHT backend (SQLite)
+
+The implementation is FEATURE-COMPLETE. All 218 roadmap steps (Tracks A-F)
+are done. 1144+ Rust tests pass. Clippy is clean. Fmt is clean. All repos
+are public on GitHub.
+
+NOW BEGINS THE PERFORMANCE PHASE.
+
+================================================================================
+SECTION 2: YOUR MISSION
+================================================================================
+
+Execute the AAFP Performance Optimization Plan: 7 tracks, 52 steps, ~12 months.
+
+Reduce networking latency from 250us to <30us round-trip (8x).
+Increase throughput from 160K msg/s to >1.5M msg/s (9x).
+Reduce allocations per message from 3 to 0 (zero-copy).
+Reduce PQ handshake from 709us to <100us (7x).
+
+================================================================================
+SECTION 3: CURRENT BASELINE (Apple M4, release build)
+================================================================================
+
+Round-trip ping (localhost):    250 us
+One-way throughput (1KB msgs):  160,000 msg/s
+PQ handshake (crypto only):     709 us
+Frame encode 1KB:               66 ns
+Frame decode 1KB:               35 ns
+AEAD encrypt 1KB:               1.63 us
+AEAD decrypt 1KB:               1.64 us
+ML-DSA-65 keygen:               133 us
+ML-DSA-65 sign:                 272 us
+ML-DSA-65 verify:               76 us
+sizeof(Session):                168 bytes
+Allocations per message:        3 (JSON -> frame -> QUIC)
+Lock acquisitions per send:     1 (Mutex on send stream)
+
+These numbers are from PERFORMANCE_REPORT.md and RELEASE_READINESS.md.
+
+================================================================================
+SECTION 4: TARGET OUTCOMES (cumulative, after each track)
+================================================================================
+
+After Track G (Zero-Copy):       <150us RTT,  >300K msg/s, 0 allocs/msg
+After Track H (Lock-Free):       <100us RTT,  >800K msg/s, 0 allocs/msg
+After Track I (0-RTT + Pool):    <50us RTT (pooled), >800K msg/s, 0 allocs/msg
+After Track J (QUIC Tuning):     <50us RTT,   >1M msg/s,   0 allocs/msg
+After Track K (Serialization):   <40us RTT,   >1.2M msg/s, 0 allocs/msg
+After Track L (Kernel/HW):       <30us RTT,   >1.5M msg/s, 0 allocs/msg
+
+Track M (Benchmarking) runs continuously alongside all other tracks.
+
+================================================================================
+SECTION 5: THE 7 TRACKS (read the detailed plan files)
+================================================================================
+
+Track G: Zero-Copy Data Path (8 steps, Q1)
+  File: implementation-plans/track-g-zerocopy/G-zero-copy-data-path.md
+  Focus: Eliminate all 3 allocations on the hot path via buffer pool + in-place
+         serialization. JSON -> frame -> QUIC becomes a single buffer write.
+  Key deliverables:
+    - BytesMut buffer pool (thread-local, configurable size)
+    - encode_frame_into() / decode_frame_from() (in-place, no new Vec)
+    - Zero-copy MCP transport send (serde_json::to_writer into buffer)
+    - Zero-copy MCP transport receive (read directly into buffer)
+    - 0 allocations per message after warmup
+
+Track H: Lock-Free Concurrency (7 steps, Q1-Q2)
+  File: implementation-plans/track-h-lockfree/H-lock-free-concurrency.md
+  Focus: Replace Arc<Mutex<Option<QuicSendStream>>> with mpsc channel + dedicated
+         writer task. Shard the DHT 256-way with per-shard RwLock. Use ArcSwap
+         for read-heavy shards (lock-free reads).
+  Key deliverables:
+    - mpsc::Sender<BytesMut> replaces Mutex on send path
+    - Dedicated writer task per connection
+    - ShardedDht with 256 shards (sha256(key)[0] -> shard index)
+    - ArcSwap for read-heavy shards (copy-on-write, lock-free reads)
+    - Linear scaling with concurrent senders (8 senders -> >800K msg/s)
+
+Track I: Connection Lifecycle (8 steps, Q2)
+  File: implementation-plans/track-i-connection-lifecycle/I-connection-lifecycle.md
+  Focus: 0-RTT session resumption for returning peers, connection pooling,
+         QUIC connection migration, adaptive keep-alive.
+  Key deliverables:
+    - TLS session ticket cache (LRU, 1024 entries, 1hr TTL)
+    - AAFP 0-RTT resumption protocol (RFC amendment + client + server)
+    - ConnectionPool (reuse connections for same peer, idle timeout 60s)
+    - Connection migration (QUIC CID-based, survives address change)
+    - Adaptive keep-alive (30s -> 60s when stable, 10s when unstable)
+    - Warm connect (0-RTT): <300us. Pooled connect: <50us.
+
+Track J: QUIC Transport Tuning (7 steps, Q2-Q3)
+  File: implementation-plans/track-j-quic-tuning/J-quic-transport-tuning.md
+  Focus: Tune quinn for ultra-low-latency RPC instead of general-purpose web.
+  Key deliverables:
+    - BBR congestion control (replaces cubic)
+    - Initial RTT: 10ms (from quinn default 333ms)
+    - Tuned stream buffers (initial window 1MB)
+    - ACK delay: 5ms (from 25ms)
+    - GSO (Generic Segmentation Offload) for large messages
+    - Multi-path QUIC (research, may use quiche/s2n-quic if quinn lacks support)
+
+Track K: Serialization Optimization (7 steps, Q3)
+  File: implementation-plans/track-k-serialization/K-serialization-optimization.md
+  Focus: Replace serde_json with simd-json (2-4x), replace ciborium with minicbor
+         (3-10x), stack-allocate handshake messages, custom codecs for hot path.
+  Key deliverables:
+    - simd-json for MCP transport (2-4x faster JSON)
+    - minicbor for AAFP protocol messages (3-10x faster CBOR, 0 alloc)
+    - heapless::Vec for handshake messages (stack-allocated, 0 heap alloc)
+    - Custom codec for PING/tools-list (bypass serde, <100ns encode+decode)
+    - bytes::Bytes for zero-copy string fields in deserialized messages
+
+Track L: Kernel & Hardware (8 steps, Q3-Q4)
+  File: implementation-plans/track-l-kernel-hardware/L-kernel-hardware.md
+  Focus: The last mile. Syscall reduction, SIMD crypto, io_uring, runtime tuning.
+  Key deliverables:
+    - Syscall profile (dtrace/perf) to identify overhead
+    - recvmmsg/sendmmsg batching (Linux) — 10-100x fewer syscalls
+    - Verify/enable SIMD crypto (AES-NI / ARM Crypto Extensions) — 5x AEAD
+    - io_uring integration (Linux, via tokio-uring) — 2-5x syscall reduction
+    - Tokio runtime tuning (worker_threads, stack size, core pinning)
+    - XDP/DPDK research (kernel bypass — may not be feasible with QUIC)
+
+Track M: Benchmarking & Profiling (7 steps, ONGOING)
+  File: implementation-plans/track-m-benchmarking/M-benchmarking-profiling.md
+  Focus: Measurement infrastructure for all other tracks. CI regression detection.
+  Key deliverables:
+    - BenchmarkRunner harness (JSON output, p50/p90/p99/p99.9, comparison)
+    - Flamegraph generation (cargo flamegraph, perf/dtrace)
+    - Allocation tracking (custom allocator wrapper, per-benchmark counts)
+    - CI benchmark regression detection (>10% regression = fail)
+    - Latency distribution plots (histogram, CDF, time series)
+    - Cross-platform benchmark matrix (macOS ARM64 + Linux x86_64)
+    - Interactive HTML performance dashboard
+
+================================================================================
+SECTION 6: EXECUTION ORDER
+================================================================================
+
+Phase 1 (Q1): G1-G8 (Zero-Copy) + M1-M3 (Benchmarking foundation)
+  - Start G and M in parallel. M provides the measurement tools G needs.
+  - G1 (allocation profile) and M1 (benchmark harness) and M3 (alloc tracker)
+    should be done first, in parallel.
+
+Phase 2 (Q2): H1-H7 (Lock-Free) + I1-I5 (0-RTT + Pooling) + M4-M5
+  - H depends on G (needs buffer pool for lock-free buffer management).
+  - I depends on H (needs channel-based send for connection pooling).
+  - M4 (CI regression) and M5 (latency distribution) enable H and I verification.
+
+Phase 3 (Q3): I6-I8 (Migration) + K1-K7 (Serialization) + J1-J3 (QUIC Tuning) + M6-M7
+  - K depends on G (needs buffer pool for in-place serialization).
+  - J depends on I (needs connection pooling for realistic benchmarks).
+  - M6 (cross-platform) and M7 (dashboard) complete the measurement stack.
+
+Phase 4 (Q4): J4-J7 (QUIC Advanced) + L1-L8 (Kernel/Hardware)
+  - L depends on K (needs optimized serialization before kernel bypass helps).
+  - J4-J7 (GSO, multi-path) are advanced QUIC features.
+
+================================================================================
+SECTION 7: HOW TO EXECUTE EACH STEP
+================================================================================
+
+For EVERY step in EVERY track, follow this exact procedure:
+
+1. READ the step in the track plan file (e.g., G1 in G-zero-copy-data-path.md)
+2. BASELINE: Run the relevant benchmark BEFORE any changes. Save the numbers.
+3. IMPLEMENT: Write the code for the step. Add tests.
+4. VERIFY: Run the benchmark AGAIN. Compare to baseline.
+5. TEST: Run `cargo test --workspace`. Expected: 0 failures.
+6. LINT: Run `cargo clippy --workspace -- -D warnings`. Expected: clean.
+7. FMT: Run `cargo fmt --all -- --check`. Expected: clean.
+8. STATUS: Update PERFORMANCE_STATUS.md — mark step [x], update metrics.
+9. COMMIT: One commit per step, with before/after numbers in the message.
+10. PUSH: Push after each TRACK completes (not every step).
+
+NEVER skip step 2 (baseline) or step 4 (verify). If you can't measure it,
+you can't optimize it. If the benchmark doesn't improve, investigate why
+before moving to the next step.
+
+================================================================================
+SECTION 8: VERIFY CRITERIA FOR EACH STEP
+================================================================================
+
+Every step in the plan files has a "VERIFY:" line. These are non-negotiable.
+Do not mark a step complete unless the verify criterion is met.
+
+Examples:
+  G1  VERIFY: Baseline shows 3 allocs/msg, ~1.2KB allocated/msg
+  G5  VERIFY: Send path benchmark shows 0 allocations/msg
+  G8  VERIFY: Round-trip ping <150us (from 250us baseline), allocations/msg = 0
+  H2  VERIFY: 4 concurrent senders -> ~600K msg/s
+  H7  VERIFY: 8 concurrent senders: >800K msg/s, DHT 100K reads <10ms
+  I8  VERIFY: Warm connect <300us, pooled connect <50us
+  J7  VERIFY: Localhost round-trip <50us
+  K7  VERIFY: JSON encode 1KB <2us, CBOR encode ClientHello <500ns
+  L8  VERIFY: Localhost round-trip <30us, AEAD 1KB <0.3us
+
+================================================================================
+SECTION 9: COMMIT MESSAGE FORMAT
+================================================================================
+
+git commit -m "$(cat <<'EOF'
+perf(track-step): <description>
+
+Before: <metric> = <value>
+After:  <metric> = <value>
+Improvement: <Nx>
+
+<explanation of what changed and why>
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+EOF
+)"
+
+Example:
+git commit -m "$(cat <<'EOF'
+perf(g-5): zero-copy MCP transport send path
+
+Before: allocations/msg = 3, round-trip = 250us
+After:  allocations/msg = 0, round-trip = 148us
+Improvement: 1.7x round-trip, 3 allocations eliminated
+
+Replace serde_json::to_vec() + encode_frame() + write_all() with a
+single buffer pool acquire -> write header in-place -> serialize JSON
+into buffer -> write_all -> release buffer. Zero heap allocations
+after pool warmup.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+EOF
+)"
+
+================================================================================
+SECTION 10: QUICK VERIFICATION COMMANDS
+================================================================================
+
+# Build
+cd /Users/david/projects/AAFP-research/implementations/rust
+cargo build --workspace
+
+# Test (must be 0 failures)
+cargo test --workspace
+
+# Lint (must be clean)
+cargo clippy --workspace -- -D warnings
+cargo fmt --all -- --check
+
+# Benchmarks
+cargo bench --bench mcp_transport -- --warm-up-time 3 --measurement-time 5
+cargo bench --bench framing
+cargo bench --bench handshake
+cargo bench --bench crypto
+
+# Flamegraph (requires: cargo install flamegraph)
+cargo flamegraph --bench mcp_transport -- --bench-only
+
+# Python tests (aafp-py)
+source implementations/rust/crates/aafp-py/.venv/bin/activate
+cd implementations/rust/crates/aafp-py
+python -m pytest tests/ -v
+
+# Golden traces (must still pass — wire compatibility)
+cargo test --test golden_traces -- --nocapture
+
+================================================================================
+SECTION 11: SUBMODULE WORKFLOW
+================================================================================
+
+The repo structure is:
+
+/Users/david/projects/AAFP-research/              <- umbrella repo
+  implementations/rust/                             <- git submodule (aafp)
+  implementations/go/                               <- git submodule (aafp-go)
+
+When you commit changes in the Rust submodule:
+
+  cd implementations/rust
+  git add -A
+  git commit -m "perf(g-5): zero-copy MCP transport send path ..."
+  git push origin master
+
+  # Then update the umbrella repo to point to the new submodule commit:
+  cd /Users/david/projects/AAFP-research
+  git add implementations/rust
+  git commit -m "chore: update rust submodule — perf(g-5): zero-copy send"
+  git push origin master
+
+Push after each TRACK completes, not after every step. But commit after
+every step.
+
+================================================================================
+SECTION 12: GOLDEN RULES (NON-NEGOTIABLE)
+================================================================================
+
+1. NEVER sacrifice security for speed.
+   PQ handshake and identity verification are non-negotiable.
+   Do not weaken crypto, skip signature verification, or disable TLS.
+
+2. NEVER break the wire protocol.
+   All optimizations must be wire-compatible with existing peers.
+   Golden traces MUST still pass after every change.
+   If a change alters the wire format, it requires an RFC amendment
+   and the user's explicit approval.
+
+3. NEVER skip benchmarking.
+   Every step must have before/after numbers.
+   If you can't measure it, you can't optimize it.
+
+4. NEVER mark a step complete unless benchmarks show improvement.
+   If a step doesn't improve performance, investigate why.
+   If it regresses, revert and investigate.
+
+5. NEVER use `unsafe` without a SAFETY comment and justification.
+   Every unsafe block needs:
+     // SAFETY: <why this is safe, what invariants are maintained>
+
+6. ALWAYS run `cargo test --workspace` before committing.
+   Expected: 0 failures. If any test fails, fix it before committing.
+
+7. ALWAYS run `cargo clippy --workspace -- -D warnings` before committing.
+   Expected: clean. Fix all warnings.
+
+8. ALWAYS run `cargo fmt --all -- --check` before committing.
+   Expected: clean. Run `cargo fmt --all` if not.
+
+9. ALWAYS update PERFORMANCE_STATUS.md in the same commit as the work.
+   Mark the step [x] and update the metrics table.
+
+10. One optimization per commit.
+    Each commit should be independently measurable and revertable.
+
+================================================================================
+SECTION 13: WHEN TO STOP AND ASK THE USER
+================================================================================
+
+Stop and ask for guidance if:
+
+1. A proposed optimization would change the wire protocol
+   (requires RFC amendment + user approval)
+
+2. A dependency needs to be added
+   (check it's maintained, published >7 days ago, not yanked)
+
+3. `unsafe` code is required and you're unsure about the safety justification
+
+4. A benchmark regresses and you can't figure out why after investigation
+
+5. A track is blocked by an external factor
+   (e.g., quinn doesn't support a feature, a crate doesn't build on macOS)
+
+6. You need to make a design decision that's not covered in the plan files
+
+For everything else, make a decision and proceed. You have full autonomy.
+
+================================================================================
+SECTION 14: KEY FILES TO READ BEFORE STARTING
+================================================================================
+
+Read these in order:
+
+1. implementation-plans/PERFORMANCE_OPTIMIZATION_PLAN.md
+   Master plan with dependency graph and execution order.
+
+2. implementation-plans/PERFORMANCE_STATUS.md
+   Status tracker. Update this after every step.
+
+3. PERFORMANCE_REPORT.md
+   Current benchmark results (baseline numbers).
+
+4. implementations/rust/PERFORMANCE_CRITERIA.md
+   Original performance targets from the roadmap.
+
+5. implementations/rust/AGENTS.md
+   Build and test guide for the Rust workspace.
+
+6. implementation-plans/track-g-zerocopy/G-zero-copy-data-path.md
+   START HERE. Track G is the first track to execute.
+
+7. implementation-plans/track-m-benchmarking/M-benchmarking-profiling.md
+   Run M1-M3 in parallel with G. M provides the measurement tools.
+
+Then read the plan files for subsequent tracks as you get to them:
+   implementation-plans/track-h-lockfree/H-lock-free-concurrency.md
+   implementation-plans/track-i-connection-lifecycle/I-connection-lifecycle.md
+   implementation-plans/track-j-quic-tuning/J-quic-transport-tuning.md
+   implementation-plans/track-k-serialization/K-serialization-optimization.md
+   implementation-plans/track-l-kernel-hardware/L-kernel-hardware.md
+
+================================================================================
+SECTION 15: KEY CODE LOCATIONS (where to make changes)
+================================================================================
+
+MCP Transport (hot path — Track G, H, K):
+  implementations/rust/crates/aafp-transport-mcp/src/lib.rs
+    - send() method: line ~491 (Mutex lock + JSON serialize + frame encode + write)
+    - receive() method: line ~514 (read frame + JSON deserialize)
+    - send_handle(): line ~402 (Arc<Mutex<Option<QuicSendStream>>>)
+    - send_raw_json_on_handle(): line ~412
+
+QUIC Transport (Track G, J):
+  implementations/rust/crates/aafp-transport-quic/src/transport.rs
+    - QuicTransport, QuicConnection, QuicSendStream, QuicRecvStream
+  implementations/rust/crates/aafp-transport-quic/src/config.rs
+    - QuicConfig (congestion control, RTT, buffers — Track J)
+
+Framing (Track G):
+  implementations/rust/crates/aafp-messaging/src/framing.rs
+    - encode_frame() / decode_frame() — add in-place variants
+    - Frame struct, FrameCodec
+
+Handshake (Track I, K):
+  implementations/rust/crates/aafp-crypto/src/handshake_v1.rs
+    - ClientHello, ServerHello, ClientFinished (CBOR serialization)
+  implementations/rust/crates/aafp-sdk/src/handshake_driver.rs
+    - drive_client_handshake() / drive_server_handshake()
+
+Discovery / DHT (Track H):
+  implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+    - SharedCapabilityDht (Arc<RwLock<CapabilityDht>>)
+    - CapabilityDht (HashMap-based, single lock)
+  implementations/rust/crates/aafp-discovery/src/capability_dht.rs
+    - Legacy DHT (deprecated, do not optimize)
+
+SDK Agent (Track I):
+  implementations/rust/crates/aafp-sdk/src/lib.rs
+    - Agent struct (keypair, transport, record, dht, pubsub)
+  implementations/rust/crates/aafp-sdk/src/builder.rs
+    - AgentBuilder
+
+Crypto (Track L):
+  implementations/rust/crates/aafp-crypto/src/aead.rs
+    - AEAD encrypt/decrypt (verify SIMD usage)
+  implementations/rust/crates/aafp-crypto/src/dsa.rs
+    - ML-DSA-65 sign/verify
+
+Benchmarks:
+  implementations/rust/crates/aafp-transport-mcp/benches/mcp_transport.rs
+    - Round-trip ping, one-way throughput
+  implementations/rust/crates/aafp-messaging/benches/framing.rs
+    - Frame encode/decode
+  implementations/rust/crates/aafp-crypto/benches/
+    - Crypto benchmarks
+
+Workspace Cargo.toml (dependencies — Track K, L):
+  implementations/rust/Cargo.toml
+    - quinn, rustls, aws-lc-rs, tokio, ciborium, serde_json, fips204
+
+================================================================================
+SECTION 16: WHAT "DONE" LOOKS LIKE
+================================================================================
+
+The project is done when ALL of these are true:
+
+[ ] G: Zero-copy data path — 0 allocations per message, round-trip <150us
+[ ] H: Lock-free concurrency — 8 concurrent senders >800K msg/s, DHT sharded
+[ ] I: Connection lifecycle — 0-RTT resumption, connection pooling, migration
+[ ] J: QUIC tuning — BBR, tuned buffers, GSO, round-trip <50us
+[ ] K: Serialization — simd-json, minicbor, custom codecs, encode <2us
+[ ] L: Kernel/hardware — SIMD crypto, io_uring, runtime tuning, RT <30us
+[ ] M: Benchmarking — CI regression, flamegraphs, alloc tracking, dashboard
+[ ] PERFORMANCE_STATUS.md shows all 52 steps [x]
+[ ] PERFORMANCE_REPORT.md updated with final results
+[ ] All 1144+ tests still pass
+[ ] Clippy clean, fmt clean
+[ ] All changes committed and pushed to GitHub
+
+================================================================================
+SECTION 17: BEGIN
+================================================================================
+
+Start now.
+
+1. Read implementation-plans/PERFORMANCE_OPTIMIZATION_PLAN.md
+2. Read implementation-plans/track-g-zerocopy/G-zero-copy-data-path.md
+3. Read implementation-plans/track-m-benchmarking/M-benchmarking-profiling.md
+4. Begin G1 (benchmark allocation profile) and M1 (benchmark harness) in parallel
+
+G1 asks you to measure the current allocation profile. Do that before
+writing any optimization code. You cannot optimize what you cannot measure.
+
+M1 asks you to build the benchmark harness that all other steps will use.
+Build it first so every subsequent step has proper measurement.
+
+Go.
+
+================================================================================
+END OF BUILDER PROMPT
+================================================================================
