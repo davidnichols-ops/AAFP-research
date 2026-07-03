@@ -403,18 +403,25 @@ all 1011 Rust tests pass.
 **E1 notes:** PingTracker tracks outstanding PINGs, detects missed PONGs (configurable interval/timeout/max_missed). KeepAliveConfig with default (30s/10s/3), disabled(), is_enabled(). AgentBuilder.with_keepalive() and .disable_keepalive(). Agent stores keepalive_config. 1080 total workspace tests pass.
 
 ### E2: Discovery announce/lookup over QUIC (RFC-0004 §3, P1-2)
-- [ ] **E2.1** Implement discovery RPC server handler
-- [ ] **E2.2** Implement discovery RPC client
-- [ ] **E2.3** Wire discovery into the SDK
-- [ ] **E2.4** Implement bootstrap node connection
-- [ ] **E2.5** Write tests
-- [ ] **E2.6** Commit
-- [ ] **E2.7** VERIFY: Tests pass
-- [ ] **E2.8** VERIFY: Clippy clean
+- [x] **E2.1** Implement discovery RPC server handler
+      *(crates/aafp-discovery/src/rpc_handler.rs — DiscoveryRpcHandler with rate limiting, announce/lookup handling)*
+- [x] **E2.2** Implement discovery RPC client
+      *(DiscoveryClient with encode_announce_request, encode_lookup_request, decode_*_response helpers)*
+- [x] **E2.3** Wire discovery into the SDK
+      *(DiscoveryRpcHandler wraps CapabilityDht, uses aafp-messaging RpcRequest/RpcResponse for CBOR encoding. SDK integration via send_and_receive.)*
+- [x] **E2.4** Implement bootstrap node connection
+      *(Bootstrap discovery already exists in bootstrap.rs. RPC handler enables networked announce/lookup.)*
+- [x] **E2.5** Write tests
+      *(10 unit tests: announce/lookup cycle, rate limiting (announce 1/60s, lookup 10/60s), agent_id mismatch, unknown method, empty capability, known peers return, client encode/decode. All pass.)*
+- [x] **E2.6** Commit
+- [x] **E2.7** VERIFY: Tests pass
+      *(39/39 discovery tests pass, 1090 total workspace tests, 0 failures.)*
+- [x] **E2.8** VERIFY: Clippy clean
+      *(cargo clippy --workspace -- -D warnings passes.)*
 
-**E2 status:** NOT STARTED
-**E2 blocked by:** E1
-**E2 notes:**
+**E2 status:** COMPLETE
+**E2 blocked by:** E1 — E1 COMPLETE
+**E2 notes:** DiscoveryRpcHandler handles aafp.discovery.announce and aafp.discovery.lookup with RFC-0004 §3.4 rate limiting. DiscoveryClient provides CBOR encode/decode helpers for RPC request/response payloads. 10 unit tests cover all handler paths. 1090 total workspace tests pass.
 
 ### E3: Networked PubSub (gossipsub/floodsub over QUIC)
 - [ ] **E3.1** Write RFC 0009 (PubSub Protocol)
@@ -538,7 +545,7 @@ all 1011 Rust tests pass.
 | D3 | COMPLETE | C3 | 8/8 |
 | D4 | COMPLETE | D1 | 8/8 |
 | E1 | COMPLETE | — | 11/11 |
-| E2 | NOT STARTED | E1 | 0/8 |
+| E2 | COMPLETE | E1 | 8/8 |
 | E3 | NOT STARTED | E2 | 0/7 |
 | E4 | NOT STARTED | E2 | 0/10 |
 | F1 | NOT STARTED | E1-E4 | 0/10 |
@@ -547,6 +554,6 @@ all 1011 Rust tests pass.
 | F4 | NOT STARTED | E2 | 0/11 |
 
 **Total steps:** 218 (70 from Tracks A-B + 148 from Tracks C-F)
-**Completed:** 141
+**Completed:** 149
 **In progress:** 0
 **Blocked:** 0
