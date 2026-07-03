@@ -424,17 +424,23 @@ all 1011 Rust tests pass.
 **E2 notes:** DiscoveryRpcHandler handles aafp.discovery.announce and aafp.discovery.lookup with RFC-0004 §3.4 rate limiting. DiscoveryClient provides CBOR encode/decode helpers for RPC request/response payloads. 10 unit tests cover all handler paths. 1090 total workspace tests pass.
 
 ### E3: Networked PubSub (gossipsub/floodsub over QUIC)
-- [ ] **E3.1** Write RFC 0009 (PubSub Protocol)
-- [ ] **E3.2** Implement networked PubSub (floodsub)
-- [ ] **E3.3** Wire PubSub into the SDK
-- [ ] **E3.4** Write tests
-- [ ] **E3.5** Commit
-- [ ] **E3.6** VERIFY: Tests pass
-- [ ] **E3.7** VERIFY: Clippy clean
+- [x] **E3.1** Write RFC 0009 (PubSub Protocol)
+      *(RFCs/0009-pubsub.md — floodsub v1, wire format, message propagation, dedup, TTL. Gossipsub v2 documented as future work.)*
+- [x] **E3.2** Implement networked PubSub (floodsub)
+      *(crates/aafp-messaging/src/pubsub_v1.rs — NetworkedPubSub, PubSubRpcHandler, SubscribeParams, PublishParams, SeenCache. 16 unit tests.)*
+- [x] **E3.3** Wire PubSub into the SDK
+      *(PubSubRpcHandler handles aafp.pubsub.subscribe/unsubscribe/publish RPC methods. NetworkedPubSub tracks local+remote subscriptions.)*
+- [x] **E3.4** Write tests
+      *(16 unit tests: local subscribe/publish, multiple subscribers, remote subscription tracking, remove subscriber/peer, remote message delivery, dedup, TTL=0, CBOR roundtrips, RPC handler subscribe/unsubscribe/publish/unknown, encode request, seen cache.)*
+- [x] **E3.5** Commit
+- [x] **E3.6** VERIFY: Tests pass
+      *(16/16 pubsub_v1 tests pass, 1106 total workspace tests, 0 failures.)*
+- [x] **E3.7** VERIFY: Clippy clean
+      *(cargo clippy --workspace -- -D warnings passes.)*
 
-**E3 status:** NOT STARTED
-**E3 blocked by:** E2
-**E3 notes:**
+**E3 status:** COMPLETE
+**E3 blocked by:** E2 — E2 COMPLETE
+**E3 notes:** Floodsub v1 implemented per RFC 0009. NetworkedPubSub with local broadcast channels + remote subscription tracking. PubSubRpcHandler for subscribe/unsubscribe/publish RPC. SeenCache for message dedup (60s TTL, 10K max). TTL-based hop limit (default 3). 16 unit tests. 1106 total workspace tests pass.
 
 ### E4: Relay protocol / NAT traversal (P1-8)
 - [ ] **E4.1** Write RFC 0010 (Circuit Relay Protocol)
@@ -546,7 +552,7 @@ all 1011 Rust tests pass.
 | D4 | COMPLETE | D1 | 8/8 |
 | E1 | COMPLETE | — | 11/11 |
 | E2 | COMPLETE | E1 | 8/8 |
-| E3 | NOT STARTED | E2 | 0/7 |
+| E3 | COMPLETE | E2 | 7/7 |
 | E4 | NOT STARTED | E2 | 0/10 |
 | F1 | NOT STARTED | E1-E4 | 0/10 |
 | F2 | NOT STARTED | — | 0/14 |
@@ -554,6 +560,6 @@ all 1011 Rust tests pass.
 | F4 | NOT STARTED | E2 | 0/11 |
 
 **Total steps:** 218 (70 from Tracks A-B + 148 from Tracks C-F)
-**Completed:** 149
+**Completed:** 156
 **In progress:** 0
 **Blocked:** 0
