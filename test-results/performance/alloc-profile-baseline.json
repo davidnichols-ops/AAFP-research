@@ -1,0 +1,51 @@
+{
+    "test_name": "alloc-profile-baseline",
+    "test_category": "performance",
+    "timestamp": "2026-07-03",
+    "environment": {
+        "cpu": "Apple M4",
+        "os": "Darwin",
+        "rust": "1.96.0"
+    },
+    "status": "baseline",
+    "summary": "Allocation profile baseline for MCP transport hot path (Track G)",
+    "send_path": {
+        "serde_json_to_vec": {
+            "allocs": 1,
+            "bytes": 128
+        },
+        "frame_data": {
+            "allocs": 0,
+            "bytes": 0
+        },
+        "encode_frame": {
+            "allocs": 1,
+            "bytes": 68
+        },
+        "total": {
+            "allocs": 2,
+            "bytes": 196
+        }
+    },
+    "recv_path": {
+        "decode_frame": {
+            "allocs": 5,
+            "bytes": 526
+        },
+        "serde_json_from_slice": {
+            "allocs": 2,
+            "bytes": 168
+        },
+        "total": {
+            "allocs": 7,
+            "bytes": 694
+        }
+    },
+    "round_trip": {
+        "total": {
+            "allocs": 9,
+            "bytes": 890
+        }
+    },
+    "notes": "Send path: 2 allocs/msg (JSON serialize + frame encode). Frame::data() is zero-alloc (Vec move). Recv path: 7 allocs/msg (decode_frame allocates Vec for extensions + payload, plus JSON deserialize allocates Value nodes). Round trip: 9 allocs/msg total."
+}
