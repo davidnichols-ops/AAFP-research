@@ -30,7 +30,7 @@
 
 | Track | Name | Status | Steps | Duration |
 |-------|------|--------|-------|----------|
-| G | Zero-Copy Data Path | IN PROGRESS | 2/8 | Q1 |
+| G | Zero-Copy Data Path | IN PROGRESS | 4/8 | Q1 |
 | H | Lock-Free Concurrency | NOT STARTED | 0/7 | Q1-Q2 |
 | I | Connection Lifecycle | NOT STARTED | 0/8 | Q2 |
 | J | QUIC Transport Tuning | NOT STARTED | 0/7 | Q2-Q3 |
@@ -39,7 +39,7 @@
 | M | Benchmarking & Profiling | IN PROGRESS | 2/7 | Ongoing |
 
 **Total steps:** 52
-**Completed:** 4
+**Completed:** 6
 **In progress:** 2
 **Blocked:** 0
 
