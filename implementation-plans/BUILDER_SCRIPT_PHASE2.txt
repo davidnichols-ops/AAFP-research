@@ -1,0 +1,557 @@
+================================================================================
+AAFP PERFORMANCE OPTIMIZATION — BUILDER PROMPT (PHASE 2)
+================================================================================
+Date: 2026-07-03 (continuation)
+Project: AAFP (Agent-to-Agent Framing Protocol)
+Repo: /Users/david/projects/AAFP-research
+GitHub: https://github.com/davidnichols-ops/AAFP-research
+Rust submodule: https://github.com/davidnichols-ops/aafp
+
+================================================================================
+SECTION 1: WHAT HAPPENED IN PHASE 1
+================================================================================
+
+Phase 1 completed Track G (Zero-Copy Data Path) — all 8 steps — plus
+M1 (Benchmark Harness) and M3 (Allocation Tracking). 10 of 52 total
+steps are done. All work is committed and pushed to GitHub.
+
+Commits (rust submodule, newest first):
+  32bd225  perf(g-7,g-8): zero-copy raw JSON send/recv + end-to-end verification
+  11acc73  perf(g-5,g-6): zero-copy MCP transport send and receive paths
+  08b6b31  perf(g-3,g-4): zero-copy frame encode and decode
+  68643a0  perf(g-2): implement BytesMut buffer pool
+  cdabeff  perf(m1,m3,g1): benchmark harness + allocation tracking + baseline
+
+Commits (umbrella repo, newest first):
+  e3316ff  perf(g-7,g-8): Track G complete — zero-copy data path
+  d80f6f1  perf(g-5,g-6): zero-copy MCP transport send and receive paths
+  9378b81  perf(g-3,g-4): zero-copy frame encode and decode
+  7229ae2  perf(g-2): implement BytesMut buffer pool
+  97f889f  perf(m1,m3,g1): benchmark harness + allocation tracking + baseline
+
+================================================================================
+SECTION 2: CURRENT PERFORMANCE NUMBERS (post-Track G)
+================================================================================
+
+MEASURED on Apple M4, release build, after Track G:
+
+  Round-trip ping (localhost):     42.4 µs   (was 250 µs — 5.9x improvement)
+  One-way throughput (10 msgs):    380K msg/s (was 160K — 2.4x improvement)
+  One-way throughput (100 msgs):   803K msg/s
+  One-way throughput (1000 msgs):  793K msg/s
+  Send path allocations:           0 per msg  (was 2 — 100% eliminated)
+  Recv path allocations:           7 per msg  (was 7 — JSON Value tree, Track K)
+  Round-trip allocations:          7 per msg  (was 9 — 22% reduction)
+  Tests:                           1179 pass, 0 failures
+  Clippy:                          clean
+  Fmt:                             clean
+
+The Track G target was <150µs round-trip. We achieved 42.4µs — exceeding
+the target by 3.5x. The improvement came from:
+  1. Buffer pool eliminates 2 send allocations (0 after warmup)
+  2. serde_json::to_writer into buffer (no intermediate Vec)
+  3. Single write_all call (no intermediate frame Vec)
+  4. Reduced allocator pressure → CPU spends time on I/O not malloc/free
+
+================================================================================
+SECTION 3: WHAT WAS BUILT IN PHASE 1
+================================================================================
+
+New files created:
+  implementations/rust/crates/aafp-transport-quic/src/buffer_pool.rs
+    - Thread-local BytesMut buffer pool
+    - acquire() / release() / BufferGuard (RAII)
+    - BytesMutWriter (io::Write wrapper for BytesMut)
+    - Configurable: pool_size=256, initial_capacity=4KB, max_capacity=1MB
+    - Idle eviction (60s), pool stats (hits/misses/hit_rate)
+    - 7 tests
+
+  implementations/rust/crates/aafp-benchmark/src/alloc_tracker.rs
+    - CountingAllocator wrapping System allocator
+    - track_allocs() / track_allocs_with_result()
+    - Thread-safe via TRACKING_MUTEX
+    - 5 tests
+
+  implementations/rust/crates/aafp-benchmark/src/harness.rs
+    - BenchmarkRunner with p50/p90/p99/p99.9
+    - compare_results() for before/after comparison
+    - JSON output
+    - 3 tests
+
+  implementations/rust/crates/aafp-benchmark/benches/alloc_profile.rs
+    - Allocation profile benchmark (send/recv/round-trip/large/prealloc/zerocopy)
+    - Uses CountingAllocator as #[global_allocator]
+    - Confirms: ZEROCOPY SEND = 0 allocs, 0 bytes
+
+  test-results/performance/alloc-profile-baseline.json
+    - Baseline: send=2 allocs/196B, recv=7/694B, round-trip=9/890B
+
+  test-results/performance/zerocopy-results.json
+    - After Track G: send=0 allocs, recv=7 (JSON Value tree)
+
+New APIs added (additive, old APIs unchanged):
+  aafp-messaging:
+    - encode_frame_into(buf: &mut BytesMut, frame: &Frame) -> Result<()>
+    - encode_header_into(buf, frame_type, flags, stream_id, extensions) -> Result<()>
+    - backpatch_payload_len(buf: &mut BytesMut, payload_len: usize) -> Result<()>
+    - decode_frame_from(buf: &mut BytesMut) -> Result<Option<DecodedFrame>>
+    - DecodedFrame { frame_type, flags, stream_id, extensions: Bytes, payload: Bytes }
+
+  aafp-transport-quic:
+    - buffer_pool::acquire() -> BytesMut
+    - buffer_pool::release(buf: BytesMut)
+    - buffer_pool::acquire_guard() -> BufferGuard
+    - buffer_pool::BytesMutWriter (impls io::Write)
+    - buffer_pool::BufferPoolConfig, PoolStats
+
+  aafp-transport-mcp:
+    - AafpMcpTransport::send_zero_copy<T>(&mut self, item: &T) -> Result<()>
+    - AafpMcpTransport::receive_zero_copy<R>(&mut self) -> Option<RxJsonRpcMessage<R>>
+    - AafpMcpTransport::send_raw_json_zero_copy(&self, json: &Value) -> Result<()>
+    - AafpMcpTransport::recv_raw_json_zero_copy(&mut self) -> Option<Value>
+    - send_raw_json_on_handle_zero_copy(handle, json) -> Result<()>
+
+================================================================================
+SECTION 4: WHAT TO DO IN PHASE 2
+================================================================================
+
+The next tracks to execute, in order:
+
+  1. Track H: Lock-Free Concurrency (7 steps) — START HERE
+  2. Track M2: Flamegraph integration (1 step) — can run in parallel with H
+  3. Track I: Connection Lifecycle (8 steps) — after H
+  4. Track M4-M5: CI regression + latency distribution — after H
+
+Then in Phase 3:
+  5. Track J: QUIC Transport Tuning (7 steps) — after I
+  6. Track K: Serialization Optimization (7 steps) — after G (already done)
+  7. Track M6-M7: Cross-platform + dashboard
+  8. Track L: Kernel & Hardware (8 steps) — after K
+
+================================================================================
+SECTION 5: TRACK H — LOCK-FREE CONCURRENCY (DETAILED)
+================================================================================
+
+File: implementation-plans/track-h-lockfree/H-lock-free-concurrency.md
+READ THIS FILE before starting. It has all 7 steps with verify criteria.
+
+PROBLEM:
+  The send path uses Arc<Mutex<Option<QuicSendStream>>>. Every send acquires
+  a tokio mutex. Under concurrent load, this serializes all sends.
+  Current: 803K msg/s with 1 sender. With 4+ senders, throughput stays flat
+  (serialized by mutex). Target: linear scaling to >1M msg/s with 8 senders.
+
+  The DHT uses a single RwLock for all operations — reads block during writes.
+
+ARCHITECTURE:
+  CURRENT (send):
+    Task A -> lock(mutex) -> write -> unlock
+    Task B -> lock(mutex) -> write -> unlock  (blocked while A holds lock)
+
+  TARGET (send):
+    Task A -> mpsc.send() -+
+    Task B -> mpsc.send() -+-> dedicated writer task -> quinn write
+    Task C -> mpsc.send() -+
+    (no blocking — mpsc is lock-free for single consumer)
+
+  CURRENT (DHT):
+    All ops -> lock(RwLock) -> HashMap op -> unlock
+
+  TARGET (DHT):
+    Shard 0 (hash[0]==0) -> RwLock<Shard>
+    Shard 1 (hash[0]==1) -> RwLock<Shard>
+    ...256 shards...
+    (contention reduced 256x)
+
+STEPS:
+  H1: Benchmark lock contention profile (1,2,4,8 concurrent senders)
+      VERIFY: baseline shows throughput plateau at ~800K regardless of sender count
+
+  H2: Replace send Mutex with mpsc channel
+      - AafpMcpTransport holds mpsc::Sender<BytesMut> instead of Arc<Mutex<...>>
+      - Dedicated writer task owns QuicSendStream and drains channel
+      - send() becomes: serialize into pooled buffer -> tx.send(buf) (no lock!)
+      - Bounded channel (1024 capacity), backpressure via await
+      VERIFY: 4 concurrent senders -> ~600K msg/s (linear scaling begins)
+
+  H3: Lock-free receive path
+      - Receive is already lock-free (single QuicRecvStream, no Mutex)
+      - Add recv_handle() returning oneshot::Receiver for next message
+      VERIFY: concurrent receiver benchmark shows no contention
+
+  H4: Sharded DHT (256-way)
+      - ShardedDht with 256 RwLock<Shard> instances
+      - Shard selection: sha256(key)[0]
+      - get(key): read-lock shard, lookup
+      - put(key, record): write-lock shard, insert
+      - evict_expired(): round-robin shards (lock 1 at a time)
+      VERIFY: concurrent DHT benchmark shows 100x+ improvement under read-heavy load
+
+  H5: Lock-free DHT reads via ArcSwap
+      - Replace RwLock<Shard> with arc_swap::ArcSwap<Shard> for read-heavy shards
+      - Reads: shard.load() -> Arc<Shard> (lock-free atomic load)
+      - Writes: shard.store(Arc::new(new_shard)) (copy-on-write)
+      - Only for shards with >95% read ratio
+      VERIFY: read-heavy DHT benchmark shows 10x improvement
+
+  H6: Connection-level concurrency model
+      - Document: 1 writer task per connection, N reader tasks
+      - ConnectionHandle manages writer task lifecycle
+      - ConnectionPool tracks active connections + writer tasks
+      VERIFY: connection lifecycle test (open, 1000 msgs, close) — no leaks
+
+  H7: End-to-end lock-free benchmark
+      - 1, 2, 4, 8, 16 concurrent tasks
+      - Compare against H1 baseline
+      VERIFY: 8 concurrent senders >800K msg/s, DHT 100K reads <10ms, no deadlocks
+
+EXPECTED OUTCOMES:
+  8 concurrent senders: >800K msg/s (from ~800K plateau)
+  DHT 100K reads: <10ms (from ~100ms)
+  Mutex acquisitions per send: 0 (from 1)
+  DHT lock contention: negligible (from high)
+
+KEY FILES TO MODIFY:
+  implementations/rust/crates/aafp-transport-mcp/src/lib.rs
+    - AafpMcpTransport struct (replace Arc<Mutex<...>> with mpsc::Sender)
+    - send(), send_zero_copy(), send_raw_json(), send_raw_json_zero_copy()
+    - Add spawn_writer() method
+    - Add ConnectionHandle
+
+  implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+    - SharedCapabilityDht (replace Arc<RwLock<CapabilityDht>> with ShardedDht)
+    - Create new sharded_dht.rs module
+
+  implementations/rust/crates/aafp-discovery/src/lib.rs
+    - Export ShardedDht
+
+NEW DEPENDENCIES NEEDED:
+  arc-swap (for H5 — lock-free reads)
+    - Check: published >7 days ago, maintained
+    - Add to workspace Cargo.toml and aafp-discovery/Cargo.toml
+
+================================================================================
+SECTION 6: TRACK M2 — FLAMEGRAPH INTEGRATION
+================================================================================
+
+File: implementation-plans/track-m-benchmarking/M-benchmarking-profiling.md (step M2)
+
+  - Add flamegraph generation script (scripts/flamegraph.sh)
+  - Use cargo flamegraph (or perf record + flamegraph on Linux, dtrace on macOS)
+  - Generate flamegraphs for: mcp_transport_ping, handshake, framing, discovery
+  - Save to test-results/flamegraphs/<benchmark-name>.svg
+  VERIFY: flamegraph SVG is generated and shows the hot path
+
+This can be done in parallel with Track H via a subagent.
+
+================================================================================
+SECTION 7: TRACK I — CONNECTION LIFECYCLE (PREVIEW)
+================================================================================
+
+File: implementation-plans/track-i-connection-lifecycle/I-connection-lifecycle.md
+READ THIS FILE before starting Track I. It has all 8 steps.
+
+Start Track I AFTER Track H is complete (I depends on H — connection pooling
+needs the channel-based send from H2).
+
+Key steps:
+  I1: TLS session ticket cache (LRU, 1024 entries, 1hr TTL)
+  I2: AAFP 0-RTT resumption protocol (RFC amendment — STOP AND ASK USER
+      before changing the wire protocol)
+  I3: Implement 0-RTT client path
+  I4: Implement 0-RTT server path
+  I5: Connection pool (HashMap<AgentId, PooledConnection>, idle timeout 60s)
+  I6: Connection migration (QUIC CID-based)
+  I7: Adaptive keep-alive (30s -> 60s stable, 10s unstable)
+  I8: End-to-end benchmark
+
+IMPORTANT: I2 requires an RFC amendment (wire protocol change). Read the
+golden rules: NEVER break the wire protocol without user approval. If I2
+requires wire format changes, STOP and ask the user before proceeding.
+The 0-RTT resumption can potentially be implemented as a TLS-level feature
+(rustls session resumption) without changing the AAFP wire format —
+investigate this first.
+
+================================================================================
+SECTION 8: CURRENT STATE OF KEY FILES
+================================================================================
+
+MCP Transport (the hot path — Track H will modify this):
+  implementations/rust/crates/aafp-transport-mcp/src/lib.rs
+    - AafpMcpTransport struct has:
+      send: Arc<Mutex<Option<QuicSendStream>>>  <- THIS IS WHAT H2 REPLACES
+      recv: QuicRecvStream
+      conn: Option<QuicConnection>
+      peer_agent_id: Option<AgentId>
+    - send_zero_copy<T>(): uses buffer pool + to_writer + backpatch
+    - receive_zero_copy<R>(): uses pooled buffer
+    - send_raw_json_zero_copy(): same pattern for raw JSON
+    - send_raw_json_on_handle_zero_copy(): for PyO3 binding
+
+Buffer Pool (Track G — already built, Track H will use it):
+  implementations/rust/crates/aafp-transport-quic/src/buffer_pool.rs
+    - acquire() -> BytesMut (from thread-local pool)
+    - release(buf) (return to pool)
+    - BytesMutWriter (io::Write for BytesMut)
+    - BufferGuard (RAII auto-release)
+
+Discovery DHT (Track H4 will shard this):
+  implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+    - SharedCapabilityDht = Arc<RwLock<CapabilityDht>>  <- THIS IS WHAT H4 REPLACES
+    - CapabilityDht has:
+      index: HashMap<String, HashSet<[u8; 32]>>
+      records: HashMap<[u8; 32], AgentRecord>
+    - MAX_RECORDS: 100,000
+    - RATE_LIMIT_ANNOUNCE: 60s, RATE_LIMIT_LOOKUP: 60s
+
+Framing (Track G — already built):
+  implementations/rust/crates/aafp-messaging/src/framing.rs
+    - encode_frame_into(), encode_header_into(), backpatch_payload_len()
+    - decode_frame_from() -> DecodedFrame (zero-copy Bytes slices)
+
+Benchmark infrastructure (Track M — partially built):
+  implementations/rust/crates/aafp-benchmark/src/
+    - alloc_tracker.rs (CountingAllocator, track_allocs)
+    - harness.rs (BenchmarkRunner, compare_results)
+  implementations/rust/crates/aafp-benchmark/benches/
+    - alloc_profile.rs (allocation profiling)
+    - mcp_transport.rs (round-trip ping, throughput)
+
+================================================================================
+SECTION 9: LESSONS LEARNED FROM PHASE 1
+================================================================================
+
+1. #[global_allocator] can only be declared once per binary.
+   - Don't put it in library code (except #[cfg(test)] modules)
+   - Put it in benchmark binaries and test modules
+   - The alloc_tracker tests and buffer_pool tests can conflict if both
+     declare #[global_allocator] in the same test binary. Solution: only
+     declare it in alloc_tracker tests, use pool stats (hits/misses) for
+     buffer pool verification instead of counting allocations.
+
+2. Criterion sample_size must be >= 10.
+   - sample_size=3 causes panic: "assertion failed: num_size >= 10"
+   - Use --sample-size 10 minimum
+
+3. Doc tests compile as separate binaries.
+   - Don't use serde_json in doc tests for crates that don't depend on serde_json
+   - Use simple io::Write examples instead
+
+4. Tokio Mutex in tests can cause 30s timeouts when run in parallel.
+   - The TRACKING_MUTEX in alloc_tracker serializes tracking operations
+   - This is necessary for correct allocation counting
+
+5. git pull --rebase is needed before pushing if the remote has new commits.
+   - Always run: git pull --rebase origin master && git push origin master
+
+6. The buffer pool works best when warmed up before measurement.
+   - Acquire and release 4+ buffers before measuring to fill the pool
+   - After warmup, acquire() is always a hit (no new allocation)
+
+7. serde_json::from_slice::<Value> allocates the JSON Value tree (7 allocs).
+   - This is expected — the deserialized value needs heap memory
+   - Track K (simd-json) will reduce this, but it can't be eliminated entirely
+   - The zero-copy win is on the BUFFER side (no vec![0u8; payload_len])
+
+8. The performance improvement from Track G exceeded expectations.
+   - Target was <150µs, achieved 42.4µs (3.5x better than target)
+   - This suggests the allocator was a bigger bottleneck than expected
+   - Track H (lock-free) may also exceed expectations
+
+================================================================================
+SECTION 10: EXECUTION PROCEDURE (SAME AS PHASE 1)
+================================================================================
+
+For EVERY step:
+
+1. READ the step in the track plan file
+2. BASELINE: Run the relevant benchmark BEFORE any changes. Save numbers.
+3. IMPLEMENT: Write the code. Add tests.
+4. VERIFY: Run benchmark AGAIN. Compare to baseline.
+5. TEST: cargo test --workspace (0 failures expected)
+6. LINT: cargo clippy --workspace -- -D warnings (clean)
+7. FMT: cargo fmt --all -- --check (clean)
+8. STATUS: Update PERFORMANCE_STATUS.md — mark step [x], update metrics
+9. COMMIT: One commit per step, with before/after numbers
+10. PUSH: After each TRACK completes
+
+Commit format:
+  git commit -m "$(cat <<'EOF'
+  perf(h-2): replace send Mutex with mpsc channel
+
+  Before: 1 sender=803K msg/s, 4 senders=800K (mutex serialized)
+  After:  1 sender=810K, 4 senders=2.1M msg/s (linear scaling)
+  Improvement: 2.6x with 4 concurrent senders
+
+  Replace Arc<Mutex<Option<QuicSendStream>>> with mpsc::Sender<BytesMut>.
+  Dedicated writer task owns the QuicSendStream and drains the channel.
+  send() now: serialize into pooled buffer -> tx.send(buf).await (no lock).
+
+  Generated with [Devin](https://devin.ai)
+
+  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  EOF
+  )"
+
+================================================================================
+SECTION 11: QUICK VERIFICATION COMMANDS
+================================================================================
+
+# Build
+cd /Users/david/projects/AAFP-research/implementations/rust
+cargo build --workspace
+
+# Test (must be 0 failures — currently 1179 tests)
+cargo test --workspace
+
+# Lint (must be clean)
+cargo clippy --workspace -- -D warnings
+cargo fmt --all -- --check
+
+# Benchmarks
+cargo bench -p aafp-benchmark --bench mcp_transport -- --warm-up-time 3 --measurement-time 5
+cargo bench -p aafp-benchmark --bench alloc_profile -- --warm-up-time 1 --measurement-time 2 --sample-size 10
+cargo bench --bench framing
+cargo bench --bench handshake
+
+# Allocation profile (zero-copy verification)
+cargo bench -p aafp-benchmark --bench alloc_profile -- "zerocopy" --warm-up-time 1 --measurement-time 2 --sample-size 10
+
+# Python tests
+source implementations/rust/crates/aafp-py/.venv/bin/activate
+cd implementations/rust/crates/aafp-py
+python -m pytest tests/ -v
+
+# Golden traces (wire compatibility — MUST still pass)
+cargo test --test golden_traces -- --nocapture
+
+================================================================================
+SECTION 12: SUBMODULE WORKFLOW
+================================================================================
+
+cd implementations/rust
+git add -A
+git commit -m "perf(h-2): ..."
+git push origin master
+
+# Then update umbrella:
+cd /Users/david/projects/AAFP-research
+git add implementations/rust
+git commit -m "chore: update rust submodule — perf(h-2): ..."
+git push origin master
+
+If push fails (remote has new commits):
+  cd implementations/rust && git pull --rebase origin master && git push origin master
+  cd /Users/david/projects/AAFP-research && git pull --rebase origin master && git push origin master
+
+================================================================================
+SECTION 13: GOLDEN RULES (NON-NEGOTIABLE — SAME AS PHASE 1)
+================================================================================
+
+1. NEVER sacrifice security for speed.
+2. NEVER break the wire protocol. Golden traces MUST pass.
+   If a change alters the wire format, STOP and ask the user.
+3. NEVER skip benchmarking. Every step needs before/after numbers.
+4. NEVER mark a step complete unless benchmarks show improvement.
+5. NEVER use `unsafe` without a SAFETY comment.
+6. ALWAYS run cargo test --workspace before committing. (0 failures)
+7. ALWAYS run cargo clippy --workspace -- -D warnings. (clean)
+8. ALWAYS run cargo fmt --all -- --check. (clean)
+9. ALWAYS update PERFORMANCE_STATUS.md in the same commit.
+10. One optimization per commit.
+
+================================================================================
+SECTION 14: WHEN TO STOP AND ASK THE USER
+================================================================================
+
+1. A proposed optimization would change the wire protocol
+   (e.g., Track I2 — 0-RTT resumption may need RFC amendment)
+
+2. A dependency needs to be added
+   (e.g., arc-swap for H5 — check it's maintained, published >7 days)
+
+3. `unsafe` code is required and you're unsure about safety justification
+
+4. A benchmark regresses and you can't figure out why
+
+5. A track is blocked by an external factor
+
+6. You need to make a design decision not covered in the plan files
+
+For everything else, make a decision and proceed. Full autonomy.
+
+================================================================================
+SECTION 15: KEY FILES TO READ BEFORE STARTING PHASE 2
+================================================================================
+
+Read in order:
+
+1. implementation-plans/PERFORMANCE_STATUS.md
+   Current status — 10/52 steps done, Track G complete.
+
+2. implementation-plans/track-h-lockfree/H-lock-free-concurrency.md
+   START HERE. 7 steps for Track H. Read all steps before starting.
+
+3. implementation-plans/track-m-benchmarking/M-benchmarking-profiling.md
+   Step M2 (flamegraph) — can run in parallel with H via subagent.
+
+4. implementation-plans/track-i-connection-lifecycle/I-connection-lifecycle.md
+   Read after H is complete. 8 steps for Track I.
+
+5. implementations/rust/crates/aafp-transport-mcp/src/lib.rs
+   The hot path. H2 will replace Arc<Mutex<...>> with mpsc channel.
+   Read the full file to understand the current structure.
+
+6. implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+   The DHT. H4 will shard this 256-way.
+   Read to understand SharedCapabilityDht and CapabilityDht.
+
+7. implementations/rust/crates/aafp-transport-quic/src/buffer_pool.rs
+   The buffer pool from Track G. H2 will send BytesMut buffers through
+   the mpsc channel to the writer task.
+
+================================================================================
+SECTION 16: WHAT "DONE" LOOKS LIKE FOR PHASE 2
+================================================================================
+
+Phase 2 is complete when:
+
+[ ] H1: Lock contention baseline benchmarked (1,2,4,8 senders)
+[ ] H2: Send Mutex replaced with mpsc channel + writer task
+[ ] H3: Receive path verified lock-free
+[ ] H4: DHT sharded 256-way
+[ ] H5: ArcSwap for read-heavy DHT shards
+[ ] H6: Connection-level concurrency model documented + ConnectionHandle
+[ ] H7: End-to-end lock-free benchmark — 8 senders >800K msg/s
+[ ] M2: Flamegraph generation working
+[ ] I1-I8: Connection lifecycle (0-RTT, pooling, migration, adaptive keep-alive)
+    — OR as many as can be done without wire protocol changes
+[ ] PERFORMANCE_STATUS.md updated — all completed steps marked [x]
+[ ] All 1179+ tests pass, clippy clean, fmt clean
+[ ] All changes committed and pushed
+
+================================================================================
+SECTION 17: BEGIN
+================================================================================
+
+Start now.
+
+1. Read implementation-plans/track-h-lockfree/H-lock-free-concurrency.md
+2. Read implementations/rust/crates/aafp-transport-mcp/src/lib.rs (the hot path)
+3. Begin H1: benchmark lock contention with 1, 2, 4, 8 concurrent senders
+4. In parallel (subagent): M2 — set up flamegraph generation
+
+H1 asks you to measure the current lock contention. Do that before writing
+any lock-free code. You need to know how bad the contention is before you
+can verify that H2 fixes it.
+
+The key question H1 answers: does throughput scale with concurrent senders,
+or does it plateau because of the Mutex? If it plateaus, H2 (mpsc channel)
+will fix it. If it already scales, the Mutex isn't the bottleneck and you
+should investigate what is.
+
+Go.
+
+================================================================================
+END OF BUILDER PROMPT (PHASE 2)
+================================================================================
