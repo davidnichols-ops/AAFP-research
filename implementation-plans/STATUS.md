@@ -317,17 +317,24 @@ a race condition when used as a subprocess server). All 6 Python tests pass,
 all 1011 Rust tests pass.
 
 ### D2: Test against A2A reference implementation
-- [ ] **D2.1** Research A2A reference implementations
-- [ ] **D2.2** Determine test strategy (A: real SDK, B: spec examples, C: conformance)
-- [ ] **D2.3** Implement the test
-- [ ] **D2.4** Run the tests
-- [ ] **D2.5** Document results
-- [ ] **D2.6** Commit
-- [ ] **D2.7** VERIFY: All A2A tests pass
+- [x] **D2.1** Research A2A reference implementations
+      *(Official A2A SDKs exist for Python (a2a-sdk v1.1.0), Go (a2a-go v2.0.0), JS, Java, .NET, Rust. A TCK exists at a2aproject/a2a-tck but tests over HTTP/gRPC/JSON-RPC, not QUIC. All SDKs use HTTP — none support QUIC. Strategy B (spec examples) chosen.)*
+- [x] **D2.2** Determine test strategy (A: real SDK, B: spec examples, C: conformance)
+      *(Strategy B: spec examples. types.rs updated to A2A v1.0 spec.)*
+- [x] **D2.3** Implement the test
+      *(Updated types.rs to v1.0: flat Part (no kind discriminator), SCREAMING_SNAKE_CASE TaskState/Role, SendMessageRequest params wrapping, response wrapping ({task:...}, {tasks:...}). Updated server.rs dispatch, client.rs. Updated existing tests. Wrote 18 new spec_conformance.rs tests with exact v1.0 JSON examples.)*
+- [x] **D2.4** Run the tests
+      *(40 A2A tests pass: 18 spec_conformance + 14 conformance + 5 integration + 3 unit. 1051 total workspace tests pass.)*
+- [x] **D2.5** Document results
+      *(JSON result written to test-results/interop/a2a-reference.json. INTEROP_RESULTS.md written. Dashboard regenerated.)*
+- [x] **D2.6** Commit
+      *(Committed: rust `3a00274`, umbrella `620e2b2`. Pushed.)*
+- [x] **D2.7** VERIFY: All A2A tests pass
+      *(40 A2A tests pass, 1051 total workspace tests, 0 failures.)*
 
-**D2 status:** NOT STARTED
-**D2 blocked by:** C3
-**D2 notes:**
+**D2 status:** COMPLETE
+**D2 blocked by:** C3 — C3 COMPLETE
+**D2 notes:** A2A transport binding updated to A2A v1.0 spec. Data model rewritten: flat Part (no kind discriminator), SCREAMING_SNAKE_CASE TaskState/Role, SendMessageRequest params wrapping, response wrapping. 6 official A2A SDKs found but none support QUIC transport — Strategy B (spec examples) used. 40 A2A tests pass (3 unit + 14 conformance + 5 integration + 18 spec_conformance). 1051 total workspace tests pass.
 
 ### D3: Rust ↔ Go cross-language interop over QUIC
 - [x] **D3.1** Assess Go QUIC transport capability
@@ -509,9 +516,9 @@ all 1011 Rust tests pass.
 | C2 | COMPLETE | C1 | 10/10 |
 | C3 | COMPLETE | C1 | 9/9 |
 | C4 | COMPLETE | — | 9/9 |
-| D1 | NOT STARTED | C3 | 0/8 |
-| D2 | NOT STARTED | C3 | 0/7 |
-| D3 | NOT STARTED | C3 | 0/8 |
+| D1 | COMPLETE | C3 | 8/8 |
+| D2 | COMPLETE | C3 | 7/7 |
+| D3 | COMPLETE | C3 | 8/8 |
 | D4 | NOT STARTED | D1 | 0/8 |
 | E1 | NOT STARTED | — | 0/11 |
 | E2 | NOT STARTED | E1 | 0/8 |
@@ -523,6 +530,6 @@ all 1011 Rust tests pass.
 | F4 | NOT STARTED | E2 | 0/11 |
 
 **Total steps:** 218 (70 from Tracks A-B + 148 from Tracks C-F)
-**Completed:** 106
+**Completed:** 122
 **In progress:** 0
 **Blocked:** 0
