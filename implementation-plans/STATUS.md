@@ -10,7 +10,7 @@
 - `[!]` — Blocked (add note)
 - `[-]` — Skipped / N/A (add reason)
 
-**Last updated:** 2026-07-04 (Track O1-O4 COMPLETE — WAN simulation tests, 15 new tests pass)
+**Last updated:** 2026-07-04 (Track S2 COMPLETE — 100-agent load test, 399K msgs, 0% error)
 
 **Test Results Infrastructure:** A `test-results/` directory has been added to the
 umbrella repo with:
@@ -788,7 +788,14 @@ with multiple nodes, commit R1, then proceed to R2-R8.
         LoadTestMetrics (throughput, latency, error rate, resource usage), CLI binary.
         14 tests pass (10 unit + 3 integration + 1 doctest). Crate is in workspace.
         fmt + clippy clean.)*
-- [~] **S2** 100-agent load test (throughput, latency, error rate)
+- [x] **S2** 100-agent load test (throughput, latency, error rate)
+      *(COMPLETE — 100 agents across 4 topologies (mesh/star/ring/random).
+        Mesh: 100K msgs, 0% error, 93K msg/s, p50=32ms, p99=158ms.
+        Star: 99K msgs, 0% error, 61K msg/s, p50=9ms, p99=25ms.
+        Ring: 100K msgs, 0% error, 181K msg/s, p50=3ms, p99=10ms.
+        Random: 100K msgs, 0% error, 138K msg/s, p50=14ms, p99=83ms.
+        All 399K messages delivered with 0 failures. Bottleneck: connection setup.
+        Results in test-results/performance/load-test-100-agents.json.)*
 - [ ] **S3** Long-running stability test (4-24h, leak detection)
 - [ ] **S4** Metrics and observability (AgentMetrics, health check, tracing)
 - [ ] **S5** Deployment documentation (Docker, systemd, Kubernetes)
@@ -796,7 +803,7 @@ with multiple nodes, commit R1, then proceed to R2-R8.
 - [ ] **S7** Stress testing (burst, large messages, churn, DHT load)
 - [ ] **S8** Production readiness report
 
-**S status:** IN PROGRESS (S1 COMPLETE, S2 in progress)
+**S status:** IN PROGRESS (S1-S2 COMPLETE, S3 next)
 **S blocked by:** Track N (NAT traversal — load test needs relay) — N COMPLETE
 **S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
 **S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`

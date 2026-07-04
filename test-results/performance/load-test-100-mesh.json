@@ -1,0 +1,31 @@
+{
+  "config_summary": {
+    "num_agents": 100,
+    "messages_per_agent": 100,
+    "message_size": 1024,
+    "topology": "mesh",
+    "num_edges": 1000
+  },
+  "messages_sent": 100000,
+  "messages_received": 100000,
+  "messages_failed": 0,
+  "throughput_msgps": 93331.31426590138,
+  "throughput_bps": 95571265.80828302,
+  "latency": {
+    "min_us": 28.166,
+    "p50_us": 31670.542,
+    "p90_us": 86600.25,
+    "p99_us": 158066.292,
+    "p999_us": 234048.45899999997,
+    "max_us": 348814.292,
+    "mean_us": 40517.36050012029
+  },
+  "error_rate": 0.0,
+  "connections_established": 1000,
+  "connections_failed": 0,
+  "duration_secs": 1.07145175,
+  "resources": {
+    "memory_bytes": 0,
+    "file_descriptors": 0
+  }
+}
