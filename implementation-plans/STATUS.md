@@ -838,7 +838,7 @@ then run S2 (100-agent test) and proceed to S3-S8.
 | N | COMPLETE | — | 8/8 |
 | O | NOT STARTED | N (done) | 0.5/8 (O1 partial, uncommitted) |
 | P | COMPLETE | — | 8/8 |
-| Q | NOT STARTED | P (done) | 0/8 |
+| Q | IN PROGRESS | P (done) | 1/8 (Q1 done: threat model) |
 | R | NOT STARTED | O | 0.5/8 (R1 partial, uncommitted) |
 | S | NOT STARTED | N (done) | 0.5/8 (S1 partial, uncommitted) |
 
