@@ -184,6 +184,9 @@
       border-radius: 4px;
       transition: width 0.5s ease;
     }
+    .bar-fill.throughput {
+      background: linear-gradient(90deg, #56d364 0%, #2ea043 100%);
+    }
     .bar-value {
       font-family: 'SF Mono', Monaco, monospace;
       font-size: 0.85rem;
@@ -198,6 +201,45 @@
     }
     .status-badge.pass { background: rgba(63,185,80,0.2); color: var(--pass); }
     .status-badge.fail { background: rgba(248,81,73,0.2); color: var(--fail); }
+    .track-badge {
+      font-size: 0.7rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-weight: 600;
+      background: rgba(56,139,253,0.15);
+      color: var(--accent);
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+    .chart-desc {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+    .key-findings {
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+    .key-findings h4 {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin: 0 0 0.5rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .key-findings ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .key-findings li {
+      font-size: 0.82rem;
+      color: var(--text);
+      padding: 0.2rem 0;
+    }
+    .key-findings strong {
+      color: var(--accent);
+    }
     .footer {
       text-align: center;
       color: var(--text-dim);
@@ -213,7 +255,7 @@
   <div class="header">
     <h1>AAFP Test Results <span class="badge">rev6-rc1</span></h1>
     <div class="meta">
-      Generated: 2026-07-02 21:49:34 ·
+      Generated: 2026-07-03 20:45:32 ·
       Commit: d0112ca ·
       Rust: 1.96.0 ·
       OS: macOS 15.5.0 (Darwin 25.5.0) ·
@@ -233,12 +275,12 @@
           </div>
         </div>
 
-        <div class="summary-card neutral" onclick="document.getElementById('performance').scrollIntoView({behavior:'smooth'})">
-          <div class="card-icon">○</div>
+        <div class="summary-card warn" onclick="document.getElementById('performance').scrollIntoView({behavior:'smooth'})">
+          <div class="card-icon">⚠</div>
           <div class="card-body">
             <div class="card-title">Performance</div>
-            <div class="card-status">No data</div>
-            <div class="card-detail">0 tests · 0 passed · 0 failed · 0 skipped</div>
+            <div class="card-status">3/12 passing</div>
+            <div class="card-detail">12 tests · 3 passed · 0 failed · 0 skipped</div>
           </div>
         </div>
 
@@ -298,8 +340,181 @@
     </div>
 
     <div class="section" id="performance">
-      <h2>Performance Benchmarks <span class="count">(0 benchmarks)</span></h2>
-      <p class='empty'>No performance benchmarks run yet.</p>
+      <h2>Performance Benchmarks <span class="count">(12 benchmarks)</span></h2>
+      
+        <div class="chart-card">
+          <h3>connection-lifecycle-i8-results.json <span class="track-badge">I8</span> <span class="status-badge unknown">unknown</span></h3>
+          <div class="chart-desc">End-to-end connection lifecycle benchmark (Track I8)</div>
+          <div class="chart-env">CPU: — · Rust: —</div>
+          <div class="bar-chart">
+                <div class="bar-row">
+                  <span class="bar-label">connection_lifecycle_migration/rebind_endpoint (µs)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:0.060461382457326344%"></div></div>
+                  <span class="bar-value">14.31 µs</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">connection_lifecycle_pool/100_rpcs_with_pool (µs)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:0.16452594220043942%"></div></div>
+                  <span class="bar-value">38.94 µs</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">connection_lifecycle_pool/100_rpcs_no_pool (µs)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:100.0%"></div></div>
+                  <span class="bar-value">23.67 ms</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">connection_lifecycle_pool/100_rpcs_with_pool (elem/s)</span>
+                  <div class="bar-track"><div class="bar-fill throughput" style="width:100.0%"></div></div>
+                  <span class="bar-value">2.57M/s</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">connection_lifecycle_migration/rebind_endpoint (elem/s)</span>
+                  <div class="bar-track"><div class="bar-fill throughput" style="width:2.721640250788582%"></div></div>
+                  <span class="bar-value">69.9K/s</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">connection_lifecycle_pool/100_rpcs_no_pool (elem/s)</span>
+                  <div class="bar-track"><div class="bar-fill throughput" style="width:0.16453132910160054%"></div></div>
+                  <span class="bar-value">4.2K/s</span>
+                </div>
+          </div>
+          <div class="key-findings"><h4>Key Findings</h4><ul><li><strong>Pool Vs No Pool Speedup:</strong> 607x faster per RPC (0.39µs vs 237µs)</li><li><strong>Pool Total Time Speedup:</strong> 607x faster total (38.94µs vs 23.67ms for 100 RPCs)</li><li><strong>Rebind Time:</strong> 14.31µs — connection migration is fast enough for real-time NAT rebinding</li><li><strong>Pool Connections Saved:</strong> 100x fewer connections (1 vs 100)</li></ul></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>crypto-benchmarks  <span class="status-badge pass">pass</span></h3>
+          
+          <div class="chart-env">CPU: Apple M4 · Rust: —</div>
+          <div class="bar-chart">
+          </div>
+          
+        </div>
+
+        <div class="chart-card">
+          <h3>framing-benchmarks  <span class="status-badge pass">pass</span></h3>
+          
+          <div class="chart-env">CPU: Apple M4 · Rust: —</div>
+          <div class="bar-chart">
+          </div>
+          
+        </div>
+
+        <div class="chart-card">
+          <h3>quic-tuning-j7-results.json <span class="track-badge">J7</span> <span class="status-badge unknown">unknown</span></h3>
+          <div class="chart-desc">End-to-end QUIC transport tuning benchmark (Track J7)</div>
+          <div class="chart-env">CPU: — · Rust: —</div>
+          <div class="bar-chart">
+                <div class="bar-row">
+                  <span class="bar-label">quic_tuning_stream_open/low_latency_bbr (µs)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:0.2947775969026354%"></div></div>
+                  <span class="bar-value">1.34 µs</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">quic_tuning_small_message/newreno_config (µs)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:81.10563597166616%"></div></div>
+                  <span class="bar-value">368.69 µs</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">quic_tuning_small_message/low_latency_bbr (µs)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:95.75432267147697%"></div></div>
+                  <span class="bar-value">435.28 µs</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">quic_tuning_small_message/default_config (µs)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:100.0%"></div></div>
+                  <span class="bar-value">454.58 µs</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">quic_tuning_stream_open/low_latency_bbr (elem/s)</span>
+                  <div class="bar-track"><div class="bar-fill throughput" style="width:100.0%"></div></div>
+                  <span class="bar-value">745.3K/s</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">quic_tuning_small_message/newreno_config (elem/s)</span>
+                  <div class="bar-track"><div class="bar-fill throughput" style="width:0.363880316651013%"></div></div>
+                  <span class="bar-value">2.7K/s</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">quic_tuning_small_message/low_latency_bbr (elem/s)</span>
+                  <div class="bar-track"><div class="bar-fill throughput" style="width:0.30819804105729237%"></div></div>
+                  <span class="bar-value">2.3K/s</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">quic_tuning_small_message/default_config (elem/s)</span>
+                  <div class="bar-track"><div class="bar-fill throughput" style="width:0.29504897356769083%"></div></div>
+                  <span class="bar-value">2.2K/s</span>
+                </div>
+          </div>
+          <div class="key-findings"><h4>Key Findings</h4><ul><li><strong>Stream Open Latency:</strong> 1.34µs — extremely fast stream open on tuned transport</li><li><strong>Bbr Vs Cubic:</strong> BBR shows ~4% improvement over Cubic for small messages (435µs vs 454µs)</li><li><strong>Newreno Localhost:</strong> NewReno is fastest on localhost (368µs) — no congestion to manage</li><li><strong>Note:</strong> Round-trip times are dominated by TLS handshake. For pooled connections, the per-RPC cost is just the stream open time (1.34µs).</li></ul></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>serialization-baseline-k1.json <span class="track-badge">K1</span> <span class="status-badge unknown">unknown</span></h3>
+          <div class="chart-desc">Serialization baseline benchmark (Track K1)</div>
+          <div class="chart-env">CPU: — · Rust: —</div>
+          <div class="bar-chart">
+                <div class="bar-row">
+                  <span class="bar-label">aafp_cbor/decode_rpc_request (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:3.474407407407407%"></div></div>
+                  <span class="bar-value">94 ns</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">aafp_cbor/encode_rpc_request (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:5.133333333333333%"></div></div>
+                  <span class="bar-value">139 ns</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">serde_json/encode_initialize (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:5.883703703703704%"></div></div>
+                  <span class="bar-value">159 ns</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">simd_json/encode_initialize (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:6.666666666666667%"></div></div>
+                  <span class="bar-value">180 ns</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">simd_json/decode_initialize (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:14.784444444444444%"></div></div>
+                  <span class="bar-value">399 ns</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">serde_json/decode_initialize (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:21.48148148148148%"></div></div>
+                  <span class="bar-value">580 ns</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">simd_json/encode_tools_list (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:28.076666666666668%"></div></div>
+                  <span class="bar-value">758 ns</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">serde_json/encode_tools_list (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:28.621851851851847%"></div></div>
+                  <span class="bar-value">773 ns</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">simd_json/decode_tools_list (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:99.37407407407407%"></div></div>
+                  <span class="bar-value">2.68 µs</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">serde_json/decode_tools_list (ns)</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:100.0%"></div></div>
+                  <span class="bar-value">2.70 µs</span>
+                </div>
+          </div>
+          <div class="key-findings"><h4>Key Findings</h4><ul><li><strong>Json Encode:</strong> serde_json encode is already fast (158ns for 192B initialize)</li><li><strong>Json Decode:</strong> simd-json decode is 1.45x faster than serde_json for small messages (399ns vs 580ns)</li><li><strong>Cbor Encode:</strong> aafp_cbor encode is 138ns for 16B RPC request — already well under 500ns target</li><li><strong>Cbor Decode:</strong> aafp_cbor decode is 94ns for 16B RPC request — already well under 500ns target</li><li><strong>Conclusion:</strong> CBOR path (aafp_cbor) is already optimized. JSON decode benefits from simd-json (1.45x). JSON encode is comparable.</li></ul></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>session-benchmarks  <span class="status-badge pass">pass</span></h3>
+          
+          <div class="chart-env">CPU: Apple M4 · Rust: —</div>
+          <div class="bar-chart">
+          </div>
+          
+        </div>
     </div>
 
     <div class="section" id="conformance">

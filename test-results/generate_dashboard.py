@@ -102,20 +102,51 @@ def generate_performance_charts(all_results):
     charts = []
     for r in perf:
         metrics = r.get("metrics", {})
-        if not metrics:
+        benchmarks = r.get("benchmarks", {})
+        if not metrics and not benchmarks:
             continue
 
         name = r.get("test_name", r.get("_filename", "benchmark"))
         status = r.get("status", "unknown")
+        track = r.get("track", "")
+        description = r.get("description", "")
 
-        # Generate bar chart from metrics
+        # Build a unified metrics dict from either format
+        unified = {}
+        if metrics:
+            for k, v in metrics.items():
+                if isinstance(v, (int, float)):
+                    unified[k] = v
+        if benchmarks:
+            for bench_name, bench_data in benchmarks.items():
+                if isinstance(bench_data, dict):
+                    # Extract median_time_ns or median_time_us
+                    if "median_time_ns" in bench_data:
+                        unified[bench_name + " (ns)"] = bench_data["median_time_ns"]
+                    elif "median_time_us" in bench_data:
+                        unified[bench_name + " (µs)"] = bench_data["median_time_us"] * 1000
+                    if "throughput_elem_per_s" in bench_data:
+                        unified[bench_name + " (elem/s)"] = bench_data["throughput_elem_per_s"]
+
+        if not unified:
+            continue
+
+        # Generate bar chart from unified metrics
+        # Separate time metrics (ns) from throughput metrics (elem/s)
+        time_metrics = {k: v for k, v in unified.items() if "(ns)" in k or "(µs)" in k}
+        thrpt_metrics = {k: v for k, v in unified.items() if "(elem/s)" in k or "throughput" in k.lower()}
+
         bars = []
-        max_val = max((v for v in metrics.values() if isinstance(v, (int, float))), default=1)
-        for metric_name, value in metrics.items():
-            if isinstance(value, (int, float)):
+        if time_metrics:
+            max_val = max(time_metrics.values()) if time_metrics else 1
+            for metric_name, value in sorted(time_metrics.items(), key=lambda x: x[1]):
                 pct = (value / max_val * 100) if max_val > 0 else 0
-                unit = "ms" if value > 0.001 else "µs" if value > 0.000001 else "ns"
-                display_val = f"{value:.3f}" if value < 100 else f"{value:.1f}"
+                if value >= 1_000_000:
+                    display_val = f"{value/1_000_000:.2f} ms"
+                elif value >= 1_000:
+                    display_val = f"{value/1_000:.2f} µs"
+                else:
+                    display_val = f"{value:.0f} ns"
                 bars.append(f"""
                 <div class="bar-row">
                   <span class="bar-label">{metric_name}</span>
@@ -123,13 +154,46 @@ def generate_performance_charts(all_results):
                   <span class="bar-value">{display_val}</span>
                 </div>""")
 
+        if thrpt_metrics:
+            max_val = max(thrpt_metrics.values()) if thrpt_metrics else 1
+            for metric_name, value in sorted(thrpt_metrics.items(), key=lambda x: -x[1]):
+                pct = (value / max_val * 100) if max_val > 0 else 0
+                if value >= 1_000_000:
+                    display_val = f"{value/1_000_000:.2f}M/s"
+                elif value >= 1_000:
+                    display_val = f"{value/1_000:.1f}K/s"
+                else:
+                    display_val = f"{value:.0f}/s"
+                bars.append(f"""
+                <div class="bar-row">
+                  <span class="bar-label">{metric_name}</span>
+                  <div class="bar-track"><div class="bar-fill throughput" style="width:{pct}%"></div></div>
+                  <span class="bar-value">{display_val}</span>
+                </div>""")
+
         env = r.get("environment", {})
+        track_badge = f'<span class="track-badge">{track}</span>' if track else ""
+        desc_line = f'<div class="chart-desc">{description}</div>' if description else ""
+
+        # Key findings (if present)
+        key_findings = r.get("key_findings", {})
+        findings_html = ""
+        if key_findings and isinstance(key_findings, dict):
+            findings_items = []
+            for k, v in key_findings.items():
+                if isinstance(v, str):
+                    findings_items.append(f"<li><strong>{k.replace('_', ' ').title()}:</strong> {v}</li>")
+            if findings_items:
+                findings_html = f'<div class="key-findings"><h4>Key Findings</h4><ul>{"".join(findings_items)}</ul></div>'
+
         charts.append(f"""
         <div class="chart-card">
-          <h3>{name} <span class="status-badge {status}">{status}</span></h3>
+          <h3>{name} {track_badge} <span class="status-badge {status}">{status}</span></h3>
+          {desc_line}
           <div class="chart-env">CPU: {env.get("cpu", "—")} · Rust: {env.get("rust_version", "—")}</div>
           <div class="bar-chart">{''.join(bars)}
           </div>
+          {findings_html}
         </div>""")
 
     return "\n".join(charts) if charts else "<p class='empty'>No performance metrics available.</p>"
@@ -451,6 +515,9 @@ def generate_html(all_results):
       border-radius: 4px;
       transition: width 0.5s ease;
     }}
+    .bar-fill.throughput {{
+      background: linear-gradient(90deg, #56d364 0%, #2ea043 100%);
+    }}
     .bar-value {{
       font-family: 'SF Mono', Monaco, monospace;
       font-size: 0.85rem;
@@ -465,6 +532,45 @@ def generate_html(all_results):
     }}
     .status-badge.pass {{ background: rgba(63,185,80,0.2); color: var(--pass); }}
     .status-badge.fail {{ background: rgba(248,81,73,0.2); color: var(--fail); }}
+    .track-badge {{
+      font-size: 0.7rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-weight: 600;
+      background: rgba(56,139,253,0.15);
+      color: var(--accent);
+      font-family: 'SF Mono', Monaco, monospace;
+    }}
+    .chart-desc {{
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }}
+    .key-findings {{
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }}
+    .key-findings h4 {{
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin: 0 0 0.5rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }}
+    .key-findings ul {{
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }}
+    .key-findings li {{
+      font-size: 0.82rem;
+      color: var(--text);
+      padding: 0.2rem 0;
+    }}
+    .key-findings strong {{
+      color: var(--accent);
+    }}
     .footer {{
       text-align: center;
       color: var(--text-dim);

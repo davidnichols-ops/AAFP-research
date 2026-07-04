@@ -34,12 +34,12 @@
 | H | Lock-Free Concurrency | COMPLETE | 7/7 | Q1-Q2 |
 | I | Connection Lifecycle | COMPLETE | 5/5 (I2-I4 skipped) | Q2 |
 | J | QUIC Transport Tuning | COMPLETE | 6/6 (J6 skipped) | Q2-Q3 |
-| K | Serialization Optimization | IN PROGRESS | 2/7 (K3-K6 not needed) | Q3 |
+| K | Serialization Optimization | COMPLETE | 3/7 (K3-K6 not needed) | Q3 |
 | L | Kernel & Hardware | NOT STARTED | 0/8 | Q3-Q4 |
-| M | Benchmarking & Profiling | IN PROGRESS | 2/7 | Ongoing |
+| M | Benchmarking & Profiling | IN PROGRESS | 5/7 (M4/M6 need CI) | Ongoing |
 
 **Total steps:** 52
-**Completed:** 30
+**Completed:** 33
 **In progress:** 3
 **Blocked:** 0
 
