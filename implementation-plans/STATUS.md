@@ -878,7 +878,7 @@ usage), CLI binary. S2 (100-agent load test) in progress.
 | N | COMPLETE | — | 8/8 |
 | O | COMPLETE | N (done) | 8/8 |
 | P | COMPLETE | — | 8/8 |
-| Q | IN PROGRESS | P (done) | 2/8 (Q1-Q2 done: threat model, fuzz testing) |
+| Q | IN PROGRESS | P (done) | 3/8 (Q1-Q3 done: threat model, fuzz, handshake attacks) |
 | R | NOT STARTED | O | 0.5/8 (R1 partial, uncommitted) |
 | S | NOT STARTED | N (done) | 0.5/8 (S1 partial, uncommitted) |
 
