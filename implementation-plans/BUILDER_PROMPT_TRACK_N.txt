@@ -1,0 +1,516 @@
+# Builder Prompt: Track N — NAT Traversal (N1-N8)
+
+Copy everything below the line and paste it as the first message to the Builder model.
+
+---
+
+You are the Builder. Track P (Identity & PKI) is COMPLETE (8/8 steps, committed at beb6201). You are now executing Track N (NAT Traversal) — 8 steps that make NAT traversal actually work.
+
+## Current State (as of 2026-07-04)
+
+**All previous work is committed and pushed:**
+- Tracks A-M: COMPLETE (270/270 steps)
+- Track P: COMPLETE (8/8 steps, commit beb6201, 1390 tests passing)
+- Rust submodule: `beb6201` (clean working tree except uncommitted O1/R1/S1 work)
+
+**Test count:** 1390 tests passing, 0 failures, 7 ignored
+
+**Uncommitted work from earlier subagents (DO NOT touch these yet — commit them AFTER Track N):**
+- `crates/aafp-discovery/src/dht_router.rs` (1693 lines) — Track R1
+- `crates/aafp-identity/src/key_directory.rs` (730 lines) — Track P2 (may already be committed in beb6201 — check first)
+- `crates/aafp-loadtest/` (1138 lines) — Track S1
+- `crates/aafp-tests/tests/wan_test.rs` + examples — Track O1
+
+**IMPORTANT:** Before starting Track N, check if key_directory.rs is already committed:
+```bash
+cd /Users/david/Projects/AAFP-research/implementations/rust
+git show beb6201 --stat | grep key_directory
+```
+If it's there, it's already committed. If not, leave it for later.
+
+## Track N Goal
+
+Make NAT traversal actually work. Currently:
+- Relay protocol (RFC 0010) tracks reservations but doesn't forward real data
+- DCuTR (hole punching) is a stub — records attempts but doesn't punch
+- AutoNAT is a stub — tracks status but doesn't do dial-back
+- No real-world NAT testing has been done
+
+After Track N: two agents behind different NATs can communicate via relay, AutoNAT detects NAT status, and DCuTR upgrades relayed connections to direct where possible.
+
+## Current State of NAT Code
+
+```
+crates/aafp-nat/src/
+├── relay_v1.rs   (1099 lines) — RelayV1Service (reservation lifecycle), RelayV1RpcHandler, RelayV1Client, AutoNatV1, RelayedConnection
+│   ├── RelayV1Service: manages reservations (reserve/renew/cancel/expire) ✓
+│   ├── RelayedConnection: tracks metadata (source, target, bytes_forwarded) but does NOT forward data ✗
+│   ├── AutoNatV1: has report_observed() but no dial-back ✗
+│   └── RelayV1Client: encodes/decodes RPC requests ✓
+├── dcutr.rs      (159 lines)  — Dcutr stub: record_attempt() only, no hole punching ✗
+├── auto_nat.rs   (227 lines)  — Legacy AutoNat stub: NatStatus tracking only ✗
+├── relay.rs      (206 lines)  — Legacy RelayService stub
+└── lib.rs        (28 lines)   — Module declarations
+```
+
+SDK integration points:
+- `Agent` struct has `nat_status()` (returns NatStatus::Unknown by default)
+- `AgentClient::connect()` does direct dial only, no relay fallback
+- `AgentServer::accept()` / `accept_one()` does direct accept only
+- `AgentBuilder` has NAT fields but they're not wired to v1 implementations
+
+Transport (aafp-transport-quic):
+- `QuicTransport::dial(addr)` — direct QUIC connection
+- `QuicTransport::accept()` — accept incoming QUIC connection
+- `QuicConnection::open_bi()` — open bidirectional stream
+- `QuicConnection::accept_bi()` — accept bidirectional stream
+- `QuicTransport::rebind(socket)` — change UDP socket (for migration)
+
+## Execution Order
+
+```
+N1 (relay data forwarding)     ← FOUNDATION — everything depends on this
+N2 (AutoNAT dial-back)         ← After N1 (needs relay for fallback)
+N3 (DCuTR hole punching)       ← After N1 (needs relay for address exchange)
+N4 (relay discovery)           ← After N1 (needs working relay to discover)
+N5 (SDK integration)           ← After N1-N4 (ties everything together)
+N6 (test harness)              ← After N5 (tests the integrated system)
+N7 (two-machine test)          ← After N6 (real-world validation)
+N8 (performance testing)       ← After N6 (benchmarks the system)
+```
+
+N2, N3, N4 can be developed in parallel after N1. N5 requires all of N1-N4.
+
+## Step Details
+
+### N1: Relay Data Forwarding (THE CRITICAL STEP)
+
+This is the most important step. The relay must forward real QUIC streams.
+
+**What to build:**
+
+1. **`RelayV1Service::forward_data()` async method:**
+   - Takes two `(QuicSendStream, QuicRecvStream)` pairs (caller and target)
+   - Spawns two tokio tasks: caller→target and target→caller
+   - Uses `tokio::io::copy()` for efficient byte copying
+   - Tracks `bytes_forwarded` in the `RelayedConnection`
+   - Closes both sides when either closes
+
+2. **`handle_relayed_connection()` async function:**
+   - Called when a caller requests a relayed connection to target B
+   - The relay has its own `QuicTransport` for dialing targets
+   - Dials target B using the relay's transport
+   - Opens a bi-stream to target B
+   - The caller's stream is already open (from the RPC request)
+   - Calls `forward_data()` to copy bytes bidirectionally
+   - Returns when the connection closes
+
+3. **Modify `RelayV1RpcHandler` to support async data forwarding:**
+   - Current handler is synchronous (returns CBOR Value)
+   - Data forwarding is async and long-lived (stream, not request/response)
+   - Approach: The `handle_connect()` RPC returns a `ConnectResult` with
+     `connection_id`. Then the caller opens a bi-stream on the same QUIC
+     connection with a header indicating `connection_id`. The relay accepts
+     bi-streams, reads the connection_id, and starts forwarding.
+   - Alternative approach: The relay opens a bi-stream back to the caller
+     after `handle_connect()` succeeds. Simpler but requires the relay to
+     hold the caller's `QuicConnection`.
+
+4. **Connection lifecycle management:**
+   - Track active relayed connections in `RelayV1Service`
+   - Enforce `max_connections` (default 50)
+   - Clean up when either side closes
+   - Track bytes forwarded for metrics
+
+**Key design decision:** How does the caller's data reach the relay?
+
+The relay is a QUIC server. The caller connects to the relay via QUIC. On that QUIC connection:
+- Stream 0 (or a control stream): Used for RPC (reserve, connect, etc.)
+- After `connect` RPC succeeds, the caller opens a NEW bi-stream for data
+- The relay accepts this bi-stream, reads the connection_id header, and
+  starts forwarding to the target
+
+Wire format for data stream header:
+```
+[1 byte: 0xFF (magic)] [8 bytes: connection_id (big-endian)]
+```
+Then raw bytes follow, which the relay copies to the target's stream.
+
+**VERIFY:** A test where agent A → relay → agent B can send and receive data through the relay (localhost). The test should:
+1. Start relay node (QuicTransport + RelayV1Service)
+2. Start agent B (QuicTransport + RelayV1RpcHandler for incoming relay connections)
+3. Agent B reserves on the relay
+4. Agent A connects to the relay, requests relayed connection to B
+5. Agent A sends a message through the relay
+6. Agent B receives the message
+7. Agent B sends a reply
+8. Agent A receives the reply
+9. Close the connection
+
+**Key files:**
+- `crates/aafp-nat/src/relay_v1.rs` — Add `forward_data()`, `handle_relayed_connection()`
+- `crates/aafp-nat/src/lib.rs` — Export new types
+- `crates/aafp-transport-quic/src/transport.rs` — QuicTransport, QuicConnection (read-only, don't modify)
+- `crates/aafp-tests/tests/relay_forwarding.rs` (NEW) — Integration test
+
+**Commit message:**
+```
+feat(n1): relay data forwarding — real QUIC stream forwarding (Track N1)
+
+Implements RelayV1Service::forward_data() for bidirectional byte copying
+between caller and target QUIC streams. Adds handle_relayed_connection()
+that dials the target and spawns forwarding tasks. Wire format: data
+streams start with [0xFF magic + 8-byte connection_id] header.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+```
+
+### N2: AutoNAT Dial-Back
+
+**What to build:**
+
+1. **`AutoNatV1::request_dial_back()` (client side):**
+   - Agent sends its local address to a peer via RPC
+   - Peer attempts to dial the agent's advertised address
+   - Peer reports success/failure back
+   - Agent updates NatStatus based on result
+
+2. **`AutoNatV1::handle_dial_back_request()` (peer side):**
+   - Receive the agent's advertised address
+   - Attempt to dial it (with 5s timeout)
+   - Report success or failure
+
+3. **RPC methods:**
+   - `aafp.autonat.dialback_request` — params: {addr: String}
+   - `aafp.autonat.dialback_response` — params: {success: bool, error: String?}
+
+4. **Status determination:**
+   - 2+ successful dial-backs → `NatStatus::Public`
+   - 2+ failed dial-backs → `NatStatus::Private`
+   - Otherwise → `NatStatus::Unknown`
+   - Use configurable thresholds (default: 2 successes, 2 failures)
+
+5. **Observed address tracking:**
+   - When a peer connects, it reports the observed address back
+   - `AutoNatV1::report_observed(addr, local_addr)` already exists
+   - Add: `AutoNatV1::best_observed_address()` — returns the most commonly observed address
+
+**VERIFY:** A test where an agent binds to 127.0.0.1, advertises 127.0.0.1, and a peer successfully dials back. Then a test where the agent advertises an unreachable address and the peer reports failure.
+
+**Key files:**
+- `crates/aafp-nat/src/relay_v1.rs` — AutoNatV1 (add dial-back methods)
+- `crates/aafp-nat/src/auto_nat.rs` — Update legacy or deprecate
+- `crates/aafp-tests/tests/autonat_dialback.rs` (NEW)
+
+### N3: DCuTR Hole Punching
+
+**What to build:**
+
+1. **`Dcutr::initiate_upgrade()` async method:**
+   - Both peers exchange their observed external addresses (via relay)
+   - Both peers simultaneously dial each other's observed addresses
+   - If both dials succeed, upgrade to direct connection
+   - If either fails, keep the relayed connection
+
+2. **Address exchange protocol (via relay):**
+   - `aafp.dcutr.observe` — Ask peer to report my observed address
+   - `aafp.dcutr.connect` — Initiate simultaneous open with exchanged addresses
+
+3. **Simultaneous open:**
+   - Use `QuicTransport::dial()` with the peer's observed address
+   - Both sides dial at the same time (coordinated via relay RPC)
+   - Quinn handles the rest — if both dials reach the NAT, holes are punched
+   - Use quinn's `Connection::migrate()` if needed for path validation
+
+4. **NAT type detection:**
+   - If AutoNAT reports both peers as cone NAT → attempt DCuTR
+   - If either is symmetric NAT → skip DCuTR, keep relay
+   - Document that symmetric NAT requires relay (unfixable without port prediction)
+
+5. **Research insight (from WORLD_SCALE_RESEARCH.md):**
+   - DCUtR success rate: 70% ± 7.1% for hole punching (from 4.4M attempts in IPFS)
+   - TCP and QUIC have comparable success rates (~70%)
+   - 97.6% of successful connections established on first attempt
+   - AAFP should target 70% hole-punch + 20% relay fallback = 90% success
+
+**VERIFY:** A test where two agents on different localhost addresses (127.0.0.1 and 127.0.0.2) upgrade from relayed to direct connection via DCuTR.
+
+**Key files:**
+- `crates/aafp-nat/src/dcutr.rs` — Replace stub with real implementation
+- `crates/aafp-nat/src/relay_v1.rs` — AutoNatV1 provides observed addresses
+- `crates/aafp-tests/tests/dcutr_upgrade.rs` (NEW)
+
+### N4: Relay Discovery and Bootstrap
+
+**What to build:**
+
+1. **`RelayDiscovery` type:**
+   - Connects to bootstrap nodes
+   - Queries for agents with capability `"aafp.relay"`
+   - Returns a list of known relay multiaddrs
+
+2. **Relay selection logic:**
+   - Ping each discovered relay
+   - Choose the relay with lowest latency
+   - Fallback: if ping fails, try next relay
+
+3. **Relay reservation lifecycle management:**
+   - Automatically reserve on connect
+   - Renew before expiry (at 80% of TTL)
+   - Cancel on disconnect
+   - Background task that handles renewal
+
+4. **Configuration:**
+   - `AgentBuilder::with_relay(addr)` — specify a known relay
+   - `AgentBuilder::with_relay_discovery(bootstrap_addrs)` — discover relays via bootstrap
+   - `AgentBuilder::with_auto_nat(enabled)` — enable AutoNAT
+
+**VERIFY:** An agent can discover a relay via bootstrap, reserve, and maintain the reservation with automatic renewal.
+
+**Key files:**
+- `crates/aafp-discovery/src/bootstrap.rs` — Add relay discovery
+- `crates/aafp-nat/src/relay_v1.rs` — RelayV1Client reservation lifecycle
+- `crates/aafp-sdk/src/builder.rs` — Add relay configuration
+
+### N5: SDK Integration
+
+**What to build:**
+
+1. **Agent startup sequence:**
+   ```
+   Agent starts
+   → AutoNAT runs dial-back checks (N2)
+   → Determines NatStatus
+   → If behind NAT: discover relay (N4), reserve on relay
+   → Advertise relay address in discovery (if behind NAT)
+   ```
+
+2. **Modify `AgentClient::connect()`:**
+   ```rust
+   pub async fn connect(&self, agent: &Agent, addr: &str) -> Result<AgentId, SdkError> {
+       // 1. Try direct dial
+       match direct_dial(addr).await {
+           Ok(conn) => return Ok(establish_session(conn).await?),
+           Err(_) if agent.has_relay() => {
+               // 2. If direct fails and relay is known, try relayed connection
+               let relayed = relayed_connect(agent, addr).await?;
+               // 3. After relayed connection, attempt DCuTR upgrade in background
+               spawn(dcutr_upgrade(relayed));
+               return Ok(establish_session(relayed).await?);
+           }
+           Err(e) => return Err(e),
+       }
+   }
+   ```
+
+3. **Modify `AgentServer::accept()`:**
+   - Accept both direct and relayed connections
+   - For relayed connections: accept the data stream from the relay
+
+4. **Add to `Agent` struct:**
+   - `nat_status()` — already exists, wire to AutoNatV1
+   - `relay_addr()` — returns the relay address (if reserved)
+   - `observed_addresses()` — returns observed external addresses
+
+**VERIFY:** An agent behind NAT can be reached via relay, and the connection is later upgraded to direct via DCuTR (if NAT type allows).
+
+**Key files:**
+- `crates/aafp-sdk/src/client.rs` — AgentClient::connect() — add relay fallback + DCuTR
+- `crates/aafp-sdk/src/server.rs` — AgentServer::accept() — accept relayed connections
+- `crates/aafp-sdk/src/builder.rs` — AgentBuilder — add NAT traversal configuration
+- `crates/aafp-sdk/src/lib.rs` — Agent struct — add nat_status, relay fields
+
+### N6: NAT Traversal Test Harness
+
+**What to build:**
+
+1. **`NATScenario` enum:**
+   ```rust
+   pub enum NATScenario {
+       NoNAT,           // Public IP, direct connection
+       ConeNAT,         // Same external port for all destinations
+       SymmetricNAT,    // Different external port per destination
+       PortRestricted,  // Only accepts from contacted addresses
+   }
+   ```
+
+2. **`NatSimulator` helpers:**
+   - For localhost testing: use multiple bind addresses (127.0.0.1:XXXX, 127.0.0.2:XXXX)
+   - Simulate cone NAT: bind to one address, advertise it
+   - Simulate symmetric NAT: bind to different ports per destination (hard on localhost — document limitation)
+   - Simulate port-restricted: only accept from addresses we've contacted
+
+3. **Integration tests (`crates/aafp-tests/tests/nat_traversal.rs`):**
+   - `test_no_nat_direct_connection` — direct works, no relay needed
+   - `test_cone_nat_dcutr_upgrade` — direct works, DCuTR upgrade works
+   - `test_symmetric_nat_relay_only` — direct fails, relay works, DCuTR fails (expected)
+   - `test_port_restricted_relay_works` — relay works, DCuTR may work
+   - `test_relayed_connection_bidirectional` — data flows both ways through relay
+   - `test_relay_connection_close` — cleanup works when either side closes
+   - `test_relay_capacity_limit` — relay rejects when at max_connections
+   - `test_autonat_detects_public` — AutoNAT correctly reports Public
+   - `test_autonat_detects_private` — AutoNAT correctly reports Private
+
+4. **For real NAT testing (N7):** Document how to test with two machines.
+
+**VERIFY:** All NAT scenarios produce correct behavior.
+
+**Key files:**
+- `crates/aafp-tests/tests/nat_traversal.rs` (NEW)
+- `crates/aafp-tests/src/nat_simulator.rs` (NEW) — NAT simulation helpers
+
+### N7: Two-Machine Relay Test
+
+**What to build:**
+
+1. **Test script (`scripts/test-nat-traversal.sh`):**
+   ```bash
+   # Machine 1 (public IP or port-forwarded): Start relay
+   cargo run --example relay_server -- --addr 0.0.0.0:4433
+
+   # Machine 2 (behind NAT): Start agent A
+   cargo run --example nat_agent -- --relay <relay-addr> --mode server
+
+   # Machine 3 (behind different NAT): Start agent B
+   cargo run --example nat_agent -- --relay <relay-addr> --mode client --target <agent-a-id>
+   ```
+
+2. **Example binaries:**
+   - `crates/aafp-nat/examples/relay_server.rs` — standalone relay node
+   - `crates/aafp-nat/examples/nat_agent.rs` — agent that uses NAT traversal
+
+3. **Documentation (`docs/NAT_TRAVERSAL_TESTING.md`):**
+   - Network topology diagram
+   - Commands to run on each machine
+   - Expected output
+   - Troubleshooting guide
+
+4. **Results format:**
+   - Write to `test-results/interop/nat-traversal-real-world.json`
+   - Include: topology, NAT types, connection method (direct/relay/dcutr), latency, throughput
+
+**VERIFY:** Two agents behind different NATs can communicate via relay. (This step requires real machines — document the procedure and mark as COMPLETE when the test has been run at least once, even if on localhost with simulated NAT.)
+
+**Key files:**
+- `crates/aafp-nat/examples/relay_server.rs` (NEW)
+- `crates/aafp-nat/examples/nat_agent.rs` (NEW)
+- `scripts/test-nat-traversal.sh` (NEW)
+- `docs/NAT_TRAVERSAL_TESTING.md` (NEW)
+- `test-results/interop/nat-traversal-real-world.json` (NEW)
+
+### N8: Relay Performance and Capacity Testing
+
+**What to build:**
+
+1. **Benchmark (`crates/aafp-benchmark/benches/relay_performance.rs`):**
+   - `relay_throughput` — bytes/sec through relay (1KB, 10KB, 100KB, 1MB messages)
+   - `relay_concurrent_connections` — 1, 10, 50 concurrent relayed connections
+   - `relay_latency_overhead` — relay vs direct connection latency
+   - `relay_under_load` — 10 agents, 1000 msg/s each through relay
+
+2. **Results:**
+   - Write to `test-results/performance/relay-performance.json`
+   - Document: max throughput, max concurrent connections, latency overhead
+
+3. **Capacity targets (from RFC 0010):**
+   - 50 concurrent relayed connections (DEFAULT_MAX_CONNECTIONS)
+   - 100KB/s per connection (5 MB/s aggregate)
+   - <10ms latency overhead vs direct connection
+
+**VERIFY:** Relay can handle 50 concurrent connections at 100KB/s each without degradation.
+
+**Key files:**
+- `crates/aafp-benchmark/benches/relay_performance.rs` (NEW)
+- `test-results/performance/relay-performance.json` (NEW)
+
+## Research Insights (apply during implementation)
+
+From `implementation-plans/WORLD_SCALE_RESEARCH.md`:
+
+1. **DCUtR success rate:** 70% ± 7.1% for hole punching (4.4M attempts in IPFS).
+   TCP and QUIC have comparable success rates. 97.6% of successes on first attempt.
+   Target: 70% hole-punch + 20% relay fallback = 90% success.
+
+2. **QUIC connection migration failure:** 76% failure rate on hard handoffs (Wi-Fi→Wi-Fi).
+   For N3 (DCuTR): use active migration initialization, not passive.
+   For N7: expect failures and document fallback (reconnect with session resumption).
+
+3. **Relay capacity:** WebRTC TURN servers handle 50K-100K concurrent flows.
+   coturn: 10K+ sessions on 4 vCPU/8GB RAM.
+   AAFP's default max_connections=50 is conservative — can increase for production.
+
+4. **NAT types in the wild:**
+   - 15-20% of consumer connections need relay (NAT traversal fails)
+   - 40-60% of enterprise connections need relay
+   - 85% in strict corporate environments
+   - Symmetric NAT: ~20% of NATs (DCuTR cannot work)
+
+## Quick Verification Commands
+
+Before committing each step:
+```bash
+cd /Users/david/Projects/AAFP-research/implementations/rust
+cargo fmt --all -- --check    # formatting
+cargo build --workspace        # build (0 warnings)
+cargo clippy --workspace -- -D warnings  # lints
+cargo test --workspace         # all tests pass
+```
+
+## Submodule Workflow
+
+```bash
+# Commit in Rust submodule:
+cd /Users/david/Projects/AAFP-research/implementations/rust
+git add -A
+git commit -m "feat(n1): ..."
+
+# Update umbrella:
+cd /Users/david/Projects/AAFP-research
+git add implementations/rust
+git commit -m "chore: update rust submodule — Track N1"
+
+# Push:
+cd implementations/rust && git push origin master
+cd /Users/david/Projects/AAFP-research && git push origin master
+```
+
+## STATUS.md Updates
+
+After EACH step, update `implementation-plans/STATUS.md`:
+- Mark the step as `[x]` with notes
+- Update the track status (NOT STARTED → IN PROGRESS → COMPLETE)
+- Update the summary table at the bottom
+- Commit STATUS.md together with the code
+
+## Golden Rules
+
+1. **NEVER skip verification.** A step is not done until VERIFY passes.
+2. **NEVER mark a step complete unless it is actually complete.** Update STATUS.md.
+3. **ALWAYS run `cargo fmt --all -- --check` and `cargo clippy --workspace -- -D warnings` before committing.**
+4. **ALWAYS update `STATUS.md` in the same commit as the work it tracks.**
+5. **Commit and push after EACH step.** Not after every 3 steps. After EACH one.
+6. **If a step is blocked, mark it BLOCKED in STATUS.md** and move to the next unblocked step.
+7. **Read RFC 0010** (`RFCs/0010-circuit-relay.md`) before starting — it defines the wire format.
+8. **Do NOT modify domain separators or cryptographic constants.**
+9. **Do NOT add dependencies without checking they are maintained and published >7 days ago.**
+
+## When to Stop and Ask the User
+
+1. **Authentication failures:** If `git push` fails with permission denied.
+2. **A plan references a file that doesn't exist** and you can't find it.
+3. **You hit a blocker you can't resolve** after exhausting reasonable options.
+4. **Quinn doesn't support simultaneous open** for DCuTR — if `QuicTransport::dial()` can't be used for hole punching, report this and we'll discuss alternatives (raw UDP socket binding + quinn rebind).
+
+For everything else, make a decision and proceed. You have full autonomy.
+
+## After Track N: What's Next
+
+After Track N completes (all 8 steps committed and pushed):
+- **Track O** (WAN Testing) can start — O1 is partially done (uncommitted), O2-O8 remain
+- **Track Q** (Security Audit) can start — needs Track P (COMPLETE) 
+- **Track S** (Load Testing) can start — S1 is partially done (uncommitted), S2-S8 remain
+- **Track R** (WAN Discovery) can start after Track O — R1 is partially done (uncommitted)
+
+The uncommitted work from earlier subagents (O1, R1, S1) should be committed before or during those tracks.

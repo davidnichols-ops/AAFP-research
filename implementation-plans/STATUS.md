@@ -835,44 +835,42 @@ then run S2 (100-agent test) and proceed to S3-S8.
 | F3 | COMPLETE | — | 9/9 |
 | F4 | COMPLETE | E2 | 11/11 |
 | G-M | COMPLETE | — | 52/52 (performance) |
-| N | NOT STARTED | — | 0/8 |
-| O | IN PROGRESS | N | 0.5/8 (O1 partial) |
-| P | IN PROGRESS | — | 1.5/8 (P1 done, P2 partial) |
-| Q | NOT STARTED | P | 0/8 |
-| R | IN PROGRESS | O | 0.5/8 (R1 partial) |
-| S | IN PROGRESS | N | 0.5/8 (S1 partial) |
+| N | COMPLETE | — | 8/8 |
+| O | NOT STARTED | N (done) | 0.5/8 (O1 partial, uncommitted) |
+| P | COMPLETE | — | 8/8 |
+| Q | NOT STARTED | P (done) | 0/8 |
+| R | NOT STARTED | O | 0.5/8 (R1 partial, uncommitted) |
+| S | NOT STARTED | N (done) | 0.5/8 (S1 partial, uncommitted) |
 
 **Total steps:** 282 (218 Tracks A-F + 52 Tracks G-M + 48 Tracks N-S)
-**Completed:** 271 (218 + 52 + P1)
-**In progress:** 4 (O1, P2, R1, S1 — all partial, uncommitted)
-**Blocked:** 0
-**Not started:** 43 (N1-N8, O2-O8, P3-P8, Q1-Q8, R2-R8, S2-S8)
+**Completed:** 278 (218 + 52 + 8 P + 8 N)
+**In progress:** 0
+**Blocked:** 1 (R blocked by O)
+**Not started:** 39 (O1-O8, Q1-Q8, R1-R8, S1-S8 — O1/R1/S1 have uncommitted partial work)
 
-**Uncommitted work from builder subagents:**
-- `crates/aafp-discovery/src/dht_router.rs` (1693 lines) — R1
-- `crates/aafp-identity/src/key_directory.rs` (730 lines) — P2
-- `crates/aafp-loadtest/` (1138 lines, 6 files) — S1
-- `crates/aafp-tests/tests/wan_test.rs` (431 lines) — O1
-- `crates/aafp-tests/examples/wan_test_{client,server}.rs` (471 lines) — O1
+**Tests:** 1461 passing, 0 failures, 7 ignored
+
+**Uncommitted work from earlier subagents (needs review + commit):**
+- `crates/aafp-discovery/src/dht_router.rs` (1698 lines) — R1 (Kademlia k-buckets, DhtRouter)
+- `crates/aafp-identity/src/key_directory.rs` (755 lines) — P2 (may be in beb6201, check first)
+- `crates/aafp-loadtest/` (1371 lines, 6 files) — S1 (load test harness, 14 tests)
+- `crates/aafp-tests/tests/wan_test.rs` (440 lines) — O1 (WAN test harness)
+- `crates/aafp-tests/examples/wan_test_{client,server}.rs` — O1
 - `scripts/wan-test-*.sh`, `docs/WAN_TESTING.md` — O1
-- All code compiles, 1324 tests pass, 0 failures. Needs review + commit.
+- All code compiles, 1461 tests pass, 0 failures.
 
 ### Recommended Execution Order
 
 ```
-Phase 5 (parallel):
-  Track N (NAT Traversal)     — 8 steps, 2-3 weeks
-  Track P (Identity/PKI)      — 8 steps, 2-3 weeks
-
-Phase 6 (after N + P):
-  Track O (WAN Testing)       — 8 steps, 1-2 weeks (needs N)
-  Track Q (Security Audit)    — 8 steps, 2-3 weeks (needs P)
-  Track S (Load & Ops)        — 8 steps, 2 weeks (needs N)
+Phase 6 (NOW — all 3 unblocked, run in parallel):
+  Track O (WAN Testing)       — 8 steps (needs N ✓) — O1 partial uncommitted
+  Track Q (Security Audit)    — 8 steps (needs P ✓)
+  Track S (Load & Ops)        — 8 steps (needs N ✓) — S1 partial uncommitted
 
 Phase 7 (after O):
-  Track R (WAN Discovery)     — 8 steps, 2 weeks (needs O)
+  Track R (WAN Discovery)     — 8 steps (needs O) — R1 partial uncommitted
 ```
 
-Tracks N and P can start immediately in parallel.
-Tracks O, Q, S can start once their dependencies complete.
-Track R is the final track.
+Tracks O, Q, S are ALL unblocked and can start immediately in parallel.
+Track R is the final track, blocked by O.
+Tracks N and P are COMPLETE.

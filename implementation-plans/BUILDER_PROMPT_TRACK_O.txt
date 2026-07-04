@@ -1,0 +1,192 @@
+# Builder Prompt: Track O — WAN Testing (O1-O8)
+
+Copy everything below the line to a new builder session.
+
+---
+
+You are the Builder. Tracks A-M, N, and P are COMPLETE (286/282 steps). You are now executing Track O (WAN Testing) — 8 steps that validate AAFP over real networks.
+
+## Current State (2026-07-04)
+
+- **1461 tests passing**, 0 failures, 7 ignored
+- 17 Rust crates, ~66K lines
+- Track N (NAT Traversal) COMPLETE — relay forwarding, AutoNAT, DCuTR, SDK integration all working
+- Track P (Identity/PKI) COMPLETE — WoT, CA, key rotation, revocation, TrustManager
+- Rust submodule at commit c5e7e24 (clean except for uncommitted O1/R1/S1 work)
+
+**O1 is partially done (uncommitted):**
+- `crates/aafp-tests/tests/wan_test.rs` (440 lines) — WAN test harness
+- `crates/aafp-tests/examples/wan_test_client.rs` + `wan_test_server.rs` — example binaries
+- `scripts/wan-test-{setup,server,client}.sh` — shell scripts
+- `docs/WAN_TESTING.md` — test guide
+- All compiles, tests pass on localhost
+
+**FIRST TASK:** Review and commit the uncommitted O1 work, then continue with O2-O8.
+
+## Track O Goal
+
+Every test in AAFP has run on localhost (<1ms RTT, no packet loss, no NAT, no congestion). This track validates AAFP over real WAN conditions: 50-100ms RTT, packet loss, BBR vs Cubic fairness, cross-network interop, connection migration, and multi-node DHT.
+
+## Steps
+
+### O1: Commit existing WAN test infrastructure (REVIEW + COMMIT)
+
+```bash
+cd /Users/david/Projects/AAFP-research/implementations/rust
+# Review the code
+cat crates/aafp-tests/tests/wan_test.rs
+cat crates/aafp-tests/examples/wan_test_client.rs
+cat crates/aafp-tests/examples/wan_test_server.rs
+# Run tests
+cargo test -p aafp-tests --test wan_test
+# Format and lint
+cargo fmt -p aafp-tests -- --check
+cargo clippy -p aafp-tests -- -D warnings
+# Commit
+git add crates/aafp-tests/tests/wan_test.rs \
+  crates/aafp-tests/examples/wan_test_client.rs \
+  crates/aafp-tests/examples/wan_test_server.rs \
+  crates/aafp-tests/Cargo.toml
+git commit -m "feat(o1): WAN test infrastructure — env-var-configurable harness (Track O1)
+
+Implements wan_test.rs (configurable via AAFP_REMOTE_ADDR, AAFP_TEST_MODE,
+AAFP_MSG_COUNT, AAFP_MSG_SIZE, AAFP_CONGESTION), wan_test_client/server
+examples, shell scripts for two-machine testing, WAN_TESTING.md guide.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>"
+```
+
+Also commit the scripts and docs in the umbrella repo:
+```bash
+cd /Users/david/Projects/AAFP-research
+git add scripts/wan-test-*.sh docs/WAN_TESTING.md
+git commit -m "docs(o1): WAN testing scripts and documentation (Track O1)"
+```
+
+### O2: Latency and throughput over WAN
+
+Measure round-trip latency and throughput across real network conditions.
+
+- Run ping test (1000 pings), measure p50/p90/p99/p99.9
+- Compare to localhost baseline (41.47µs)
+- Run throughput test (1000 1KB messages), compare to localhost (776K msg/s)
+- Test message sizes: 64B, 256B, 1KB, 4KB, 16KB, 64KB
+- Test BBR vs Cubic vs NewReno (3 runs each, take median)
+- Write results to `test-results/performance/wan-latency-throughput.json`
+- **VERIFY:** WAN latency and throughput measured and documented
+
+**If no second machine available:** Use `toxiproxy` or `tc` to simulate WAN conditions on localhost. Add 50ms latency, 1% packet loss. Document that real WAN test is pending.
+
+### O3: Packet loss and high-latency conditions
+
+Test AAFP under adverse network conditions.
+
+- Use `tc` (Linux, requires root) or `Network Link Conditioner` (macOS) or `toxiproxy` (userspace)
+- Test scenarios:
+  - 1% packet loss → measure impact
+  - 5% packet loss → verify connection survives
+  - 200ms RTT (cross-continent) → measure handshake time
+  - 500ms RTT (satellite) → verify timeout handling
+  - 1% loss + 100ms RTT → realistic cross-continent
+- Test: handshake under loss, mid-stream interruption, slow network (56KB/s), burst loss
+- Document failure modes: at what loss % does handshake fail? At what RTT does timeout occur?
+- Write results to `test-results/performance/wan-adverse-conditions.json`
+- **VERIFY:** AAFP survives 5% packet loss and 200ms RTT
+
+### O4: BBR vs Cubic validation over WAN
+
+The critical congestion control test.
+
+- Run 1000-message round-trip test with Cubic, BBR, NewReno
+- Test under: clean network, 1% loss, 5% loss, 100ms RTT, 100ms RTT + 1% loss
+- Measure: RT latency (p50/p99), throughput (msg/s), time to first message, stability
+- Expected: clean → all similar; with loss → BBR > Cubic > NewReno; high RTT → BBR > Cubic > NewReno
+- Write results to `test-results/performance/wan-congestion-control.json`
+- **VERIFY:** BBR shows measurable advantage over Cubic under packet loss
+
+### O5: Cross-network interop testing
+
+Test all interop scenarios over real network.
+
+- Python MCP SDK interop over WAN (Rust server, Python client on different machine)
+- A2A interop over WAN (Rust server + Rust client on different machines)
+- Verify all operations succeed, measure latency vs localhost
+- Write results to `test-results/interop/wan-interop.json`
+- **VERIFY:** All interop scenarios work over WAN
+
+### O6: Connection migration over real network changes
+
+Test I6 (connection migration) under real conditions.
+
+- Test 1: WiFi to Ethernet (same machine) — disable WiFi, enable Ethernet, verify migration
+- Test 2: WiFi to cellular — switch to hotspot, verify migration (expect 76% failure rate)
+- Test 3: IP address change — 192.168.1.X to 10.0.0.X, verify quinn rebind
+- Document which scenarios work and which fail
+- Write results to `test-results/interop/wan-connection-migration.json`
+- **VERIFY:** Connection survives at least one network change scenario
+
+**If no real hardware:** Test with multiple localhost addresses (127.0.0.1, 127.0.0.2). Document real-world test setup.
+
+### O7: Multi-node DHT over WAN
+
+Test discovery with multiple nodes on different networks.
+
+- Start 3+ agents on different machines (or different localhost ports)
+- Test: announce, lookup, agent goes offline, agent comes back
+- Measure: announce time, lookup time, propagation time, churn handling
+- Write results to `test-results/interop/wan-dht-discovery.json`
+- **VERIFY:** Multi-node DHT discovery works over WAN
+
+**If only one machine:** Test with 3 agents on different localhost ports. Document real-world setup.
+
+### O8: WAN performance report
+
+Compile all WAN test results into a comprehensive report.
+
+- Create `test-results/performance/WAN_REPORT.md`:
+  - Test environment (machines, network, RTT, bandwidth)
+  - Latency results (localhost vs LAN vs WAN vs adverse)
+  - Throughput results
+  - Congestion control comparison
+  - Failure modes and recovery times
+  - Interop results
+  - Connection migration results
+  - DHT discovery results
+  - Recommendations for production deployment
+- Update `PERFORMANCE_STATUS.md` with WAN results
+- **VERIFY:** Comprehensive WAN report exists
+
+## Key Research Insights
+
+- **QUIC connection migration:** 76% failure rate on hard handoffs (Wi-Fi→cellular). Expect failures in O6. Document fallback (reconnect + session resumption).
+- **BBR fairness:** BBRv3 can grab 99% bandwidth vs Cubic. Use Cubic for agent-to-agent RPC, BBR for relay forwarding.
+- **Only 52% of IPv4 QUIC servers support connection migration.** This is a known industry issue.
+
+## Verification Commands
+
+```bash
+cd /Users/david/Projects/AAFP-research/implementations/rust
+cargo fmt --all -- --check
+cargo build --workspace
+cargo clippy --workspace -- -D warnings
+cargo test --workspace
+```
+
+## Submodule Workflow
+
+```bash
+# Commit in Rust submodule:
+cd implementations/rust && git add -A && git commit -m "feat(o2): ..."
+# Update umbrella:
+cd /Users/david/Projects/AAFP-research && git add implementations/rust && git commit -m "chore: update rust submodule — Track O2"
+```
+
+## Golden Rules
+
+1. NEVER skip verification. A step is not done until VERIFY passes.
+2. ALWAYS run `cargo fmt --all -- --check` and `cargo clippy --workspace -- -D warnings` before committing.
+3. ALWAYS update `STATUS.md` in the same commit as the work.
+4. Commit after EACH step.
+5. If a step requires hardware you don't have (two machines, real NAT), document the test setup, run what you can on localhost, and mark the step complete with notes about what needs real-world validation.

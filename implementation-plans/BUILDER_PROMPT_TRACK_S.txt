@@ -1,0 +1,253 @@
+# Builder Prompt: Track S — Load Testing & Operations (S1-S8)
+
+Copy everything below the line to a new builder session.
+
+---
+
+You are the Builder. Tracks A-M, N, and P are COMPLETE (286/282 steps). You are now executing Track S (Load Testing & Operations) — 8 steps that prove AAFP scales and is deployable.
+
+## Current State (2026-07-04)
+
+- **1461 tests passing**, 0 failures, 7 ignored
+- 17 Rust crates, ~66K lines
+- Track N (NAT Traversal) COMPLETE — relay, AutoNAT, DCuTR, SDK integration
+- Track P (Identity/PKI) COMPLETE — trust model
+- Rust submodule at commit c5e7e24
+
+**S1 is partially done (uncommitted):**
+- `crates/aafp-loadtest/` (1371 lines, 6 files) — load test harness
+  - `src/lib.rs` — LoadTestConfig, Topology, LoadTestMetrics
+  - `src/runner.rs` — LoadTestRunner (creates N agents, runs test)
+  - `src/metrics.rs` — metrics collection (lock-free atomics)
+  - `src/bin/loadtest.rs` — CLI binary
+  - `tests/load_test.rs` — 14 tests (10 unit + 3 integration + 1 doctest)
+- Crate is in workspace Cargo.toml
+- All tests pass
+
+**FIRST TASK:** Review and commit the uncommitted S1 work, then continue with S2-S8.
+
+## Track S Goal
+
+AAFP has never been tested with more than a few agents. This track:
+1. Commits and runs the load test harness with 100 agents
+2. Runs a 4-24 hour stability test (leak detection)
+3. Adds metrics, health checks, and observability
+4. Creates deployment docs (Docker, systemd, Kubernetes)
+5. Creates operational runbook (key rotation, updates, debugging)
+6. Stress tests edge cases (burst, large messages, churn)
+7. Compiles a production readiness report
+
+## Steps
+
+### S1: Commit existing load test harness (REVIEW + COMMIT)
+
+```bash
+cd /Users/david/Projects/AAFP-research/implementations/rust
+# Review the code
+cat crates/aafp-loadtest/src/lib.rs
+cat crates/aafp-loadtest/src/runner.rs
+cat crates/aafp-loadtest/src/metrics.rs
+cat crates/aafp-loadtest/src/bin/loadtest.rs
+# Run tests
+cargo test -p aafp-loadtest
+# Format and lint
+cargo fmt -p aafp-loadtest -- --check
+cargo clippy -p aafp-loadtest -- -D warnings
+# Commit
+git add crates/aafp-loadtest/ Cargo.toml Cargo.lock
+git commit -m "feat(s1): load test harness — N agents, topologies, metrics (Track S1)
+
+Implements LoadTestConfig, Topology (mesh/star/ring/random), LoadTestRunner,
+LoadTestMetrics (throughput, latency, error rate, resource usage), CLI binary.
+14 tests pass (10 unit + 3 integration + 1 doctest).
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>"
+```
+
+### S2: 100-agent load test
+
+Run the load test with 100 agents.
+
+- Configure: 100 agents, 1000 messages/agent, 1KB messages, 60s duration
+- Topologies: mesh (limited to 10 connections/agent), star, ring, random (K=5)
+- Measure:
+  - Total messages sent/received
+  - Throughput (messages/second aggregate)
+  - Latency distribution (p50, p90, p99, p99.9)
+  - Error rate (messages lost, connections failed)
+  - Memory per agent (should be <10MB)
+  - CPU usage per agent
+  - File descriptors per agent
+- Identify bottlenecks: CPU-bound? memory-bound? network-bound? lock contention?
+- Write results to `test-results/performance/load-test-100-agents.json`
+- **VERIFY:** 100 agents exchange 100K messages with <1% error rate
+
+**IMPORTANT:** 100 agents with mesh topology = 10,000 connections. Limit to 10 connections/agent to avoid N². Use `ulimit -n 65536` if you hit file descriptor limits.
+
+### S3: Long-running stability test (4-24 hours)
+
+Test for memory leaks and stability.
+
+- Run a single agent for 4 hours (24 if practical):
+  - Accept connections from 10 clients
+  - Each client sends 1 message/second
+  - Monitor: memory, CPU, file descriptors, connection count
+  - Log metrics every 5 minutes
+- Check for: memory growth (leak), FD growth (connection leak), CPU drift, connection stability
+- If 4 hours is impractical in a test, create a script that runs the test and document how to run it manually
+- Write results to `test-results/performance/stability-4h.json`
+- **VERIFY:** Memory growth <10% over 4 hours of continuous operation
+
+### S4: Metrics and observability
+
+Add metrics collection to the agent.
+
+- Add `AgentMetrics` struct (in `aafp-sdk/src/metrics.rs`):
+  - `connections_active`, `connections_total`
+  - `messages_sent`, `messages_received`
+  - `bytes_sent`, `bytes_received`
+  - `handshakes_completed`, `handshakes_failed`
+  - `dht_records`, `relay_connections`
+  - `uptime_seconds`
+  - Use `AtomicU64` counters (lock-free)
+
+- Add `Agent::metrics() → AgentMetrics`:
+  - Returns current metrics snapshot
+
+- Add `Agent::health_check() → HealthStatus`:
+  - `Healthy`: all systems normal
+  - `Degraded`: high error rate, low memory
+  - `Unhealthy`: no connections, OOM risk
+
+- Add `aafp.metrics` RPC method: returns metrics as CBOR
+
+- Add structured logging using `tracing` crate:
+  - Log: connections, handshakes, errors, DHT operations
+  - Configurable log level
+
+- Optional: Prometheus-format metrics endpoint (behind feature flag)
+
+**VERIFY:** Agent exposes metrics via RPC, metrics are accurate, health check returns correct status.
+
+Key files:
+- `crates/aafp-sdk/src/lib.rs` — Agent struct (add metrics field)
+- `crates/aafp-sdk/src/metrics.rs` (NEW) — AgentMetrics, HealthStatus
+- `crates/aafp-sdk/Cargo.toml` — add `tracing` dependency
+
+### S5: Deployment documentation
+
+Create production deployment guides.
+
+- Create `docs/DEPLOYMENT.md`:
+  - Quick start: single agent deployment
+  - Docker: Dockerfile + docker-compose.yml
+  - Systemd: service file for Linux
+  - Kubernetes: Deployment + Service + ConfigMap
+  - Configuration: all AgentBuilder options
+  - Security: key management, firewall rules, TLS config
+  - Monitoring: how to collect metrics, set up alerts
+  - Scaling: horizontal scaling, relay deployment, DHT sizing
+
+- Create `Dockerfile`:
+  - Multi-stage build (cargo build → distroless runtime)
+  - Expose UDP 4433 (QUIC)
+  - Health check
+  - Configurable via environment variables
+
+- Create `docker-compose.yml`:
+  - 3-agent setup (relay + 2 agents behind NAT)
+  - Volumes for key storage and DHT database
+
+- Create `deploy/systemd/aafp-agent.service`:
+  - systemd unit file with user isolation, restart on failure, resource limits
+
+- Create `deploy/kubernetes/aafp-agent.yaml`:
+  - Deployment (3 replicas), Service (UDP), ConfigMap, Secret
+
+**VERIFY:** Docker build succeeds, docker-compose starts 3 agents, agents can communicate.
+
+### S6: Operational runbook
+
+Create `docs/OPERATIONS.md` and `docs/TROUBLESHOOTING.md`:
+
+**OPERATIONS.md:**
+- Key rotation (reference Track P5)
+- Rolling update: drain connections, update, restart, re-accept
+- Scaling: how to add more agents
+- Debugging slow agent: check metrics, logs, CPU/memory, network
+- Security incident: revoke key (Track P6), notify peers, rotate
+- Relay management: deploy and maintain relay nodes
+- DHT maintenance: monitor health, handle churn
+- Backup and recovery: backup DHT database and keys
+
+**TROUBLESHOOTING.md:**
+- "Agent can't connect" → check firewall, NAT, relay
+- "High latency" → check network, congestion control, DHT routing
+- "Memory growth" → check for leaks, connection accumulation
+- "Handshake failures" → check key validity, clock skew, replay cache
+- "DHT lookup fails" → check bootstrap, peer connectivity, record TTL
+
+**VERIFY:** Runbook covers all common operations, troubleshooting guide covers known issues.
+
+### S7: Stress testing edge cases
+
+Create `crates/aafp-tests/tests/stress_tests.rs`:
+
+1. **Burst traffic:** 100 agents send 100 messages simultaneously (10K burst). Any drops?
+2. **Large message:** Send 1MB, 10MB messages. Frame fragmentation works? No OOM? (Current limit: 1MB max frame size)
+3. **Many streams:** Open 100, 500, 1000 concurrent streams on one connection. Memory per stream?
+4. **Connection churn:** 100 agents connect and disconnect every 1 second. FD leak? Memory recovery?
+5. **DHT under load:** 100 agents announce simultaneously, 100 lookup simultaneously. DHT throughput?
+
+Write results to `test-results/performance/stress-tests.json`.
+**VERIFY:** Agent survives all stress tests without crash or OOM.
+
+### S8: Production readiness report
+
+Create `docs/PRODUCTION_READINESS.md`:
+- Load test results: 100 agents, throughput, latency, errors
+- Stability results: 4-24h run, memory/CPU stability
+- Metrics available: what can be monitored
+- Deployment options: Docker, systemd, Kubernetes
+- Operational procedures: key rotation, updates, scaling
+- Known limitations: max agents, max messages, max streams
+- Recommendations: production config, monitoring setup, alerts
+- Pre-production checklist (security, performance, ops)
+
+Update `STATUS.md` with production readiness status.
+**VERIFY:** Comprehensive production readiness report exists.
+
+## Research Insights
+
+- **WhatsApp:** 2M connections per server (Erlang). AAFP should target at least 10K connections per agent for v1.
+- **Discord:** 5M concurrent users, 15K sessions per relay. AAFP relay default max_connections=50 is very conservative — increase to 1000+ for production.
+- **Resilience patterns:** Circuit breaker (5 failures → open, 30s → half-open), bulkhead (limit concurrent requests per peer to 10), retry with exponential backoff + jitter (max 3 retries). Implement directly in aafp-sdk.
+
+## Verification Commands
+
+```bash
+cd /Users/david/Projects/AAFP-research/implementations/rust
+cargo fmt --all -- --check
+cargo build --workspace
+cargo clippy --workspace -- -D warnings
+cargo test --workspace
+```
+
+## Submodule Workflow
+
+```bash
+cd implementations/rust && git add -A && git commit -m "feat(s2): ..."
+cd /Users/david/Projects/AAFP-research && git add implementations/rust && git commit -m "chore: update rust submodule — Track S2"
+```
+
+## Golden Rules
+
+1. NEVER skip verification. A step is not done until VERIFY passes.
+2. ALWAYS run `cargo fmt --all -- --check` and `cargo clippy --workspace -- -D warnings` before committing.
+3. ALWAYS update `STATUS.md` in the same commit as the work.
+4. Commit after EACH step.
+5. If 100 agents exceeds system limits (FDs, memory), start with 10 and scale up. Document system requirements.
+6. If Docker build fails, fix it — don't skip it. Use distroless base image to keep size small.
+7. If memory leaks are found, FIX THEM before continuing.

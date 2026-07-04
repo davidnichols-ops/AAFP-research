@@ -1,0 +1,215 @@
+# Builder Prompt: Track Q — Security Audit (Q1-Q8)
+
+Copy everything below the line to a new builder session.
+
+---
+
+You are the Builder. Tracks A-M, N, and P are COMPLETE (286/282 steps). You are now executing Track Q (Security Audit) — 8 steps that prove AAFP is safe against real attackers.
+
+## Current State (2026-07-04)
+
+- **1461 tests passing**, 0 failures, 7 ignored
+- 17 Rust crates, ~66K lines
+- Track P (Identity/PKI) COMPLETE — trust model implemented (WoT, CA, rotation, revocation, TrustManager)
+- Track N (NAT Traversal) COMPLETE — relay, AutoNAT, DCuTR, SDK integration
+- Rust submodule at commit c5e7e24
+
+**Existing security assets:**
+- 5 fuzz targets in `fuzz/fuzz_targets/` (CBOR decode, frame decode, handshake CBOR, RPC decode, agent record CBOR) — created but NEVER RUN
+- `aafp-conformance/src/close_adversarial.rs` — CLOSE frame flooding test (basic)
+- `aafp-conformance/src/adversarial.rs` — adversarial test framework (basic)
+- ReplayCache in `aafp-crypto/src/replay_cache.rs` — replay attack protection
+- ML-DSA-65 signatures via aws-lc-rs (FIPS 204)
+- rustls with `prefer-post-quantum` feature (PQ KEX)
+
+## Track Q Goal
+
+"Implements the spec correctly" is not the same as "survives real attackers." This track:
+1. Documents the threat model
+2. Fuzzes all input parsers (find panics, crashes, hangs)
+3. Tests handshake against attacks (forgery, replay, downgrade)
+4. Tests resource exhaustion (connection flood, stream exhaustion, slow loris, CPU exhaustion)
+5. Checks timing side-channels
+6. Tests malformed input edge cases
+7. Reviews and hardens attack surface
+8. Compiles a security report
+
+## Steps
+
+### Q1: Threat model documentation
+
+Create `docs/THREAT_MODEL.md`:
+- **Assets:** agent private keys, session data, message content, agent identity, network metadata
+- **Attack surfaces:** QUIC listener, TLS handshake, AAFP handshake, frame parser, CBOR decoder, RPC handler, discovery DHT, relay service, AutoNAT, DCuTR
+- **Trust boundaries:** unauthenticated (pre-handshake) vs authenticated (post-handshake) vs authorized (post-authorization)
+- **In-scope attacks:** MITM, replay, forgery, resource exhaustion, downgrade, timing side-channel
+- **Out-of-scope:** physical access, OS compromise, supply chain (document but don't mitigate)
+- **Attackers:** passive eavesdropper, active MITM, malicious peer (authenticated but untrusted), compromised CA, relay operator
+
+For each attack surface, document: inputs accepted, validation performed, what happens on invalid input, resources consumed.
+
+**VERIFY:** Threat model document exists and covers all attack surfaces.
+
+### Q2: Fuzz testing infrastructure
+
+5 fuzz targets already exist in `fuzz/fuzz_targets/`. Run them and add more.
+
+1. **Run existing fuzz targets** (at least 10 minutes each if 1 hour is impractical):
+   ```bash
+   cd /Users/david/Projects/AAFP-research/implementations/rust
+   cargo +nightly fuzz run fuzz_cbor_decode -- -max_total_time=600
+   cargo +nightly fuzz run fuzz_frame_decode -- -max_total_time=600
+   cargo +nightly fuzz run fuzz_handshake_cbor -- -max_total_time=600
+   cargo +nightly fuzz run fuzz_rpc_decode -- -max_total_time=600
+   cargo +nightly fuzz run fuzz_agent_record_cbor -- -max_total_time=600
+   ```
+
+2. **Add new fuzz targets:**
+   - `fuzz_relay_request`: Feed random CBOR to relay RPC handler
+   - `fuzz_discovery_request`: Feed random CBOR to discovery RPC handler
+   - `fuzz_dht_router`: Feed random data to DHT router
+
+3. **Fix any panics, crashes, or hangs found.** Add regression tests for each bug.
+
+4. **Document results:** How many iterations run, bugs found, fixes applied.
+
+**VERIFY:** All fuzz targets run without panics. Any bugs found are fixed with regression tests.
+
+**NOTE:** If `cargo +nightly` is not available, install it: `rustup toolchain install nightly`. If fuzzing can't run, document the setup and create the targets anyway — they can be run later.
+
+### Q3: Adversarial handshake tests
+
+Create `crates/aafp-tests/tests/adversarial_handshake.rs` with 8 attack tests:
+
+1. **Signature forgery:** Sign ClientHello with wrong key → must reject
+2. **AgentId forgery:** agent_id != hash(public_key) → must reject
+3. **Replay attack:** Send valid ClientHello twice → second must reject (nonce reuse)
+4. **Expired handshake:** expires_at in the past → must reject
+5. **Version downgrade:** protocol_version = 0 → must reject
+6. **MITM modification:** Modify a field after signing → must reject (signature invalid)
+7. **TLS downgrade:** Attempt non-PQ KEX → must reject (rustls enforces PQ)
+8. **PQ KEX downgrade:** Attempt classical-only KEX → must reject
+
+Write results to `test-results/security/handshake-attacks.json`.
+**VERIFY:** All 8 handshake attacks are rejected.
+
+Key files:
+- `crates/aafp-crypto/src/handshake_v1.rs` — verify_client_hello, verify_server_hello
+- `crates/aafp-crypto/src/replay_cache.rs` — ReplayCache
+- `crates/aafp-sdk/src/handshake_driver.rs` — drive_server_handshake
+
+### Q4: Resource exhaustion testing
+
+Create `crates/aafp-tests/tests/resource_exhaustion.rs` with 6 DoS tests:
+
+1. **Connection flood:** Open 1000 connections in 1 second. Measure CPU/memory/FDs. Add `max_connections` config (default 100).
+2. **Stream exhaustion:** Open 1000 bi-streams on one connection. Verify quinn enforces `max_streams_bidi`.
+3. **Large frame attack:** Send frame with payload_len = 1GB (header only). Verify rejected immediately. Verify 1MB frame works (at limit).
+4. **Slow loris:** Open connection, send 1 byte/second. Verify closed after `max_idle_timeout` (30s).
+5. **Memory exhaustion:** Send many large messages. Measure memory. Add backpressure if needed.
+6. **CPU exhaustion:** Send many handshake requests (ML-DSA-65 verify is expensive). Add rate limiting (10/second per IP).
+
+Write results to `test-results/security/resource-exhaustion.json`.
+**VERIFY:** Agent survives all resource exhaustion attacks.
+
+Key files:
+- `crates/aafp-transport-quic/src/config.rs` — QuicConfig (max_idle_timeout, stream limits)
+- `crates/aafp-sdk/src/server.rs` — AgentServer (add rate limiting)
+- `crates/aafp-messaging/src/framing.rs` — Frame size limits
+
+### Q5: Timing side-channel analysis
+
+Create `crates/aafp-benchmark/benches/timing_analysis.rs` with 4 timing tests:
+
+1. **Signature verification timing:** Measure valid vs invalid signature verify time. ML-DSA-65 should be constant-time (verify in aws-lc-rs).
+2. **AgentId comparison timing:** Measure matching vs non-matching AgentId comparison. Use `subtle::ConstantTimeEq` if not already.
+3. **ReplayCache lookup timing:** Measure cache hit vs miss. If times differ, attacker can probe.
+4. **CBOR decode timing:** Measure valid vs invalid CBOR decode time. If different, attacker can probe valid prefixes.
+
+Use `criterion` for micro-benchmarking. Fix any side-channels with constant-time operations.
+Write results to `test-results/security/timing-analysis.json`.
+**VERIFY:** No significant timing differences in security-critical paths.
+
+### Q6: Malformed input testing
+
+Create `crates/aafp-tests/tests/malformed_input.rs` with edge-case tests:
+
+**CBOR edge cases:** empty input, 100-level nesting, u64::MAX, invalid UTF-8, indefinite-length, duplicate map keys, tagged values
+**Frame edge cases:** 0-byte payload, payload_len=0 but ext_len=1000, version=255, frame_type=255, truncated header (27 bytes)
+**Handshake edge cases:** empty public_key, 1951-byte public_key (1 short), empty signature, capabilities=[null]
+**RPC edge cases:** empty method, "aafp.evil.method", params=null, params={}, 1MB params
+
+Write results to `test-results/security/malformed-inputs.json`.
+**VERIFY:** All malformed inputs are rejected without panics.
+
+### Q7: Attack surface review and hardening
+
+Systematic review of all code handling unauthenticated input.
+
+- Audit all code paths before AAFP handshake completes:
+  - QUIC connection acceptance
+  - TLS handshake (rustls — verify config)
+  - Frame reading (before handshake)
+  - Handshake message parsing
+
+- For each code path, verify:
+  - Input validation is complete
+  - Error handling doesn't leak information (no "signature invalid" vs "key not found")
+  - Resource consumption is bounded
+  - No panics on malformed input (no unwrap()/expect() in input paths)
+
+- Add adversarial test modules to each crate
+- Fix any issues: replace unwrap() with proper error handling, add missing validation, add rate limiting, add size limits
+
+**VERIFY:** Code review complete, all issues fixed, adversarial tests pass.
+
+### Q8: Security report
+
+Create `test-results/security/SECURITY_REPORT.md`:
+- Threat model summary
+- Fuzz testing results (bugs found, fixes applied)
+- Adversarial handshake test results
+- Resource exhaustion test results
+- Timing analysis results
+- Malformed input test results
+- Attack surface review findings
+- Remaining risks and recommendations
+- Comparison to OWASP guidelines where applicable
+
+Update `STATUS.md` with security audit results.
+**VERIFY:** Comprehensive security report exists.
+
+## Research Insights
+
+- **QUIC-Fuzz** (arxiv 2503.19402) found 10 vulnerabilities in 6 QUIC implementations (Google, Alibaba, Cloudflare, MSQuic, quiche, ngtcp2). 84% code coverage increase over state-of-the-art. AAFP should expect to find bugs in fuzzing.
+- **ML-DSA-65 verify:** 76-103µs per verification. An attacker sending 10K handshake requests/sec would consume 760ms-1030ms of CPU per second — effectively a DoS. Rate limiting is critical.
+- **tower-resilience crate** has production-ready circuit breaker, bulkhead, rate limiter patterns. Recommendation: implement directly in aafp-sdk (simpler than adopting Tower's Service trait).
+
+## Verification Commands
+
+```bash
+cd /Users/david/Projects/AAFP-research/implementations/rust
+cargo fmt --all -- --check
+cargo build --workspace
+cargo clippy --workspace -- -D warnings
+cargo test --workspace
+# Fuzz (requires nightly):
+cargo +nightly fuzz run <target> -- -max_total_time=600
+```
+
+## Submodule Workflow
+
+```bash
+cd implementations/rust && git add -A && git commit -m "feat(q1): ..."
+cd /Users/david/Projects/AAFP-research && git add implementations/rust && git commit -m "chore: update rust submodule — Track Q1"
+```
+
+## Golden Rules
+
+1. NEVER skip verification. A step is not done until VERIFY passes.
+2. ALWAYS run `cargo fmt --all -- --check` and `cargo clippy --workspace -- -D warnings` before committing.
+3. ALWAYS update `STATUS.md` in the same commit as the work.
+4. Commit after EACH step.
+5. If fuzzing finds a bug, FIX IT before continuing. Add a regression test.
+6. Do NOT add `unwrap()` or `expect()` in code that handles untrusted input.
+7. Do NOT modify cryptographic constants or domain separators.
