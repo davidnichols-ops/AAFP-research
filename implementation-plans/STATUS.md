@@ -815,13 +815,19 @@ with multiple nodes, commit R1, then proceed to R2-R8.
         600 msgs sent, 600 received, 0 failed, 2.5% steady-state memory growth
         (17.2MB→17.6MB). Full 4-hour run script provided (run-stability-test.sh).
         Results in test-results/performance/stability-4h.json.)*
-- [ ] **S4** Metrics and observability (AgentMetrics, health check, tracing)
+- [x] **S4** Metrics and observability (AgentMetrics, health check, tracing)
+      *(COMPLETE — Added AgentMetrics (lock-free AtomicU64 counters) to aafp-sdk.
+        12 counters: connections_active/total, messages_sent/received, bytes_sent/received,
+        handshakes_completed/failed, dht_records, relay_connections, messages_failed, uptime.
+        Agent::metrics() returns MetricsSnapshot, Agent::health_check() returns HealthStatus
+        (Healthy/Degraded/Unhealthy). MetricsRpcResponse for aafp.metrics RPC (CBOR+JSON).
+        13 new tests pass (10 metrics module + 3 agent integration).)*
 - [ ] **S5** Deployment documentation (Docker, systemd, Kubernetes)
 - [ ] **S6** Operational runbook (key rotation, updates, debugging)
 - [ ] **S7** Stress testing (burst, large messages, churn, DHT load)
 - [ ] **S8** Production readiness report
 
-**S status:** IN PROGRESS (S1-S3 COMPLETE, S4 next)
+**S status:** IN PROGRESS (S1-S4 COMPLETE, S5 next)
 **S blocked by:** Track N (NAT traversal — load test needs relay) — N COMPLETE
 **S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
 **S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`
