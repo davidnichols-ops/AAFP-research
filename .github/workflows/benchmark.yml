@@ -1,0 +1,81 @@
+name: Benchmark Regression Detection
+
+on:
+  push:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Benchmarks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    defaults:
+      run:
+        working-directory: implementations/rust
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build benchmarks
+        run: cargo bench --no-run --workspace
+
+      - name: Run mcp_transport benchmark
+        run: cargo bench -p aafp-benchmark --bench mcp_transport -- --warm-up-time 2 --measurement-time 3 --sample-size 10
+
+      - name: Run serialization benchmark
+        run: cargo bench -p aafp-benchmark --bench serialization -- --warm-up-time 2 --measurement-time 3 --sample-size 10
+
+      - name: Prepare results for dashboard
+        shell: bash
+        run: |
+          platform="${{ matrix.os }}"
+          mkdir -p "${{ github.workspace }}/test-results/performance/${platform}"
+          if [ -d "target/criterion" ]; then
+            cp -R target/criterion "${{ github.workspace }}/test-results/performance/${platform}/criterion"
+          fi
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            implementations/rust/target/criterion/
+            test-results/performance/${{ matrix.os }}/
+          retention-days: 30
+
+      - name: Download previous commit's artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: benchmark-results-${{ matrix.os }}-${{ github.event.before }}
+          path: ./baseline
+        if: ${{ github.event.before != '0000000000000000000000000000000000000000' }}
+
+      - name: Compare benchmarks against baseline
+        shell: bash
+        run: |
+          chmod +x "${{ github.workspace }}/test-results/compare_benchmarks.py"
+          if [ -d "./baseline" ] && [ "$(find ./baseline -name '*.json' | head -1)" ]; then
+            python3 "${{ github.workspace }}/test-results/compare_benchmarks.py" \
+              --current "target/criterion" \
+              --baseline "./baseline/implementations/rust/target/criterion"
+          else
+            echo "No baseline artifact available for comparison (first run or prior run expired). Skipping regression check."
+          fi
