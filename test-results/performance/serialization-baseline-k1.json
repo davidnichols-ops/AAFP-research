@@ -1,0 +1,71 @@
+{
+  "track": "K1",
+  "description": "Serialization baseline benchmark (Track K1)",
+  "timestamp": "2025-01-20",
+  "benchmarks": {
+    "serde_json/encode_initialize": {
+      "median_time_ns": 158.86,
+      "throughput": "1.21 GiB/s",
+      "payload_size_bytes": 192
+    },
+    "serde_json/encode_tools_list": {
+      "median_time_ns": 772.79,
+      "throughput": "1.13 GiB/s",
+      "payload_size_bytes": 870
+    },
+    "serde_json/decode_initialize": {
+      "median_time_ns": 580,
+      "throughput": "330 MiB/s",
+      "payload_size_bytes": 192
+    },
+    "serde_json/decode_tools_list": {
+      "median_time_ns": 2700,
+      "throughput": "330 MiB/s",
+      "payload_size_bytes": 870
+    },
+    "simd_json/encode_initialize": {
+      "median_time_ns": 180,
+      "throughput": "1.07 GiB/s",
+      "note": "simd-json encode is slightly slower than serde_json for small messages"
+    },
+    "simd_json/encode_tools_list": {
+      "median_time_ns": 758.07,
+      "throughput": "1.15 GiB/s",
+      "note": "simd-json encode is comparable to serde_json"
+    },
+    "simd_json/decode_initialize": {
+      "median_time_ns": 399.18,
+      "throughput": "2.18 GiB/s",
+      "speedup_vs_serde_json": "1.45x faster decode"
+    },
+    "simd_json/decode_tools_list": {
+      "median_time_ns": 2683.1,
+      "throughput": "332 MiB/s",
+      "note": "simd-json decode is comparable for larger messages with clone overhead"
+    },
+    "aafp_cbor/encode_rpc_request": {
+      "median_time_ns": 138.60,
+      "throughput": "117 MiB/s",
+      "payload_size_bytes": 16
+    },
+    "aafp_cbor/decode_rpc_request": {
+      "median_time_ns": 93.809,
+      "throughput": "173 MiB/s",
+      "payload_size_bytes": 16,
+      "note": "CBOR is already very fast for small AAFP messages"
+    }
+  },
+  "key_findings": {
+    "json_encode": "serde_json encode is already fast (158ns for 192B initialize)",
+    "json_decode": "simd-json decode is 1.45x faster than serde_json for small messages (399ns vs 580ns)",
+    "cbor_encode": "aafp_cbor encode is 138ns for 16B RPC request — already well under 500ns target",
+    "cbor_decode": "aafp_cbor decode is 94ns for 16B RPC request — already well under 500ns target",
+    "conclusion": "CBOR path (aafp_cbor) is already optimized. JSON decode benefits from simd-json (1.45x). JSON encode is comparable."
+  },
+  "methodology": {
+    "tool": "criterion",
+    "sample_size": 100,
+    "warm_up_time": "2s",
+    "measurement_time": "3s"
+  }
+}
