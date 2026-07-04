@@ -829,11 +829,16 @@ with multiple nodes, commit R1, then proceed to R2-R8.
         docker-compose.yml (3-agent relay setup). deploy/systemd/aafp-agent.service
         (resource limits, security hardening). deploy/kubernetes/aafp-agent.yaml
         (Deployment, Service, ConfigMap, Secret, PDB, HPA).)*
-- [ ] **S6** Operational runbook (key rotation, updates, debugging)
+- [x] **S6** Operational runbook (key rotation, updates, debugging)
+      *(COMPLETE — Created docs/OPERATIONS.md (key rotation, rolling updates,
+        scaling, debugging slow agent, security incident response, relay
+        management, DHT maintenance, backup and recovery) and
+        docs/TROUBLESHOOTING.md (connection issues, high latency, memory growth,
+        handshake failures, DHT lookup, crashes, relay, DCuTR, error messages).)*
 - [ ] **S7** Stress testing (burst, large messages, churn, DHT load)
 - [ ] **S8** Production readiness report
 
-**S status:** IN PROGRESS (S1-S5 COMPLETE, S6 next)
+**S status:** IN PROGRESS (S1-S6 COMPLETE, S7 next)
 **S blocked by:** Track N (NAT traversal — load test needs relay) — N COMPLETE
 **S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
 **S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`
