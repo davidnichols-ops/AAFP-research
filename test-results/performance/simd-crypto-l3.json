@@ -1,0 +1,55 @@
+{
+  "track": "L3",
+  "description": "SIMD-accelerated crypto verification (Apple M4, ARMv8 Crypto Extensions)",
+  "timestamp": "2026-07-03",
+  "platform": "macOS",
+  "cpu": "Apple M4",
+  "method": "criterion benchmark with and without --cfg aes_armv8",
+  "results": {
+    "aead_encrypt_1kb_chacha20": {
+      "median_time_ns": 1639,
+      "note": "ChaCha20-Poly1305 always uses SIMD — no cfg flag needed"
+    },
+    "aead_decrypt_1kb_chacha20": {
+      "median_time_ns": 1634
+    },
+    "aead_encrypt_1kb_aes256gcm_software": {
+      "median_time_ns": 5085,
+      "note": "Without aes_armv8 cfg flag — software AES (constant-time)"
+    },
+    "aead_decrypt_1kb_aes256gcm_software": {
+      "median_time_ns": 5080,
+      "note": "Without aes_armv8 cfg flag — software AES"
+    },
+    "aead_encrypt_1kb_aes256gcm_hardware": {
+      "median_time_ns": 1096,
+      "note": "With aes_armv8 cfg flag — hardware ARMv8 AES instructions",
+      "speedup_vs_software": "4.6x faster than software AES"
+    },
+    "aead_decrypt_1kb_aes256gcm_hardware": {
+      "median_time_ns": 1097,
+      "speedup_vs_software": "4.6x faster than software AES"
+    },
+    "aead_encrypt_64b_chacha20": {
+      "median_time_ns": 228,
+      "note": "Small message — ChaCha20-Poly1305"
+    },
+    "aead_encrypt_64b_aes256gcm_hardware": {
+      "median_time_ns": 230,
+      "note": "Small message — AES-256-GCM with hardware AES"
+    }
+  },
+  "key_findings": {
+    "hardware_aes_enabled": "Added --cfg aes_armv8 to .cargo/config.toml for aarch64-apple-darwin",
+    "aes256gcm_vs_chacha20_1kb": "AES-256-GCM with hardware AES is 1.5x faster than ChaCha20-Poly1305 for 1KB (1.09µs vs 1.64µs)",
+    "aes256gcm_vs_chacha20_64b": "Equal performance for 64B messages (~228-230ns)",
+    "software_aes_is_slow": "Without aes_armv8 cfg flag, AES-256-GCM is 3.1x SLOWER than ChaCha20-Poly1305 (5.08µs vs 1.64µs)",
+    "target_assessment": "The <0.3µs target for 1KB AEAD is not achievable — actual floor is 1.09µs with hardware AES. For 64B messages, both algorithms are ~230ns (under 300ns).",
+    "protocol_impact": "AAFP uses ChaCha20-Poly1305 by default. Switching to AES-256-GCM would give 1.5x speedup for 1KB+ messages but would be a wire protocol change — NOT recommended."
+  },
+  "configuration_change": {
+    "file": ".cargo/config.toml",
+    "content": "[target.aarch64-apple-darwin]\nrustflags = [\"--cfg\", \"aes_armv8\"]",
+    "rationale": "All Apple Silicon (M1-M4) has ARMv8 AES instructions. This enables hardware AES for the aes-gcm crate."
+  }
+}

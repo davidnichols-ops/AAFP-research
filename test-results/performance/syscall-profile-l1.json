@@ -1,0 +1,66 @@
+{
+  "track": "L1",
+  "description": "Syscall profile baseline (macOS, Apple M4, sample tool)",
+  "timestamp": "2026-07-03",
+  "platform": "macOS",
+  "cpu": "Apple M4",
+  "method": "sample (macOS process sampler, 5s sample during mcp_transport benchmark)",
+  "note": "dtrace requires sudo which is not available in this environment. Used 'sample' tool instead, which samples a running process by PID without requiring root.",
+  "benchmark": "mcp_transport_ping/round_trip",
+  "round_trip_time_us": 44.74,
+  "sample_duration_s": 5,
+  "total_samples": 3914,
+  "syscall_breakdown": {
+    "__psynch_cvwait": {
+      "samples": 3303,
+      "percentage": 84.4,
+      "description": "pthread condvar wait — tokio reactor parking/waiting for I/O events",
+      "implication": "This is the dominant cost — the worker thread is waiting for the I/O thread to signal readiness"
+    },
+    "__psynch_cvsignal": {
+      "samples": 57,
+      "percentage": 1.5,
+      "description": "pthread condvar signal — waking the I/O thread after QuicSendStream::write_all",
+      "implication": "Cross-thread signaling overhead — each write triggers a signal to the I/O thread"
+    },
+    "kevent": {
+      "samples": 41,
+      "percentage": 1.0,
+      "description": "kqueue event — tokio I/O polling (registering/waking for socket I/O)",
+      "implication": "kqueue is the macOS equivalent of epoll — used for async I/O readiness"
+    },
+    "__psynch_mutexdrop": {
+      "samples": 7,
+      "percentage": 0.2,
+      "description": "pthread mutex unlock — releasing tokio internal mutexes",
+      "implication": "Minimal mutex contention"
+    },
+    "quinn_proto_streams_write": {
+      "samples": 6,
+      "percentage": 0.2,
+      "description": "Actual QUIC stream write logic (quinn_proto)",
+      "implication": "The actual protocol processing is very fast — overhead is in scheduling"
+    }
+  },
+  "hot_path": "tokio::runtime::park::CachedParkThread::block_on → QuicSendStream::write_all → pthread_cond_signal + kevent",
+  "key_findings": {
+    "dominant_cost": "84% of time is spent in condvar wait (tokio reactor parking)",
+    "cross_thread_signaling": "Each write triggers pthread_cond_signal to wake the I/O thread — this is the multi-thread runtime overhead",
+    "actual_io_is_fast": "The QUIC protocol processing and actual sendto/recvfrom syscalls are too fast to appear in the sample",
+    "kqueue_overhead": "kevent (kqueue) appears in 1% of samples — I/O event registration",
+    "implication_for_L5": "The 84% condvar wait suggests current_thread runtime would eliminate cross-thread signaling, potentially saving 5-10µs per round-trip"
+  },
+  "estimated_syscalls_per_round_trip": {
+    "kevent": "1-2 (register + retrieve I/O events)",
+    "sendto": "1 (QUIC packet send)",
+    "recvfrom": "1 (QUIC packet receive)",
+    "pthread_cond_signal": "1-2 (wake I/O thread for send + receive)",
+    "pthread_cond_wait": "1-2 (park worker thread)",
+    "total_estimated": "5-8 syscalls per round-trip (including synchronization)"
+  },
+  "linux_alternatives": {
+    "dtrace": "sudo dtrace -n 'syscall:::entry /pid == $target/ { @[probefunc] = count() }' -c <cmd>",
+    "perf": "perf stat -e syscalls:sys_enter_* -p <pid>",
+    "strace": "strace -c -p <pid>"
+  }
+}

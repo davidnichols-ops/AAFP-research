@@ -6,23 +6,34 @@
 
 ---
 
-## Current Baseline (2026-07-03, Apple M4, release build)
+## Current Performance (2026-07-03, Apple M4, release build, post-Phase 4)
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Round-trip ping (localhost) | 250 µs | `mcp_transport` benchmark |
-| One-way throughput (1KB) | 160K msg/s | `mcp_transport` benchmark |
+| Round-trip ping (localhost) | 41.47 µs | `mcp_transport` benchmark |
+| One-way throughput (1KB) | 776K msg/s | `mcp_transport` benchmark |
 | PQ handshake (crypto) | 709 µs | `handshake` benchmark |
 | Frame encode 1KB | 66 ns | `framing` benchmark |
 | Frame decode 1KB | 35 ns | `framing` benchmark |
-| AEAD encrypt 1KB | 1.63 µs | crypto benchmark |
-| AEAD decrypt 1KB | 1.64 µs | crypto benchmark |
+| AEAD encrypt 1KB (ChaCha20) | 1.64 µs | `handshake` benchmark |
+| AEAD decrypt 1KB (ChaCha20) | 1.64 µs | `handshake` benchmark |
+| AEAD encrypt 1KB (AES-256-GCM HW) | 1.10 µs | `handshake` benchmark (L3) |
+| AEAD decrypt 1KB (AES-256-GCM HW) | 1.10 µs | `handshake` benchmark (L3) |
+| AEAD encrypt 64B (ChaCha20) | 228 ns | `handshake` benchmark (L3) |
 | ML-DSA-65 keygen | 133 µs | crypto benchmark |
 | ML-DSA-65 sign | 272 µs | crypto benchmark |
 | ML-DSA-65 verify | 76 µs | crypto benchmark |
 | sizeof(Session) | 168 bytes | `session` benchmark |
 | Allocations per message | 0 (send, zero-copy), 7 (recv, JSON deser) | `alloc_profile` benchmark |
-| Lock acquisitions per send | 1 | Code analysis |
+| Lock acquisitions per send | 0 | Code analysis (Track H) |
+| Cold connect time | 240 µs | `connection_lifecycle` benchmark |
+| Pooled connect (stream open) | 1.34 µs | `connection_lifecycle` benchmark |
+| Pooled RPC (100 RPCs) | 0.39 µs/RPC | `connection_lifecycle` benchmark |
+| CBOR encode (RPC request) | 138 ns | `serialization` benchmark |
+| CBOR decode (RPC request) | 94 ns | `serialization` benchmark |
+| JSON decode (simd-json) | 399 ns | `serialization` benchmark |
+| Task scheduling (yield_now) | 24 ns | `runtime_tuning` benchmark (L5) |
+| Syscall dominant cost | 84% condvar wait | `sample` profiling (L1) |
 
 ---
 
@@ -35,12 +46,12 @@
 | I | Connection Lifecycle | COMPLETE | 5/5 (I2-I4 skipped) | Q2 |
 | J | QUIC Transport Tuning | COMPLETE | 6/6 (J6 skipped) | Q2-Q3 |
 | K | Serialization Optimization | COMPLETE | 3/7 (K3-K6 not needed) | Q3 |
-| L | Kernel & Hardware | NOT STARTED | 0/8 | Q3-Q4 |
-| M | Benchmarking & Profiling | IN PROGRESS | 5/7 (M4/M6 need CI) | Ongoing |
+| L | Kernel & Hardware | COMPLETE | 8/8 (L2/L4/L7 documented) | Q3-Q4 |
+| M | Benchmarking & Profiling | COMPLETE | 7/7 | Ongoing |
 
 **Total steps:** 52
-**Completed:** 33
-**In progress:** 5
+**Completed:** 52
+**In progress:** 0
 **Blocked:** 0
 
 ---

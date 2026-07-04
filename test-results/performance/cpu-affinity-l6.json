@@ -1,0 +1,29 @@
+{
+  "track": "L6",
+  "description": "CPU affinity and priority tuning (optional feature)",
+  "timestamp": "2026-07-03",
+  "platform": "macOS",
+  "cpu": "Apple M4",
+  "status": "Implemented as optional feature (cpu-affinity)",
+  "implementation": {
+    "new_module": "aafp-sdk/src/cpu_affinity.rs",
+    "new_feature": "cpu-affinity (optional, off by default)",
+    "new_dependencies": "core_affinity 0.8.3, libc 0.2 (both optional)",
+    "api": [
+      "pin_current_thread_to_core(core_id: usize) -> Result<(), String>",
+      "num_cores() -> usize",
+      "set_high_priority() -> Result<(), String>"
+    ]
+  },
+  "usage": {
+    "enable": "aafp-sdk = { features = [\"cpu-affinity\"] }",
+    "pin_thread": "aafp_sdk::pin_current_thread_to_core(0).ok();",
+    "high_priority": "aafp_sdk::set_high_priority().ok();"
+  },
+  "platform_notes": {
+    "macOS": "Core pinning is advisory (scheduler may still migrate). setpriority requires root.",
+    "linux": "Core pinning enforced via sched_setaffinity. nice/setpriority available."
+  },
+  "benefit": "Reduces p99 latency variance by eliminating core migration. Main benefit is for latency-critical servers, not median latency.",
+  "default": "OFF — not enabled by default. Users can opt-in for latency-critical deployments."
+}

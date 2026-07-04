@@ -1,0 +1,87 @@
+{
+  "track": "L8",
+  "description": "End-to-end kernel/hardware benchmark (final)",
+  "timestamp": "2026-07-03",
+  "platform": "macOS",
+  "cpu": "Apple M4",
+  "configuration": {
+    "runtime": "multi_thread (default, 2MB stack)",
+    "quic": "QuicConfig::default() with BBR congestion control",
+    "crypto": "ChaCha20-Poly1305 (default), hardware AES enabled via .cargo/config.toml",
+    "simd_json": "enabled for MCP decode",
+    "buffer_pool": "enabled (Track G)",
+    "connection_pool": "enabled (Track I)",
+    "lock_free": "channel-based send/recv (Track H)"
+  },
+  "results": {
+    "round_trip_ping": {
+      "median_time_us": 41.47,
+      "target_us": 30.0,
+      "target_met": false,
+      "note": "41.47µs — did not meet <30µs target. The 12µs gap is dominated by QUIC protocol processing and kqueue I/O overhead, not crypto or scheduling."
+    },
+    "aead_encrypt_1kb_chacha20": {
+      "median_time_ns": 1646,
+      "note": "ChaCha20-Poly1305 (default algorithm) — uses SIMD"
+    },
+    "aead_decrypt_1kb_chacha20": {
+      "median_time_ns": 1637
+    },
+    "aead_encrypt_1kb_aes256gcm": {
+      "median_time_ns": 1095,
+      "note": "AES-256-GCM with hardware ARMv8 AES — 1.5x faster than ChaCha20"
+    },
+    "aead_decrypt_1kb_aes256gcm": {
+      "median_time_ns": 1096
+    },
+    "aead_encrypt_64b_chacha20": {
+      "median_time_ns": 228,
+      "note": "Small message (64B) — under 300ns target"
+    },
+    "aead_encrypt_64b_aes256gcm": {
+      "median_time_ns": 230
+    },
+    "one_way_send_10": {
+      "median_time_us": 27.4,
+      "throughput_msg_per_s": 365000
+    },
+    "one_way_send_100": {
+      "median_time_us": 128.8,
+      "throughput_msg_per_s": 776000
+    },
+    "one_way_send_1000": {
+      "median_time_us": 1331,
+      "throughput_msg_per_s": 751000
+    }
+  },
+  "runtime_comparison": {
+    "multi_thread_round_trip_us": 41.48,
+    "current_thread_round_trip_us": 44.87,
+    "winner": "multi_thread (8.2% faster for QUIC)",
+    "reason": "Quinn uses background I/O threads; multi_thread lets I/O thread handle kqueue while worker runs app logic"
+  },
+  "syscall_profile": {
+    "dominant_cost": "84% condvar wait (tokio reactor parking)",
+    "kevent_samples": "1% of total",
+    "actual_io_fast": "QUIC protocol processing too fast to appear in sample",
+    "estimated_syscalls_per_round_trip": "5-8 (including synchronization)"
+  },
+  "target_assessment": {
+    "round_trip_target": "<30µs — NOT MET (41.47µs)",
+    "aead_1kb_target": "<0.3µs — NOT MET for 1KB (1.10µs with hardware AES), MET for 64B (228ns)",
+    "syscall_target": "<2 per message — NOT MEASURABLE precisely (dtrace requires sudo)",
+    "scheduling_target": "<1µs — MET for yield_now (24ns on multi_thread)"
+  },
+  "remaining_bottleneck_analysis": {
+    "primary": "QUIC protocol processing (quinn_proto) — frame encoding, ACK processing, flow control",
+    "secondary": "kqueue I/O overhead — kevent registration and polling",
+    "tertiary": "TLS record layer — even with hardware AES, TLS framing adds overhead",
+    "not_bottleneck": "Crypto (1.1µs AEAD), serialization (138ns CBOR), scheduling (24ns yield), allocations (0/msg send)"
+  },
+  "cumulative_improvement": {
+    "original_baseline_us": 250,
+    "final_us": 41.47,
+    "improvement_factor": "6.0x",
+    "tracks_contributing": "G (zero-copy), H (lock-free), I (connection pool), J (QUIC tuning), K (simd-json), L (hardware AES)"
+  }
+}

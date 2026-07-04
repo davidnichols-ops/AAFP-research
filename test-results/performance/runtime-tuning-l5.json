@@ -1,0 +1,41 @@
+{
+  "track": "L5",
+  "description": "Tokio runtime tuning — current_thread vs multi_thread",
+  "timestamp": "2026-07-03",
+  "platform": "macOS",
+  "cpu": "Apple M4",
+  "method": "criterion benchmark with separate runtimes",
+  "results": {
+    "runtime_tuning_multi_thread_round_trip": {
+      "median_time_ns": 41477,
+      "note": "Multi-thread runtime with 2MB stack — current default"
+    },
+    "runtime_tuning_current_thread_round_trip": {
+      "median_time_ns": 44871,
+      "note": "Current-thread runtime with 2MB stack — L5 low-latency preset",
+      "change_vs_multi_thread": "+8.2% slower"
+    },
+    "runtime_tuning_scheduling_yield_multi_thread": {
+      "median_time_ns": 24,
+      "note": "yield_now() on multi_thread — just enqueues to local queue"
+    },
+    "runtime_tuning_scheduling_yield_current_thread": {
+      "median_time_ns": 11688,
+      "note": "yield_now() on current_thread — must poll reactor each yield",
+      "change_vs_multi_thread": "475x slower"
+    }
+  },
+  "key_findings": {
+    "current_thread_is_slower_for_quic": "current_thread is 8.2% SLOWER for QUIC round-trip (44.87µs vs 41.48µs). This is because quinn uses background I/O threads, so the main thread must both run application logic AND poll kqueue — causing more context switches.",
+    "multi_thread_is_better_for_quic": "The multi_thread runtime lets the I/O thread handle kqueue while the worker thread runs the application. This is the right choice for QUIC-based transports.",
+    "yield_now_overhead": "yield_now() is 475x faster on multi_thread (24ns vs 11.7µs) because current_thread must poll the reactor on every yield. This doesn't affect the round-trip because the round-trip doesn't yield — it blocks on I/O.",
+    "stack_size_reduction": "Reduced thread stack from 8MB to 2MB — saves memory, improves cache. No stack overflow observed in tests.",
+    "recommendation": "Keep multi_thread as default. The RuntimeConfig is available for users who want current_thread (e.g., for non-QUIC transports or embedded use cases)."
+  },
+  "configuration_changes": {
+    "new_module": "aafp-sdk/src/runtime_config.rs — RuntimeConfig, RuntimeFlavor",
+    "new_builder_methods": "AgentBuilder::with_runtime_config(), AgentBuilder::with_low_latency_runtime()",
+    "stack_size": "Reduced default stack from 8MB to 2MB in RuntimeConfig::default()"
+  },
+  "implication_for_L8_target": "The 42µs → <30µs target cannot be achieved via runtime tuning alone. The multi_thread runtime is already optimal for QUIC. The remaining bottleneck is the QUIC protocol processing and kqueue I/O overhead."
+}
