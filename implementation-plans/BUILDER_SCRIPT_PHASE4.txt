@@ -1,0 +1,764 @@
+================================================================================
+AAFP PERFORMANCE OPTIMIZATION — BUILDER PROMPT (PHASE 4)
+================================================================================
+Date: 2026-07-03 (continuation)
+Project: AAFP (Agent-to-Agent Framing Protocol)
+Repo: /Users/david/projects/AAFP-research
+GitHub: https://github.com/davidnichols-ops/AAFP-research
+Rust submodule: https://github.com/davidnichols-ops/aafp
+
+================================================================================
+SECTION 1: WHAT HAPPENED IN PHASES 1, 2, AND 3
+================================================================================
+
+Phase 1 completed Track G (Zero-Copy Data Path) — all 8 steps — plus
+M1 (Benchmark Harness) and M3 (Allocation Tracking).
+
+Phase 2 completed Track H (Lock-Free Concurrency) — all 7 steps — plus
+M2 (Flamegraph Integration) and I1 (TLS Session Ticket Cache).
+I2-I4 (0-RTT resumption) were SKIPPED by user decision — they require
+a wire protocol change (RFC amendment) because the AAFP handshake
+provides ML-DSA-65 identity verification that TLS resumption doesn't.
+
+Phase 3 completed:
+  - Track I (remaining): I5 (connection pool), I6 (connection migration
+    via quinn rebind), I7 (adaptive keep-alive), I8 (end-to-end benchmark)
+  - Track J (QUIC Transport Tuning): J1-J5 (BBR, RTT, ACK, stream window,
+    GSO), J6 skipped (quinn doesn't support multi-path), J7 (benchmark)
+  - Track K (Serialization): K1 (baseline), K2 (simd-json for MCP decode),
+    K3-K6 not needed (aafp_cbor already faster than minicbor, CBOR decode
+    is 94ns — under 200ns target)
+  - Track M: M5/M7 (enhanced performance dashboard)
+
+33 of 52 total steps done. All work committed and pushed to GitHub.
+
+Commits (rust submodule, newest first):
+  7921977  perf(k1-k2): serialization baseline + simd-json for MCP decode
+  2f4361f  perf(j7): end-to-end QUIC tuning benchmark — 1.34µs stream open
+  186b610  perf(j1-j5): QUIC transport tuning — BBR, RTT, ACK, stream window, GSO
+  29276d1  perf(i-8): end-to-end connection lifecycle benchmark — 607x pool speedup
+  d0f57f7  perf(i-7): adaptive keep-alive — 30s→60s stable, 10s unstable
+  7d12c70  perf(i-6): connection migration via quinn rebind
+  e4c0b71  perf(i-5): connection pool — 17x faster repeated RPCs
+  04f813f  perf(i-1): TLS session ticket cache + rustls session resumption
+  2eecf57  perf(h-7): end-to-end lock-free benchmark -- 1.25M msg/s
+  7324ebf  perf(h-6): ConnectionHandle + concurrency model documentation
+  ec12c86  perf(h-5): lock-free DHT reads via ArcSwap
+  045c283  perf(h-4): shard DHT 256-way with per-shard RwLock
+  f4dbdcf  perf(h-3): lock-free receive path via spawn_reader() + channel
+  841c5da  perf(h-2): replace send Mutex with mpsc channel + writer task
+  05c8a38  perf(h-1): benchmark lock contention baseline (1,2,4,8 senders)
+  32bd225  perf(g-7,g-8): zero-copy raw JSON send/recv + end-to-end verification
+  11acc73  perf(g-5,g-6): zero-copy MCP transport send and receive paths
+  08b6b31  perf(g-3,g-4): zero-copy frame encode and decode
+  68643a0  perf(g-2): implement BytesMut buffer pool
+  cdabeff  perf(m1,m3,g1): benchmark harness + allocation tracking + baseline
+
+================================================================================
+SECTION 2: CURRENT PERFORMANCE NUMBERS (post-Tracks G+H+I+J+K)
+================================================================================
+
+MEASURED on Apple M4, release build, after all completed tracks:
+
+  Round-trip ping (localhost):     42.4 µs   (was 250 µs — 5.9x improvement)
+  One-way throughput (lock-free):  1.25M msg/s (target was 800K — 1.56x)
+  Send path allocations:           0 per msg  (was 2 — 100% eliminated)
+  Recv path allocations:           7 per msg  (JSON Value tree — simd-json
+                                                helps decode but Value tree
+                                                still allocates. Track L won't
+                                                fix this; it's a serde issue.)
+  Cold connect time:               240 µs     (full TLS + PQ KEX handshake)
+  Pooled connect (stream open):    1.34 µs    (was 14µs pre-J — J tuning helped)
+  Pooled RPC (100 RPCs):           0.39 µs/RPC (607x faster than no pool)
+  Connection migration (rebind):   14.31 µs   (quinn endpoint rebind)
+  Lock acquisitions per send:      0          (was 1 — eliminated by H2)
+  DHT reads:                       lock-free  (ArcSwap, H5)
+  CBOR encode (RPC request):       138 ns     (already fast — K3-K6 not needed)
+  CBOR decode (RPC request):       94 ns      (already under 200ns target)
+  JSON decode (simd-json):         399 ns     (1.45x faster than serde_json)
+  BBR vs Cubic (small msg):        435µs vs 454µs (4% improvement)
+  NewReno (localhost):             368 µs     (fastest — no congestion to manage)
+  Tests:                           1254 pass, 0 failures
+  Clippy:                          clean
+  Fmt:                             clean
+
+Track I (Connection Lifecycle) results:
+  - Connection pool: 607x speedup for repeated RPCs (0.39µs vs 237µs)
+  - Connection migration: 14.31µs (quinn rebind — works for NAT rebinding)
+  - Adaptive keep-alive: 30s→60s stable, 10s unstable, close after 3 misses
+  - I2-I4 (0-RTT) skipped — requires wire protocol change
+
+Track J (QUIC Transport Tuning) results:
+  - BBR congestion control (CongestionController enum: Cubic/NewReno/BBR)
+  - initial_rtt 10ms (from quinn's 333ms default)
+  - max_ack_delay 5ms (from 25ms) via AckFrequencyConfig
+  - stream_receive_window 1MB (from 100KB)
+  - crypto_buffer_size 8KB
+  - GSO automatic via quinn's max_gso_segments()
+  - New presets: QuicConfig::low_latency() (BBR), QuicConfig::bulk_transfer() (Cubic)
+  - J6 (multi-path) skipped — quinn doesn't support it natively
+
+Track K (Serialization) results:
+  - simd-json 0.14.3 added for MCP decode (1.45x faster than serde_json)
+  - aafp_cbor already fast (138ns encode, 94ns decode) — K3-K6 not needed
+  - Zero-copy path keeps serde_json (immutable Bytes can't use simd-json)
+
+================================================================================
+SECTION 3: WHAT TO DO IN PHASE 4
+================================================================================
+
+The remaining work:
+
+  1. Track L (Kernel & Hardware) — 8 steps — THE MAIN FOCUS
+     - This is the "last mile" optimization track.
+     - Targets: <30µs round-trip, <0.3µs AEAD, <2 syscalls/msg, <1µs scheduling
+     - Several steps are platform-specific (Linux-only for io_uring, etc.)
+     - L7 (XDP/DPDK) is a research step — may be skipped
+
+  2. Track M (remaining): M4 (CI benchmark regression), M6 (cross-platform)
+     - M4: GitHub Actions workflow that runs benchmarks on push, detects
+       >10% regressions, posts comment on commit
+     - M6: Cross-platform benchmark matrix (macOS ARM64 + Linux x86_64)
+     - These can run in parallel with Track L via subagent
+
+  3. Final performance report and dashboard update
+
+================================================================================
+SECTION 4: TRACK L — KERNEL & HARDWARE OPTIMIZATION (DETAILED)
+================================================================================
+
+File: implementation-plans/track-l-kernel-hardware/L-kernel-hardware.md
+READ THIS FILE before starting. It has all 8 steps with verification criteria.
+
+Track L is the "last mile" — after eliminating allocations (G), locks (H),
+connection overhead (I), QUIC tuning (J), and serialization (K), the remaining
+latency comes from:
+  1. Syscall overhead (~1-2µs per write/read)
+  2. Crypto overhead (AEAD 1.6µs per 1KB — SIMD can make it 5-10x faster)
+  3. Memory bandwidth (kernel↔user copies)
+  4. Scheduler latency (tokio task wake/notify: 1-10µs)
+
+### L1: Profile syscall overhead
+- Use `dtrace` (macOS) or `perf` (Linux) to count syscalls per message round-trip
+- Expected: 2-4 syscalls per message (write, read, epoll_wait, epoll_ctl)
+- Measure syscall time: write() ~1µs, read() ~1µs, epoll_wait ~0.5µs
+- Write results to test-results/performance/syscall-profile.json
+- **VERIFY:** Baseline syscall count and time per message
+
+IMPORTANT FOR L1:
+- macOS: use `sudo dtrace -n 'syscall:::entry /pid == $target/ { @[probefunc] = count() }' -c <cmd>`
+  OR use `Instruments` (System Trace template)
+- Linux: use `perf stat -e syscalls:sys_enter_* -p <pid>` or `strace -c`
+- The benchmark binary is: target/release/mcp_transport-<hash>
+  Run `cargo bench --bench mcp_transport --no-run` to find the exact path
+- This is a MEASUREMENT step — no code changes, just profiling and recording
+- If dtrace requires sudo and you can't get it, document the limitation
+  and use an alternative (e.g., count syscalls via ltrace, or estimate
+  from flamegraph)
+
+### L2: Enable recvmmsg / sendmmsg batching (Linux)
+- Quinn uses recvmmsg() on Linux for batch packet reception (VERIFY this)
+- If not enabled, configure Endpoint to use batch receive
+- sendmmsg() allows sending multiple UDP packets in one syscall
+- For high-throughput (1000+ msg/s), this reduces syscalls by 10-100x
+- **VERIFY:** Syscall count per 1000 messages drops from ~4000 to ~40
+
+IMPORTANT FOR L2:
+- This is LINUX-ONLY. macOS doesn't have recvmmsg/sendmmsg.
+- Check quinn source: does it already use recvmmsg?
+  Look in quinn-0.11.* src/ for `recvmmsg` or `sendmmsg` or `sendmmsg`
+- If quinn already uses it, this step is a no-op — document and move on
+- If not, this may require patching quinn or using a custom UDP socket
+  implementation. If it's too complex, SKIP and document why.
+- On macOS, this step is N/A — document that macOS uses kqueue which
+  is already efficient for single-packet reads.
+
+### L3: SIMD-accelerated crypto
+- Verify aws-lc-rs uses AES-NI / ARM Crypto Extensions
+- Benchmark AEAD with SIMD vs without
+- aws-lc-rs should already use hardware AES on Apple M4 (ARMv8 Crypto Extensions)
+- Verify by checking aws-lc-rs build features
+- If SIMD is not being used, enable it:
+  - ARM64: AWS_LC_RS_ARM_CRYPTO_EXTENSIONS=1 at build time
+  - x86_64: AWS_LC_RS_AES_NI=1 at build time
+- For SHA-256: verify aws-lc-rs uses SHA-NI / ARM SHA2 extensions
+- **VERIFY:** AEAD encrypt 1KB: <0.3µs (from 1.6µs). SHA-256 1KB: <0.1µs
+
+IMPORTANT FOR L3:
+- aws-lc-rs is built with `features = ["aws-lc-rs"]` in rustls
+- On Apple M4 (ARMv8), hardware AES and SHA-256 should be automatic
+- Check: `aws-lc-rs` crate documentation for feature flags
+- The AEAD benchmark already exists in the crypto benchmark
+- Current: AEAD encrypt 1KB = 1.63µs, decrypt = 1.64µs
+- Target: <0.3µs — this is a 5x improvement
+- If aws-lc-rs already uses SIMD (likely on M4), the improvement may
+  be smaller than expected. Document what you find.
+- Consider: the 1.6µs may already include SIMD. The target of <0.3µs
+  may be unrealistic for 1KB on M4. If so, document the actual
+  achievable number and update the target.
+
+KEY FILES FOR L3:
+  implementations/rust/crates/aafp-crypto/src/aead.rs
+    - AEAD encrypt/decrypt functions
+  implementations/rust/crates/aafp-benchmark/benches/handshake.rs
+    - Crypto benchmarks (AEAD, SHA-256, ML-DSA-65)
+  implementations/rust/Cargo.toml
+    - aws-lc-rs = "1", rustls features
+
+### L4: io_uring integration (Linux only)
+- Evaluate tokio-uring for Linux io_uring support
+- io_uring allows batched, asynchronous syscalls without context switches
+- For the QUIC socket: readv / writev via io_uring submission queue
+- Expected: 2-5x reduction in syscall overhead
+- NOTE: This is Linux-only. macOS uses kqueue which is already efficient.
+- **VERIFY:** Linux benchmark shows 2-5x lower syscall overhead vs standard tokio
+
+IMPORTANT FOR L4:
+- This is LINUX-ONLY. On macOS, SKIP this step and document that
+  macOS uses kqueue (already efficient, no io_uring equivalent).
+- io_uring + QUIC is non-trivial. Quinn uses its own UDP socket I/O
+  loop that may not be compatible with tokio-uring.
+- If integration is too complex or requires forking quinn, SKIP and
+  document why. This is an advanced/research step.
+- If you skip L4, the syscall reduction from L2 (if applicable) and
+  the runtime tuning from L5 may be sufficient.
+
+### L5: Tokio runtime tuning
+- Current: tokio::runtime::Builder::new_multi_thread().enable_all()
+- Tuning options:
+  - worker_threads(n): Set to physical core count (not hyperthread count)
+  - disable_block_in_place(): Prevent blocking the reactor
+  - thread_stack_size(2 * 1024 * 1024): Reduce from default 8MB
+    (saves memory, better cache)
+  - max_blocking_threads(512): Limit blocking thread pool
+- For ultra-low latency: consider current_thread runtime (no cross-core
+  scheduling)
+- **VERIFY:** Runtime benchmark shows lower task scheduling latency
+
+IMPORTANT FOR L5:
+- This is the most impactful step on macOS (where L2/L4 are N/A).
+- The current runtime is multi-thread. For localhost RPC, a
+  current_thread runtime may be faster (no cross-core scheduling).
+- Test both: multi_thread with worker_threads=1 vs current_thread
+- The AgentBuilder creates the runtime. Check:
+  implementations/rust/crates/aafp-sdk/src/builder.rs
+- Make runtime config configurable via QuicConfig or a new RuntimeConfig
+- Don't force a single runtime — let the user choose. Default should
+  remain multi_thread for compatibility.
+
+KEY FILES FOR L5:
+  implementations/rust/crates/aafp-sdk/src/builder.rs
+    - AgentBuilder, runtime creation
+  implementations/rust/crates/aafp-benchmark/benches/mcp_transport.rs
+    - Benchmark runtime (currently multi_thread)
+  implementations/rust/crates/aafp-transport-quic/src/config.rs
+    - QuicConfig (may want to add runtime config here or separate)
+
+### L6: Affinity and priority tuning
+- Pin tokio worker threads to specific CPU cores (core_affinity crate)
+- Set process priority to high (nice -10 on Linux, renice on macOS)
+- Disable CPU frequency scaling (governor = performance on Linux)
+- These eliminate frequency scaling and core migration latency
+- **VERIFY:** Benchmark variance is reduced (p99 closer to p50)
+
+IMPORTANT FOR L6:
+- core_affinity crate: check if it's maintained, published >7 days
+  before adding as dependency
+- On macOS, core pining is advisory (not guaranteed by the scheduler)
+- Process priority: on macOS, `setpriority(PRIO_PROCESS, 0, -10)`
+  requires root or specific entitlements
+- Make this OPTIONAL — a config flag, not default behavior
+- The main benefit is reduced p99 variance, not lower median
+
+### L7: XDP / DPDK evaluation (research)
+- Research whether XDP (eXpress Data Path) or DPDK can be used with QUIC
+- XDP allows packet processing in the kernel's eBPF layer (before socket)
+- DPDK allows packet processing entirely in userspace (kernel bypass)
+- Challenge: QUIC requires UDP socket semantics. XDP/DPDK bypass sockets.
+- Approach: Evaluate quiche with XDP support, or custom UDP via AF_XDP
+- Outcome: Research step. If feasible, create a detailed plan. If not,
+  document why and skip.
+- **VERIFY:** Research report with feasibility assessment
+
+IMPORTANT FOR L7:
+- This is a RESEARCH step. No code changes needed.
+- Write a short report to test-results/performance/xdp-dpdk-feasibility.md
+- Key questions:
+  1. Does quiche support XDP? (Check quiche repo / issues)
+  2. Is there a Rust AF_XDP crate? (Check crates.io)
+  3. What's the complexity of integrating with quinn?
+  4. Is the benefit worth the complexity for AAFP's use case?
+- If the answer is "not feasible" or "too complex for the benefit",
+  document that and skip. This is expected — L7 is exploratory.
+
+### L8: End-to-end kernel/hardware benchmark
+- Benchmark with all optimizations enabled:
+  1. Localhost round-trip (target: <30µs)
+  2. AEAD encrypt/decrypt 1KB (target: <0.3µs or documented actual)
+  3. Syscall count per message (target: <2 or documented actual)
+  4. Task scheduling latency (target: <1µs)
+- Write results to test-results/performance/kernel-hardware.json
+- Update PERFORMANCE_STATUS.md
+- **VERIFY:** Localhost round-trip <30µs (from 250µs original, 42µs post G+H+I+J+K)
+
+IMPORTANT FOR L8:
+- The current round-trip is 42µs. Target is <30µs.
+- The 12µs gap must come from L5 (runtime tuning) and L3 (crypto SIMD).
+- If the target isn't met, document what was achieved and what the
+  remaining bottleneck is.
+- Extend the existing connection_lifecycle.rs or mcp_transport.rs
+  benchmark — don't create a new one unless needed.
+
+================================================================================
+SECTION 5: TRACK M (REMAINING STEPS)
+================================================================================
+
+File: implementation-plans/track-m-benchmarking/M-benchmarking-profiling.md
+
+M4 and M6 are the remaining steps. They can run in parallel with Track L
+via a subagent.
+
+### M4: CI benchmark regression detection
+- Create .github/workflows/benchmark.yml:
+  - Runs on every push to master (not PRs — too slow for PRs)
+  - Runs all benchmarks, stores results as artifacts
+  - Compares against previous commit's results
+  - If any benchmark regresses by >10%, marks the workflow as failed
+  - Posts a comment on the commit with the regression details
+- Use critcmp or custom comparison logic
+- **VERIFY:** A deliberate 10% regression is detected by CI
+
+IMPORTANT FOR M4:
+- The existing CI is in .github/workflows/rust-ci.yml (fmt, clippy, build, test)
+- The benchmark workflow should be SEPARATE (benchmark.yml)
+- Benchmarks are slow (5-10 min) — don't run on PRs
+- Use GitHub Actions artifacts to store benchmark results between runs
+- For comparison: download previous artifact, compare JSON results
+- critcmp may not work with our custom JSON format — may need custom
+  comparison script
+- The 10% threshold should be configurable
+- Consider: benchmarks on CI runners are noisy. Use a high threshold
+  (20%?) or run multiple times and take median
+
+### M6: Cross-platform benchmark runner
+- Create scripts/benchmark-matrix.sh that runs benchmarks on:
+  - macOS ARM64 (Apple Silicon) — local
+  - Linux x86_64 — CI runner
+  - (Optional: Linux ARM64 — if CI runner available)
+- Store results in test-results/performance/<platform>/
+- Generate cross-platform comparison report
+- **VERIFY:** Benchmark results exist for both macOS ARM64 and Linux x86_64
+
+IMPORTANT FOR M6:
+- The CI already runs on both ubuntu-latest and macos-latest
+- The benchmark workflow (M4) can be extended to run on both platforms
+- Store results in platform-specific directories
+- The dashboard (M7, already done) should be updated to show
+  cross-platform comparison if both platforms have data
+
+================================================================================
+SECTION 6: CURRENT STATE OF KEY FILES
+================================================================================
+
+QUIC Transport (post-Track J):
+  implementations/rust/crates/aafp-transport-quic/src/
+    - config.rs: QuicConfig with low_latency() and bulk_transfer() presets
+      initial_rtt=10ms, max_idle_timeout=30s, max_ack_delay=5ms,
+      crypto_buffer_size=8KB, stream_receive_window=1MB
+      keep_alive_interval=30s (I7 makes this adaptive)
+    - congestion.rs: CongestionController enum (Cubic/NewReno/BBR)
+      apply_to_transport_config() method
+    - transport.rs: QuicTransport
+      new() — no resumption (backward compat)
+      new_with_resumption() — with TLS session cache (I1)
+      dial() — uses cached config if resumption enabled
+    - session_cache.rs: SessionCache (I1)
+    - buffer_pool.rs: BytesMut buffer pool (Track G)
+
+MCP Transport (post-Tracks G+H+K):
+  implementations/rust/crates/aafp-transport-mcp/src/lib.rs
+    - Channel-based send (H2) and receive (H3)
+    - ConnectionHandle (H6): clonable, lock-free send
+    - simd-json for decode (K2), serde_json fallback
+    - Zero-copy raw JSON send/recv (G7-G8)
+
+SDK (post-Track I):
+  implementations/rust/crates/aafp-sdk/src/
+    - client.rs: AgentClient with connection pool (I5)
+    - connection_pool.rs: ConnectionPool, PooledConnection (I5)
+    - server.rs: AgentServer
+    - transport_binding.rs: establish_session()
+    - handshake_driver.rs: drive_client/server_handshake
+    - builder.rs: AgentBuilder (runtime creation — L5 will modify)
+
+Crypto:
+  implementations/rust/crates/aafp-crypto/src/
+    - aead.rs: AEAD encrypt/decrypt (L3 will verify SIMD)
+    - handshake_v1.rs: AAFP v1 handshake messages
+    - replay_cache.rs: ReplayCache (A-9)
+
+Benchmark infrastructure:
+  implementations/rust/crates/aafp-benchmark/benches/
+    - mcp_transport.rs (round-trip ping, throughput)
+    - lock_contention.rs (H1 baseline, H2 channel, H7 ConnectionHandle)
+    - connection_lifecycle.rs (I1/I8 cold/warm/pooled/migration)
+    - quic_tuning.rs (J7 BBR/Cubic/NewReno, stream open)
+    - serialization.rs (K1 serde_json/simd-json/aafp_cbor)
+    - alloc_profile.rs (allocation profiling)
+    - framing.rs, handshake.rs, session.rs, discovery.rs, etc.
+
+  test-results/performance/
+    - 12 JSON result files from all tracks
+    - generate_dashboard.py (M5/M7 — enhanced dashboard)
+
+CI:
+  .github/workflows/
+    - rust-ci.yml (fmt, clippy, build, test — both ubuntu and macos)
+    - go-ci.yml (Go implementation CI)
+    - (M4 will add benchmark.yml)
+
+================================================================================
+SECTION 7: LESSONS LEARNED FROM PHASES 1, 2, AND 3
+================================================================================
+
+1. #[global_allocator] can only be declared once per binary.
+   - Don't put it in library code (except #[cfg(test)] modules)
+   - Put it in benchmark binaries and test modules
+
+2. Criterion sample_size must be >= 10.
+   - sample_size=3 causes panic: "assertion failed: num_size >= 10"
+
+3. Doc tests compile as separate binaries.
+   - Don't use serde_json in doc tests for crates that don't depend on it
+
+4. Tokio Mutex in tests can cause 30s timeouts when run in parallel.
+   - The TRACKING_MUTEX in alloc_tracker serializes tracking operations
+
+5. git pull --rebase is needed before pushing if the remote has new commits.
+   - Always run: git pull --rebase origin master && git push origin master
+
+6. The buffer pool works best when warmed up before measurement.
+
+7. serde_json::from_slice::<Value> allocates the JSON Value tree (7 allocs).
+   - simd-json helps decode speed (1.45x) but doesn't eliminate allocations
+   - The Value tree is the fundamental issue — need zero-copy deserialization
+   - Track L won't fix this; it's a serde architecture issue
+
+8. Track H exceeded expectations (1.25M vs 800K target).
+   - The lock-free path eliminated contention entirely.
+   - The bottleneck shifted to writer task I/O (expected).
+
+9. Connection handle tests need to drop handles before closing transport.
+   - The writer/reader tasks hold references via channels.
+   - Drop all ConnectionHandle clones before calling Transport::close().
+
+10. iter_custom() is needed for criterion benchmarks that include setup.
+    - iter() measures the entire closure including setup.
+    - iter_custom() lets you return a Duration for just the measured part.
+
+11. QuicTransport::new() builds a fresh ClientConfig per dial() call.
+    - I1 fixed this by caching the config with a shared SessionCache.
+
+12. 0-RTT resumption requires wire protocol changes for AAFP.
+    - The AAFP handshake provides ML-DSA-65 identity verification.
+    - Connection pooling (I5) is a better approach (607x speedup).
+
+13. Quinn doesn't support multi-path QUIC natively (J6 skipped).
+    - Connection migration via endpoint rebind works (I6 — 14.31µs).
+    - Multi-path (using multiple paths simultaneously) is not supported.
+
+14. aafp_cbor is already faster than minicbor (K3-K6 not needed).
+    - CBOR encode: 138ns, decode: 94ns — already under targets.
+    - Don't switch serialization libraries if the current one is fast enough.
+
+15. simd-json requires mutable input for deserialization.
+    - Zero-copy path (immutable Bytes) can't use simd-json.
+    - Keep serde_json fallback for zero-copy path.
+
+16. NewReno is fastest on localhost (no congestion to manage).
+    - BBR shows 4% improvement over Cubic for small messages.
+    - For localhost RPC, NewReno may be the best choice.
+    - For WAN, BBR is better (handles variable bandwidth).
+
+17. Connection pool delivers 607x speedup for repeated RPCs.
+    - 0.39µs per RPC (stream open) vs 237µs (full handshake).
+    - This is the single biggest optimization in Track I.
+
+18. Adaptive keep-alive reduces overhead for stable connections.
+    - 30s→60s after 3 consecutive PONGs (stable connection).
+    - 10s after missed PONG (unstable connection).
+    - Close after 3 missed PONGs (peer is gone).
+
+================================================================================
+SECTION 8: EXECUTION PROCEDURE (SAME AS PREVIOUS PHASES)
+================================================================================
+
+For EVERY step:
+
+1. READ the step in the track plan file
+2. BASELINE: Run the relevant benchmark BEFORE any changes. Save numbers.
+3. IMPLEMENT: Write the code. Add tests.
+4. VERIFY: Run benchmark AGAIN. Compare to baseline.
+5. TEST: cargo test --workspace (0 failures expected — currently 1254)
+6. LINT: cargo clippy --workspace -- -D warnings (clean)
+7. FMT: cargo fmt --all -- --check (clean)
+8. STATUS: Update PERFORMANCE_STATUS.md — mark step [x], update metrics
+9. COMMIT: One commit per step, with before/after numbers
+10. PUSH: After each TRACK completes
+
+Commit format:
+  git commit -m "$(cat <<'EOF'
+  perf(l-3): verify SIMD-accelerated crypto — AEAD 0.Xµs
+
+  Before: AEAD encrypt 1KB = 1.63µs
+  After:  AEAD encrypt 1KB = 0.Xµs (SIMD verified on Apple M4)
+  Improvement: Nx faster
+
+  Verified aws-lc-rs uses ARMv8 Crypto Extensions on Apple M4.
+  [Description of what was done]
+
+  Generated with [Devin](https://devin.ai)
+
+  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  EOF
+  )"
+
+================================================================================
+SECTION 9: QUICK VERIFICATION COMMANDS
+================================================================================
+
+# Build
+cd /Users/david/projects/AAFP-research/implementations/rust
+cargo build --workspace
+
+# Test (must be 0 failures — currently 1254 tests)
+cargo test --workspace
+
+# Lint (must be clean)
+cargo clippy --workspace -- -D warnings
+cargo fmt --all -- --check
+
+# Benchmarks
+cargo bench -p aafp-benchmark --bench mcp_transport -- --warm-up-time 3 --measurement-time 5
+cargo bench -p aafp-benchmark --bench lock_contention -- --warm-up-time 2 --measurement-time 3 --sample-size 10
+cargo bench -p aafp-benchmark --bench connection_lifecycle -- --warm-up-time 2 --measurement-time 3 --sample-size 10
+cargo bench -p aafp-benchmark --bench quic_tuning -- --warm-up-time 2 --measurement-time 3 --sample-size 10
+cargo bench -p aafp-benchmark --bench serialization -- --warm-up-time 2 --measurement-time 3 --sample-size 10
+cargo bench -p aafp-benchmark --bench alloc_profile -- "zerocopy" --warm-up-time 1 --measurement-time 2 --sample-size 10
+cargo bench --bench framing
+cargo bench --bench handshake
+
+# Golden traces (wire compatibility — MUST still pass)
+cargo test --test golden_traces -- --nocapture
+
+# Dashboard
+python3 test-results/generate_dashboard.py
+
+================================================================================
+SECTION 10: SUBMODULE WORKFLOW
+================================================================================
+
+cd implementations/rust
+git add -A
+git commit -m "perf(l-3): ..."
+git push origin master
+
+# Then update umbrella:
+cd /Users/david/projects/AAFP-research
+git add implementations/rust
+git commit -m "chore: update rust submodule — perf(l-3): ..."
+git push origin master
+
+If push fails (remote has new commits):
+  cd implementations/rust && git pull --rebase origin master && git push origin master
+  cd /Users/david/projects/AAFP-research && git pull --rebase origin master && git push origin master
+
+================================================================================
+SECTION 11: GOLDEN RULES (NON-NEGOTIABLE — SAME AS PREVIOUS PHASES)
+================================================================================
+
+1. NEVER sacrifice security for speed.
+2. NEVER break the wire protocol. Golden traces MUST pass.
+   If a change alters the wire format, STOP and ask the user.
+3. NEVER skip benchmarking. Every step needs before/after numbers.
+4. NEVER mark a step complete unless benchmarks show improvement
+   (or the step is a research/measurement step like L1, L7).
+5. NEVER use `unsafe` without a SAFETY comment.
+6. ALWAYS run cargo test --workspace before committing. (0 failures)
+7. ALWAYS run cargo clippy --workspace -- -D warnings. (clean)
+8. ALWAYS run cargo fmt --all -- --check. (clean)
+9. ALWAYS update PERFORMANCE_STATUS.md in the same commit.
+10. One optimization per commit.
+
+================================================================================
+SECTION 12: WHEN TO STOP AND ASK THE USER
+================================================================================
+
+1. A proposed optimization would change the wire protocol
+   (Track L should NOT change the wire protocol — if it does, STOP)
+
+2. A dependency needs to be added
+   (e.g., core_affinity for L6 — check maintained, published >7 days)
+
+3. `unsafe` code is required and you're unsure about safety justification
+
+4. A benchmark regresses and you can't figure out why
+
+5. A track is blocked by an external factor
+   (e.g., L2 recvmmsg is Linux-only — skip on macOS and document)
+   (e.g., L4 io_uring is Linux-only — skip on macOS and document)
+   (e.g., L7 XDP/DPDK may not be feasible — research and document)
+
+6. You need to make a design decision not covered in the plan files
+
+7. A step's verification target is not met and can't be met
+   (e.g., L3 AEAD target <0.3µs may not be achievable if SIMD is
+   already enabled — document the actual number and update the target)
+
+For everything else, make a decision and proceed. Full autonomy.
+
+================================================================================
+SECTION 13: KEY FILES TO READ BEFORE STARTING PHASE 4
+================================================================================
+
+Read in order:
+
+1. implementation-plans/PERFORMANCE_STATUS.md
+   Current status — 33/52 steps done, Tracks G+H+I+J+K complete.
+
+2. implementation-plans/track-l-kernel-hardware/L-kernel-hardware.md
+   START HERE. 8 steps for Track L. Read all steps before starting.
+
+3. implementation-plans/track-m-benchmarking/M-benchmarking-profiling.md
+   M4 and M6 remaining. Can run in parallel with L via subagent.
+
+4. implementations/rust/crates/aafp-crypto/src/aead.rs
+   AEAD encrypt/decrypt — L3 will verify SIMD acceleration.
+
+5. implementations/rust/crates/aafp-sdk/src/builder.rs
+   AgentBuilder, runtime creation — L5 will add runtime tuning.
+
+6. implementations/rust/crates/aafp-transport-quic/src/config.rs
+   QuicConfig — L5 may add runtime config here or separate.
+
+7. implementations/rust/crates/aafp-transport-quic/src/congestion.rs
+   CongestionController enum (from Track J) — reference for config patterns.
+
+8. implementations/rust/crates/aafp-benchmark/benches/handshake.rs
+   Crypto benchmarks — L3 will extend these.
+
+9. implementations/rust/crates/aafp-benchmark/benches/mcp_transport.rs
+   Round-trip benchmark — L8 will use this for final verification.
+
+10. .github/workflows/rust-ci.yml
+    Existing CI — M4 will add benchmark.yml alongside this.
+
+11. test-results/performance/
+    Existing benchmark results — compare against these.
+
+12. test-results/generate_dashboard.py
+    Dashboard generator (M5/M7) — update if new metrics are added.
+
+================================================================================
+SECTION 14: WHAT "DONE" LOOKS LIKE FOR PHASE 4
+================================================================================
+
+Phase 4 is complete when:
+
+[ ] L1: Syscall profile measured (or documented limitation)
+[ ] L2: recvmmsg/sendmmsg verified (Linux) or documented N/A (macOS)
+[ ] L3: SIMD crypto verified — AEAD benchmark with/without SIMD
+[ ] L4: io_uring evaluated (Linux) or documented N/A (macOS)
+[ ] L5: Tokio runtime tuning — configurable runtime, benchmark improvement
+[ ] L6: CPU affinity/priority tuning (optional, configurable)
+[ ] L7: XDP/DPDK research report (or "not feasible" documented)
+[ ] L8: End-to-end kernel/hardware benchmark — round-trip <30µs (or documented)
+[ ] M4: CI benchmark regression detection (benchmark.yml workflow)
+[ ] M6: Cross-platform benchmark matrix (macOS + Linux results)
+[ ] PERFORMANCE_STATUS.md updated — all completed steps marked [x]
+[ ] All 1254+ tests pass, clippy clean, fmt clean
+[ ] All changes committed and pushed
+[ ] Final performance report: cumulative improvement from 250µs → <30µs
+
+================================================================================
+SECTION 15: PLATFORM-SPECIFIC NOTES (CRITICAL FOR TRACK L)
+================================================================================
+
+This project is developed on macOS (Apple M4, ARM64). Many Track L steps
+are Linux-specific:
+
+| Step | macOS | Linux |
+|------|-------|-------|
+| L1 (syscall profile) | dtrace or Instruments | perf or strace |
+| L2 (recvmmsg) | N/A (kqueue) | Verify quinn uses it |
+| L3 (SIMD crypto) | ARMv8 Crypto Extensions | AES-NI / SHA-NI |
+| L4 (io_uring) | N/A (no io_uring) | tokio-uring evaluation |
+| L5 (runtime tuning) | APPLICABLE | APPLICABLE |
+| L6 (affinity) | Advisory (core_affinity) | Effective (nice + governor) |
+| L7 (XDP/DPDK) | N/A | Research only |
+| L8 (benchmark) | APPLICABLE | APPLICABLE |
+
+For Linux-specific steps (L2, L4, L7), on macOS:
+  - Document that the step is N/A on macOS
+  - If possible, provide Linux instructions for future CI execution
+  - Don't block on these steps — skip and document
+
+The most impactful steps on macOS are:
+  - L3 (SIMD crypto verification — likely already enabled on M4)
+  - L5 (Tokio runtime tuning — current_thread vs multi_thread)
+  - L8 (final benchmark — measure the cumulative improvement)
+
+================================================================================
+SECTION 16: FINAL PERFORMANCE REPORT
+================================================================================
+
+After Phase 4 is complete, generate a final performance report:
+
+1. Create test-results/performance/FINAL_REPORT.md with:
+   - Cumulative improvement table (baseline → final for each metric)
+   - Per-track summary (what each track achieved)
+   - Remaining bottlenecks (what's still slow and why)
+   - Platform-specific notes (macOS vs Linux)
+   - Recommendations for future work
+
+2. Update the dashboard (test-results/generate_dashboard.py) to show
+   the full timeline from baseline to final.
+
+3. Update PERFORMANCE_STATUS.md to mark all tracks complete.
+
+The final numbers should show:
+  - Round-trip: 250µs → <30µs (8x+ improvement)
+  - Throughput: 160K msg/s → >1.5M msg/s (9x+ improvement)
+  - Allocations: 3/msg → 0/msg (send path)
+  - Connections: 100 per 100 RPCs → 1 per 100 RPCs (pooling)
+
+================================================================================
+SECTION 17: BEGIN
+================================================================================
+
+Start now.
+
+1. Read implementation-plans/track-l-kernel-hardware/L-kernel-hardware.md
+2. Read implementations/rust/crates/aafp-crypto/src/aead.rs
+3. Begin L1: profile syscall overhead using dtrace (macOS)
+4. In parallel (subagent): M4 — create benchmark.yml CI workflow
+
+The key question Phase 4 answers: can we get from 42µs round-trip to <30µs?
+The 12µs gap must come from:
+  - L5 (Tokio runtime tuning): reduce scheduling overhead (1-10µs → <1µs)
+  - L3 (SIMD crypto): reduce AEAD time (1.6µs → <0.3µs per 1KB)
+  - L1 (syscall profiling): identify and reduce unnecessary syscalls
+
+If the target isn't fully achievable on macOS (due to kqueue overhead,
+scheduler limitations, etc.), document what was achieved and what the
+theoretical minimum is. The goal is to understand the remaining
+bottlenecks, not just to hit a number.
+
+For Linux-specific steps (L2, L4, L7): document the approach for Linux
+but don't block on them. Focus on L3, L5, L6, L8 which work on macOS.
+
+Go.
+
+================================================================================
+END OF BUILDER PROMPT (PHASE 4)
+================================================================================

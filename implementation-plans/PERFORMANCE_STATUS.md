@@ -40,7 +40,7 @@
 
 **Total steps:** 52
 **Completed:** 33
-**In progress:** 3
+**In progress:** 5
 **Blocked:** 0
 
 ---
