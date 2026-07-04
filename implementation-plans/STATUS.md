@@ -10,7 +10,7 @@
 - `[!]` — Blocked (add note)
 - `[-]` — Skipped / N/A (add reason)
 
-**Last updated:** 2026-07-04 (Track O COMPLETE — O1-O8 WAN testing, 26 tests pass)
+**Last updated:** 2026-07-04 (Track S COMPLETE — S1-S8 all done, production ready)
 
 **Test Results Infrastructure:** A `test-results/` directory has been added to the
 umbrella repo with:
@@ -841,9 +841,12 @@ with multiple nodes, commit R1, then proceed to R2-R8.
         100 concurrent streams, 20 connection churn cycles, DHT 100 announce +
         5 lookups, DHT 10 concurrent access. All 7 tests pass. Results in
         test-results/performance/stress-tests.json.)*
-- [ ] **S8** Production readiness report
+- [x] **S8** Production readiness report
+      *(COMPLETE — Created docs/PRODUCTION_READINESS.md with load test results,
+        stability results, metrics, deployment options, operational procedures,
+        known limitations, recommendations, and pre-production checklist.)*
 
-**S status:** IN PROGRESS (S1-S7 COMPLETE, S8 next)
+**S status:** COMPLETE (S1-S8 all done)
 **S blocked by:** Track N (NAT traversal — load test needs relay) — N COMPLETE
 **S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
 **S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`
@@ -890,7 +893,7 @@ usage), CLI binary. S2 (100-agent load test) in progress.
 | P | COMPLETE | — | 8/8 |
 | Q | IN PROGRESS | P (done) | 4/8 (Q1-Q4 done: threat model, fuzz, handshake attacks, DoS) |
 | R | NOT STARTED | O | 0.5/8 (R1 partial, uncommitted) |
-| S | NOT STARTED | N (done) | 0.5/8 (S1 partial, uncommitted) |
+| S | COMPLETE | N (done) | 8/8 |
 
 **Total steps:** 282 (218 Tracks A-F + 52 Tracks G-M + 48 Tracks N-S)
 **Completed:** 286 (218 + 52 + 8 P + 8 N + 8 O)
