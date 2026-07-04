@@ -581,6 +581,120 @@ all 1011 Rust tests pass.
 
 ---
 
+## Track N — NAT Traversal (Production Readiness Phase 2)
+
+### N: DCUtR Hole Punching + Real Relay Testing
+- [ ] **N1** Implement relay data forwarding (real QUIC stream forwarding)
+- [ ] **N2** Implement AutoNAT dial-back (real NAT detection)
+- [ ] **N3** Implement DCuTR hole punching (replace stub)
+- [ ] **N4** Relay discovery and bootstrap (find relay nodes)
+- [ ] **N5** Integrate NAT traversal into SDK (automatic relay fallback)
+- [ ] **N6** NAT traversal test harness (4 NAT scenarios)
+- [ ] **N7** Two-machine relay test (real cross-NAT validation)
+- [ ] **N8** Relay performance and capacity testing
+
+**N status:** NOT STARTED
+**N blocked by:** nothing
+**N plan:** `implementation-plans/track-n-nat-traversal/N-nat-traversal.md`
+**N builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_N.txt`
+
+---
+
+## Track O — WAN Testing (Production Readiness Phase 2)
+
+### O: Real Network Validation
+- [ ] **O1** WAN test infrastructure (scripts + test harness)
+- [ ] **O2** Latency and throughput over WAN
+- [ ] **O3** Packet loss and high-latency conditions (tc/toxiproxy)
+- [ ] **O4** BBR vs Cubic validation over WAN
+- [ ] **O5** Cross-network interop testing (Python, A2A over WAN)
+- [ ] **O6** Connection migration over real network changes
+- [ ] **O7** Multi-node DHT over WAN (3+ machines)
+- [ ] **O8** WAN performance report
+
+**O status:** NOT STARTED
+**O blocked by:** Track N (NAT traversal for cross-NAT tests)
+**O plan:** `implementation-plans/track-o-wan-testing/O-wan-testing.md`
+**O builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_O.txt`
+
+---
+
+## Track P — Identity & PKI (Production Readiness Phase 2)
+
+### P: Trust Bootstrap for Production
+- [ ] **P1** Design trust model + write RFC 0011
+- [ ] **P2** Key directory (lookup, publish, verify)
+- [ ] **P3** Web of Trust (peer key signing, transitive trust)
+- [ ] **P4** CA-based certificate support (ML-DSA-65 signed)
+- [ ] **P5** Key rotation (old key signs new key)
+- [ ] **P6** Networked revocation distribution (gossip + directory)
+- [ ] **P7** TrustManager API (combine all trust sources)
+- [ ] **P8** End-to-end trust scenario testing (8 scenarios)
+
+**P status:** NOT STARTED
+**P blocked by:** nothing
+**P plan:** `implementation-plans/track-p-identity-pki/P-identity-pki.md`
+**P builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_P.txt`
+
+---
+
+## Track Q — Security Audit (Production Readiness Phase 2)
+
+### Q: Adversarial Testing & Attack Surface Analysis
+- [ ] **Q1** Threat model documentation
+- [ ] **Q2** Fuzz testing (6 targets: CBOR, frame, handshake, RPC, relay, discovery)
+- [ ] **Q3** Adversarial handshake tests (8 attack scenarios)
+- [ ] **Q4** Resource exhaustion testing (6 DoS scenarios)
+- [ ] **Q5** Timing side-channel analysis (4 checks)
+- [ ] **Q6** Malformed input testing (20+ edge cases)
+- [ ] **Q7** Attack surface review and hardening
+- [ ] **Q8** Security report
+
+**Q status:** NOT STARTED
+**Q blocked by:** Track P (identity/PKI — need trust model to audit)
+**Q plan:** `implementation-plans/track-q-security-audit/Q-security-audit.md`
+**Q builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_Q.txt`
+
+---
+
+## Track R — WAN Discovery (Production Readiness Phase 2)
+
+### R: Multi-Node DHT Routing & Churn
+- [ ] **R1** Multi-node DHT routing (Kademlia-style)
+- [ ] **R2** Bootstrap and peer discovery (seed → routing table)
+- [ ] **R3** Record replication and republishing (k=5 closest)
+- [ ] **R4** Churn handling (ping liveness, rejoin, graceful departure)
+- [ ] **R5** DHT query optimization (parallel, cached, iterative/recursive)
+- [ ] **R6** Network partition handling (detection + reconciliation)
+- [ ] **R7** Multi-node integration test (10 nodes, churn, partition)
+- [ ] **R8** DHT performance and scale report (10-500 nodes)
+
+**R status:** NOT STARTED
+**R blocked by:** Track O (WAN testing infrastructure)
+**R plan:** `implementation-plans/track-r-wan-discovery/R-wan-discovery.md`
+**R builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_R.txt`
+
+---
+
+## Track S — Load Testing & Operations (Production Readiness Phase 2)
+
+### S: Production Readiness
+- [ ] **S1** Load test harness (N agents, topologies, metrics)
+- [ ] **S2** 100-agent load test (throughput, latency, error rate)
+- [ ] **S3** Long-running stability test (4-24h, leak detection)
+- [ ] **S4** Metrics and observability (AgentMetrics, health check, tracing)
+- [ ] **S5** Deployment documentation (Docker, systemd, Kubernetes)
+- [ ] **S6** Operational runbook (key rotation, updates, debugging)
+- [ ] **S7** Stress testing (burst, large messages, churn, DHT load)
+- [ ] **S8** Production readiness report
+
+**S status:** NOT STARTED
+**S blocked by:** Track N (NAT traversal — load test needs relay)
+**S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
+**S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`
+
+---
+
 ## Summary
 
 | Plan | Status | Blocked by | Steps complete |
@@ -607,8 +721,36 @@ all 1011 Rust tests pass.
 | F2 | COMPLETE | — | 14/14 |
 | F3 | COMPLETE | — | 9/9 |
 | F4 | COMPLETE | E2 | 11/11 |
+| G-M | COMPLETE | — | 52/52 (performance) |
+| N | NOT STARTED | — | 0/8 |
+| O | NOT STARTED | N | 0/8 |
+| P | NOT STARTED | — | 0/8 |
+| Q | NOT STARTED | P | 0/8 |
+| R | NOT STARTED | O | 0/8 |
+| S | NOT STARTED | N | 0/8 |
 
-**Total steps:** 218 (70 from Tracks A-B + 148 from Tracks C-F)
-**Completed:** 210
+**Total steps:** 282 (218 Tracks A-F + 52 Tracks G-M + 48 Tracks N-S)
+**Completed:** 270 (218 + 52)
 **In progress:** 0
 **Blocked:** 0
+**Not started:** 48 (Tracks N-S)
+
+### Recommended Execution Order
+
+```
+Phase 5 (parallel):
+  Track N (NAT Traversal)     — 8 steps, 2-3 weeks
+  Track P (Identity/PKI)      — 8 steps, 2-3 weeks
+
+Phase 6 (after N + P):
+  Track O (WAN Testing)       — 8 steps, 1-2 weeks (needs N)
+  Track Q (Security Audit)    — 8 steps, 2-3 weeks (needs P)
+  Track S (Load & Ops)        — 8 steps, 2 weeks (needs N)
+
+Phase 7 (after O):
+  Track R (WAN Discovery)     — 8 steps, 2 weeks (needs O)
+```
+
+Tracks N and P can start immediately in parallel.
+Tracks O, Q, S can start once their dependencies complete.
+Track R is the final track.

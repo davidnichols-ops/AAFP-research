@@ -1,0 +1,324 @@
+================================================================================
+AAFP WAN DISCOVERY — BUILDER PROMPT (TRACK R)
+================================================================================
+Date: 2026-07-03
+Project: AAFP (Agent-to-Agent Framing Protocol)
+Repo: /Users/david/projects/AAFP-research
+GitHub: https://github.com/davidnichols-ops/AAFP-research
+Rust submodule: https://github.com/davidnichols-ops/aafp
+
+================================================================================
+SECTION 1: CONTEXT
+================================================================================
+
+The AAFP discovery layer has a Capability DHT that has only been tested
+in-process. It has never routed a lookup across multiple networked nodes,
+handled churn, bootstrapped from real seeds, or scaled beyond 2-3 agents.
+
+This track makes the DHT work as a real distributed system.
+
+Current state:
+  - discovery_v1.rs: CapabilityDht (in-memory store), AnnounceParams,
+    LookupParams, ShardedCapabilityDht (256-way sharding for throughput)
+  - rpc_handler.rs: DiscoveryRpcHandler (handles announce/lookup RPCs
+    but only checks local store — no routing)
+  - bootstrap.rs: BootstrapDiscovery (stub — returns hardcoded addresses)
+  - persistent_dht.rs: SQLite-backed DHT (F4 — works but local-only)
+  - METHOD_PEX is defined but not implemented
+
+================================================================================
+SECTION 2: WHAT TO BUILD (8 STEPS)
+================================================================================
+
+File: implementation-plans/track-r-wan-discovery/R-wan-discovery.md
+READ THIS FILE. It has all 8 steps.
+
+EXECUTION ORDER:
+  R1 (routing) → R2 (bootstrap) → R3 (replication) → R4 (churn)
+  → R5 (optimization) → R6 (partition) → R7 (integration test)
+  → R8 (scale report)
+
+R1 is the foundation — without multi-node routing, nothing else matters.
+R2-R4 are the distributed system features.
+R5-R6 are optimization and resilience.
+R7-R8 are validation.
+
+================================================================================
+SECTION 3: STEP DETAILS
+================================================================================
+
+### R1: Multi-Node DHT Routing
+
+WHAT TO BUILD:
+  1. DhtRouter type (in aafp-discovery/src/dht_router.rs):
+     - Routing table: KBuckets keyed by capability prefix
+     - find_peers(capability, k) → iterative lookup:
+       a. Check local CapabilityDht
+       b. If < k results, query α=3 closest known peers
+       c. Peers return records + closer peers
+       d. Iterate until k results or no new peers
+     - announce(capability, record):
+       a. Store locally
+       b. Forward to k=5 closest peers
+     - lookup(capability) → Vec<AgentRecord>:
+       a. find_peers + filter by capability
+
+  2. Peer Exchange (PEX):
+     - Implement METHOD_PEX handler
+     - Exchange known peer lists on new connection
+     - Build routing table from PEX responses
+
+  3. Routing table:
+     - KBucket with k=20 entries
+     - Bucket refresh every 15 min
+     - Bucket split when full
+
+  4. Tests:
+     - 5-node test: A announces, E (5 hops) looks up, finds A
+     - Verify iterative routing follows referrals correctly
+
+KEY FILES TO READ:
+  implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+    - CapabilityDht, AnnounceParams, LookupParams, METHOD_PEX
+  implementations/rust/crates/aafp-discovery/src/rpc_handler.rs
+    - DiscoveryRpcHandler, DiscoveryClient (RPC pattern)
+
+### R2: Bootstrap and Peer Discovery
+
+WHAT TO BUILD:
+  1. Replace BootstrapDiscovery stub:
+     - Connect to seed nodes (quic://seed1:4433, ...)
+     - Send PEX request to each seed
+     - Receive peer lists (agent_id, multiaddr, capabilities)
+     - Build initial routing table
+     - Connect to k closest peers
+     - Announce own record to closest peers
+
+  2. BootstrapConfig:
+     - seed_nodes: Vec<String>
+     - min_peers: usize (default 10)
+     - bootstrap_timeout: Duration (default 30s)
+     - refresh_interval: Duration (default 15min)
+
+  3. Agent::bootstrap():
+     - Called on agent start
+     - Runs bootstrap process
+     - Background task: periodic refresh
+
+  4. Tests:
+     - Agent A starts with 3 seeds, bootstraps, connects to 10+ peers
+     - Can route lookups through bootstrapped peers
+
+KEY FILES:
+  implementations/rust/crates/aafp-discovery/src/bootstrap.rs
+  implementations/rust/crates/aafp-sdk/src/builder.rs
+
+### R3: Record Replication and Republishing
+
+WHAT TO BUILD:
+  1. Replication:
+     - announce() forwards record to k=5 closest peers
+     - Each peer stores the record
+     - Records survive single node failure
+
+  2. Republishing:
+     - Background task: republish own records every 30 min
+     - TTL: 1 hour (configurable)
+     - Republish at 50% of TTL
+
+  3. Record refresh:
+     - aafp.discovery.refresh RPC
+     - New node requests all records from peers
+     - Populates local store
+
+  4. Expiration:
+     - Active expiration check every 5 min
+     - Log when records expire
+
+  5. Tests:
+     - A announces to N1, N1 replicates to N2-N5
+     - N1 goes down, B looks up A → finds on N2-N5
+
+### R4: Churn Handling
+
+WHAT TO BUILD:
+  1. Peer liveness:
+     - Ping every 60s (use PingTracker from E1)
+     - 3 missed pings → mark dead → remove from routing table
+     - Trigger bucket refresh
+
+  2. Re-announcement on rejoin:
+     - Agent comes back → re-announces to k closest
+     - Peers update timestamp
+
+  3. Graceful departure:
+     - Agent::leave() → announce departure
+     - aafp.discovery.depart RPC
+     - Peers remove records immediately
+
+  4. Routing table repair:
+     - Underfilled buckets → query peers for more
+     - Background task every 15 min
+
+  5. Tests:
+     - A goes offline → detected in 3 min → records removed
+     - A comes back → re-announces → visible in 1 min
+
+KEY FILES:
+  implementations/rust/crates/aafp-messaging/src/keepalive.rs
+    - PingTracker (E1) — use for liveness checks
+
+### R5: DHT Query Optimization
+
+WHAT TO BUILD:
+  1. Parallel lookups (α=3):
+     - Send to 3 peers simultaneously
+     - As responses arrive, send to closer peers
+     - Terminate after 2 rounds with no improvement
+
+  2. Cached lookups:
+     - Cache results for 5 min
+     - Invalidate on announce/depart
+
+  3. Iterative vs. recursive:
+     - Iterative (default): caller follows referrals
+     - Recursive: first peer does full lookup
+     - Configurable via LookupParams
+
+  4. Benchmarks:
+     - 10, 50, 100 nodes
+     - Metrics: latency, hops, messages, memory
+
+### R6: Network Partition Handling
+
+WHAT TO BUILD:
+  1. Partition detection:
+     - Many peers unreachable simultaneously → partition
+     - Log event
+
+  2. Reconciliation:
+     - On heal: exchange records via refresh
+     - Latest timestamp wins for conflicts
+     - Union of all records
+
+  3. Split-brain prevention:
+     - Both sides accept announces independently
+     - On heal: merge (union, latest wins)
+     - No rollback
+
+  4. Tests:
+     - 10 nodes split 5/5
+     - Each side accepts announces
+     - Heal → all 10 have all records
+
+### R7: Multi-Node Integration Test
+
+WHAT TO BUILD:
+  1. tests/multi_node_dht.rs:
+     - 10 agents on ports 4433-4442
+     - Bootstrap, announce, lookup, churn, partition scenarios
+     - All in one process (using tokio tasks) or separate processes
+
+  2. scripts/test-multi-node-dht.sh:
+     - Starts 10 agents in separate processes
+     - Runs test scenarios
+     - JSON output
+
+  3. test-results/interop/multi-node-dht.json
+
+### R8: DHT Scale Report
+
+WHAT TO BUILD:
+  1. Benchmark at 10, 50, 100, 500 nodes:
+     - Lookup latency, announce latency
+     - Routing table size, messages per lookup, hops
+     - Memory per node
+     - Churn tolerance (10% offline/min)
+
+  2. test-results/performance/dht-scale-report.md
+  3. Update PERFORMANCE_STATUS.md
+
+================================================================================
+SECTION 4: EXECUTION PROCEDURE
+================================================================================
+
+Same as previous tracks:
+1. READ the step
+2. IMPLEMENT: Write code + tests
+3. VERIFY: Run tests, confirm criteria
+4. TEST: cargo test --workspace (0 failures)
+5. LINT: cargo clippy --workspace -- -D warnings (clean)
+6. FMT: cargo fmt --all -- --check (clean)
+7. STATUS: Update STATUS.md
+8. COMMIT: One commit per step
+9. PUSH: After track completes
+
+================================================================================
+SECTION 5: GOLDEN RULES
+================================================================================
+
+1. NEVER sacrifice security. DHT must verify record signatures.
+2. NEVER break the wire protocol. Golden traces MUST pass.
+3. ALWAYS run cargo test --workspace before committing.
+4. ALWAYS run cargo clippy --workspace -- -D warnings.
+5. ALWAYS run cargo fmt --all -- --check.
+6. ALWAYS update STATUS.md.
+7. One feature per commit.
+
+================================================================================
+SECTION 6: WHEN TO STOP AND ASK THE USER
+================================================================================
+
+1. If Kademlia routing is overkill for AAFP's capability keyspace
+   → Start with gossip, ask user if full Kademlia is needed
+2. If a new dependency is needed
+   → Check maintained, published >7 days, ask user
+3. If scale testing reveals a fundamental bottleneck
+   → Document, ask user for design decision
+4. If partition handling requires consensus (Paxos/Raft)
+   → Ask user (current plan uses eventual consistency, no consensus)
+
+================================================================================
+SECTION 7: KEY FILES TO READ
+================================================================================
+
+1. implementation-plans/track-r-wan-discovery/R-wan-discovery.md
+2. implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+   CapabilityDht, AnnounceParams, LookupParams, METHOD_PEX
+3. implementations/rust/crates/aafp-discovery/src/rpc_handler.rs
+   DiscoveryRpcHandler, DiscoveryClient
+4. implementations/rust/crates/aafp-discovery/src/bootstrap.rs
+   BootstrapDiscovery (stub to replace)
+5. implementations/rust/crates/aafp-discovery/src/persistent_dht.rs
+   SQLite backend (pattern for persistent routing table)
+6. implementations/rust/crates/aafp-discovery/src/regional.rs
+   RegionalDiscovery (latency-based grouping)
+7. implementations/rust/crates/aafp-messaging/src/keepalive.rs
+   PingTracker (for churn detection in R4)
+8. RFCs/0004-discovery.md
+   Discovery protocol spec
+
+================================================================================
+SECTION 8: BEGIN
+================================================================================
+
+Start now.
+
+1. Read implementation-plans/track-r-wan-discovery/R-wan-discovery.md
+2. Read implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+3. Begin R1: implement DhtRouter with Kademlia-style routing
+
+The key question: can the DHT route lookups across multiple networked
+nodes? If yes, AAFP has working distributed discovery. If no, agents
+can only find each other through manual configuration.
+
+Start with R1 (routing) — it's the foundation. A 5-node test where
+agent A announces and agent E can find A through 5 hops proves the
+routing works. Everything else (bootstrap, replication, churn) builds
+on this.
+
+Go.
+
+================================================================================
+END OF BUILDER PROMPT (TRACK R)
+================================================================================

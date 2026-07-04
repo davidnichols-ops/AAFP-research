@@ -1,0 +1,342 @@
+================================================================================
+AAFP LOAD TESTING & OPERATIONS — BUILDER PROMPT (TRACK S)
+================================================================================
+Date: 2026-07-03
+Project: AAFP (Agent-to-Agent Framing Protocol)
+Repo: /Users/david/projects/AAFP-research
+GitHub: https://github.com/davidnichols-ops/AAFP-research
+Rust submodule: https://github.com/davidnichols-ops/aafp
+
+================================================================================
+SECTION 1: CONTEXT
+================================================================================
+
+AAFP has never been tested with more than a few agents. There is no load
+testing, no monitoring, no deployment documentation, and no operational
+runbooks. This track makes AAFP production-ready.
+
+Current state:
+  - 1138+ tests, all functional (none test load/stress)
+  - Performance benchmarks: 41.47µs round-trip, 776K msg/s (1 agent pair)
+  - No metrics collection, no structured logging
+  - No Dockerfile, no systemd service, no Kubernetes manifest
+  - No operational documentation
+
+================================================================================
+SECTION 2: WHAT TO BUILD (8 STEPS)
+================================================================================
+
+File: implementation-plans/track-s-load-operations/S-load-operations.md
+READ THIS FILE. It has all 8 steps.
+
+EXECUTION ORDER:
+  S1 (test harness) → S2 (100-agent test) → S3 (stability test)
+  → S4 (metrics) → S5 (deployment docs) → S6 (runbook)
+  → S7 (stress tests) → S8 (readiness report)
+
+S1-S3 are load and stability testing.
+S4 is observability.
+S5-S6 are documentation.
+S7 is edge case testing.
+S8 is the final report.
+
+================================================================================
+SECTION 3: STEP DETAILS
+================================================================================
+
+### S1: Load Test Harness
+
+WHAT TO BUILD:
+  1. tests/load_test.rs:
+     - LoadTestConfig: num_agents, messages_per_agent, message_size,
+       duration, topology (mesh, star, ring, random)
+     - LoadTestRunner: starts N agents, connects them, sends messages,
+       collects metrics
+     - LoadTestMetrics: throughput, latency p50/p90/p99, error rate,
+       memory, CPU, connection count
+
+  2. scripts/load-test.sh:
+     - Starts N agents (separate processes or tokio tasks)
+     - Runs load test
+     - JSON output to test-results/performance/load-test-N.json
+
+  3. Topologies:
+     - Mesh: every agent → every other (limit to 10 connections each)
+     - Star: all → central hub
+     - Ring: each → neighbor
+     - Random: each → K random peers
+
+  4. Start with 10 agents, 100 messages each, 1KB, mesh topology
+
+KEY FILES TO READ:
+  implementations/rust/crates/aafp-sdk/src/agent.rs
+    - Agent, AgentClient, AgentServer
+  implementations/rust/crates/aafp-sdk/src/connection_pool.rs
+    - ConnectionPool (I5) — used by load test
+  implementations/rust/crates/aafp-benchmark/benches/mcp_transport.rs
+    - Existing benchmark pattern for measuring throughput
+
+### S2: 100-Agent Load Test
+
+WHAT TO BUILD:
+  1. Run load test with:
+     - 100 agents
+     - 1000 messages per agent
+     - 1KB messages
+     - 60 seconds duration
+     - Topologies: star, ring, random (K=5)
+
+  2. Measure:
+     - Total messages sent/received
+     - Throughput (msg/s aggregate)
+     - Latency p50/p90/p99/p99.9
+     - Error rate (lost messages, failed connections)
+     - Memory per agent (<10MB target)
+     - CPU per agent
+     - File descriptors per agent
+
+  3. Identify bottlenecks:
+     - CPU-bound? (handshake/encryption)
+     - Memory-bound? (buffer pool)
+     - Network-bound? (QUIC streams)
+     - Lock contention? (ArcSwap, Mutex)
+
+  4. Write results to test-results/performance/load-test-100-agents.json
+
+  5. If 100 agents is too many for one machine:
+     - Start with 50, document what's needed for 100
+     - Use multiple machines if available
+
+### S3: Long-Running Stability Test
+
+WHAT TO BUILD:
+  1. Run one agent for 4-24 hours:
+     - Accept connections from 10 clients
+     - Each client sends 1 msg/s
+     - Log metrics every 5 min: memory, CPU, FDs, connections
+
+  2. Check for:
+     - Memory growth (leak)
+     - FD growth (connection leak)
+     - CPU drift
+     - Connection stability
+
+  3. If leaks found:
+     - Use cargo instruments (macOS) or heaptrack (Linux) for profiling
+     - Fix the leak
+     - Re-run stability test
+
+  4. Write results to test-results/performance/stability-24h.json
+
+### S4: Metrics and Observability
+
+WHAT TO BUILD:
+  1. AgentMetrics struct (in aafp-sdk/src/metrics.rs):
+     - connections_active, connections_total
+     - messages_sent, messages_received
+     - bytes_sent, bytes_received
+     - handshakes_completed, handshakes_failed
+     - dht_records, relay_connections
+     - uptime_seconds
+     - Use AtomicU64 (lock-free)
+
+  2. Agent::metrics() → AgentMetrics
+  3. Agent::health_check() → HealthStatus (Healthy/Degraded/Unhealthy)
+
+  4. Metrics endpoint:
+     - aafp.metrics RPC method (returns CBOR)
+     - Optional HTTP /metrics (Prometheus format, behind feature flag)
+
+  5. Structured logging:
+     - Use tracing crate (already available via tokio)
+     - Log: connections, handshakes, errors, DHT ops
+     - Configurable level: error/warn/info/debug/trace
+
+  6. Tests:
+     - Metrics are accurate after 100 messages
+     - Health check returns Healthy after start
+     - Health check returns Degraded if error rate > 10%
+
+KEY FILES:
+  implementations/rust/crates/aafp-sdk/src/agent.rs
+  implementations/rust/crates/aafp-sdk/src/lib.rs
+  implementations/rust/crates/aafp-sdk/Cargo.toml
+
+### S5: Deployment Documentation
+
+WHAT TO BUILD:
+  1. docs/DEPLOYMENT.md:
+     - Quick start (single agent)
+     - Docker (Dockerfile + docker-compose.yml)
+     - Systemd (service file)
+     - Kubernetes (Deployment + Service + ConfigMap)
+     - Configuration (all AgentBuilder options)
+     - Security (key management, firewall, TLS)
+     - Monitoring (metrics collection, alerts)
+     - Scaling (horizontal, relay, DHT sizing)
+
+  2. Dockerfile:
+     - Multi-stage: cargo build → distroless runtime
+     - Expose UDP 4433
+     - Health check
+     - Configurable via env vars
+
+  3. docker-compose.yml:
+     - 3-agent test setup
+     - Relay + 2 NAT'd agents
+     - Volumes for keys and DHT
+
+  4. deploy/systemd/aafp-agent.service
+  5. deploy/kubernetes/aafp-agent.yaml
+
+  6. Verify: docker build succeeds, docker-compose starts 3 agents
+
+### S6: Operational Runbook
+
+WHAT TO BUILD:
+  1. docs/OPERATIONS.md:
+     - Key rotation (reference Track P5)
+     - Rolling update (drain → update → restart)
+     - Scaling (add agents)
+     - Debugging slow agent (metrics → logs → CPU/mem → network)
+     - Security incident (revoke → notify → rotate)
+     - Relay management
+     - DHT maintenance
+     - Backup and recovery
+
+  2. docs/TROUBLESHOOTING.md:
+     - "Can't connect" → firewall, NAT, relay
+     - "High latency" → network, congestion, DHT routing
+     - "Memory growth" → leaks, connection accumulation
+     - "Handshake fails" → key validity, clock skew, replay cache
+     - "DHT lookup fails" → bootstrap, peers, TTL
+
+### S7: Stress Testing
+
+WHAT TO BUILD:
+  tests/stress_test.rs with 5 stress scenarios:
+
+  1. test_burst_traffic:
+     - 100 agents × 100 messages simultaneously (10K burst)
+     - Verify: no messages lost
+
+  2. test_large_message:
+     - Send 1MB, 10MB messages
+     - Verify: frame handles large payloads, no OOM
+     - Note: current max frame size is 1MB — document if needs change
+
+  3. test_many_streams:
+     - 100, 500, 1000 concurrent streams on one connection
+     - Measure: memory per stream, quinn limits
+
+  4. test_connection_churn:
+     - 100 agents connect/disconnect every 1s
+     - Measure: setup/teardown overhead, FD recovery
+
+  5. test_dht_under_load:
+     - 100 agents announce simultaneously
+     - 100 agents lookup simultaneously
+     - Measure: DHT throughput, latency
+
+  Write results to test-results/performance/stress-tests.json
+
+### S8: Production Readiness Report
+
+WHAT TO BUILD:
+  docs/PRODUCTION_READINESS.md:
+  - Load test results (100 agents)
+  - Stability results (4-24h)
+  - Available metrics
+  - Deployment options
+  - Operational procedures
+  - Known limitations (max agents, messages, streams)
+  - Recommendations (config, monitoring, alerts)
+  - Pre-production checklist
+
+  Update STATUS.md with production readiness status.
+
+================================================================================
+SECTION 4: EXECUTION PROCEDURE
+================================================================================
+
+Same as previous tracks:
+1. READ the step
+2. IMPLEMENT: Write code + tests
+3. VERIFY: Run tests, confirm criteria
+4. TEST: cargo test --workspace (0 failures)
+5. LINT: cargo clippy --workspace -- -D warnings (clean)
+6. FMT: cargo fmt --all -- --check (clean)
+7. STATUS: Update STATUS.md
+8. COMMIT: One commit per step
+9. PUSH: After track completes
+
+================================================================================
+SECTION 5: GOLDEN RULES
+================================================================================
+
+1. NEVER sacrifice security for performance.
+2. NEVER break the wire protocol. Golden traces MUST pass.
+3. ALWAYS run cargo test --workspace before committing.
+4. ALWAYS run cargo clippy --workspace -- -D warnings.
+5. ALWAYS run cargo fmt --all -- --check.
+6. ALWAYS update STATUS.md.
+7. One feature per commit.
+
+================================================================================
+SECTION 6: WHEN TO STOP AND ASK THE USER
+================================================================================
+
+1. If 100 agents exceeds system limits (FDs, memory)
+   → Start with fewer, document requirements, ask user
+2. If memory leaks are found that require significant refactoring
+   → Fix if simple, ask user if refactoring needed
+3. If Docker image is too large (>100MB)
+   → Optimize, ask user about base image preference
+4. If Kubernetes UDP load balancing doesn't work
+   → Document limitation, ask user about deployment environment
+5. If a new dependency is needed (e.g., prometheus crate)
+   → Check maintained, published >7 days, ask user
+
+================================================================================
+SECTION 7: KEY FILES TO READ
+================================================================================
+
+1. implementation-plans/track-s-load-operations/S-load-operations.md
+2. implementations/rust/crates/aafp-sdk/src/agent.rs
+   Agent — the main type being load-tested
+3. implementations/rust/crates/aafp-sdk/src/connection_pool.rs
+   ConnectionPool (I5) — handles repeated connections
+4. implementations/rust/crates/aafp-sdk/src/builder.rs
+   AgentBuilder — all configuration options
+5. implementations/rust/crates/aafp-benchmark/benches/mcp_transport.rs
+   Existing benchmark pattern
+6. implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+   DHT — tested under load in S7
+7. implementations/rust/crates/aafp-nat/src/relay_v1.rs
+   Relay — tested under load in S7
+8. BUILD.md
+   Existing build guide — deployment docs extend this
+
+================================================================================
+SECTION 8: BEGIN
+================================================================================
+
+Start now.
+
+1. Read implementation-plans/track-s-load-operations/S-load-operations.md
+2. Read implementations/rust/crates/aafp-sdk/src/agent.rs
+3. Begin S1: create load test harness
+
+The key question: can AAFP handle 100 concurrent agents exchanging
+100K messages with <1% error rate? If yes, it's production-ready for
+moderate scale. If no, what breaks and how do we fix it?
+
+Start with S1 (test harness). Get 10 agents working first, then scale
+to 100. The harness is the foundation — without it, you can't measure
+anything.
+
+Go.
+
+================================================================================
+END OF BUILDER PROMPT (TRACK S)
+================================================================================

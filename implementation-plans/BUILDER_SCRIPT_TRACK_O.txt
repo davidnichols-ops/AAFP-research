@@ -1,0 +1,366 @@
+================================================================================
+AAFP WAN TESTING — BUILDER PROMPT (TRACK O)
+================================================================================
+Date: 2026-07-03
+Project: AAFP (Agent-to-Agent Framing Protocol)
+Repo: /Users/david/projects/AAFP-research
+GitHub: https://github.com/davidnichols-ops/AAFP-research
+Rust submodule: https://github.com/davidnichols-ops/aafp
+
+================================================================================
+SECTION 1: CONTEXT
+================================================================================
+
+Every test, benchmark, and interop verification in the AAFP project has
+been run on localhost (<1ms RTT, no packet loss, no NAT, no congestion).
+This track validates AAFP over real networks.
+
+Current performance (localhost, Apple M4):
+  Round-trip: 41.47µs
+  Throughput: 776K msg/s
+  Handshake: 240µs
+  BBR vs Cubic: 4% (meaningless on localhost — no congestion)
+
+This track answers: does AAFP work over real networks?
+
+================================================================================
+SECTION 2: WHAT TO BUILD (8 STEPS)
+================================================================================
+
+File: implementation-plans/track-o-wan-testing/O-wan-testing.md
+READ THIS FILE. It has all 8 steps.
+
+EXECUTION ORDER:
+  O1 (infrastructure) → O2 (latency/throughput) → O3 (adverse conditions)
+  → O4 (BBR validation) → O5 (cross-network interop) → O6 (migration)
+  → O7 (multi-node DHT) → O8 (report)
+
+O1 is the foundation — test scripts that work across two machines.
+O2-O4 are the core WAN measurements.
+O5-O7 test specific scenarios over WAN.
+O8 compiles everything into a report.
+
+IMPORTANT: Many steps require two machines. If you only have one machine:
+  - Use localhost with different ports for logic testing
+  - Use toxiproxy or Network Link Conditioner for adverse conditions
+  - Document real-world test setups for future execution
+  - Don't skip the steps — implement the test scripts even if you can't
+    run them cross-machine. The scripts are valuable for future testing.
+
+================================================================================
+SECTION 3: STEP DETAILS
+================================================================================
+
+### O1: WAN Test Infrastructure
+
+Create scripts and test harness for two-machine testing.
+
+WHAT TO BUILD:
+  1. scripts/wan-test-server.sh:
+     - Starts an AAFP agent in server mode
+     - Configurable port (default 4433)
+     - Handles ping, echo, streaming, discovery requests
+     - Logs all connections and requests
+
+  2. scripts/wan-test-client.sh:
+     - Connects to a remote AAFP server
+     - Runs a configurable test suite (ping, echo, stream, etc.)
+     - Outputs JSON results to test-results/interop/wan-*.json
+     - Reports timing, success/failure, and error details
+
+  3. tests/wan_test.rs:
+     - Integration test configurable via env vars:
+       AAFP_REMOTE_ADDR=quic://remote.host:4433
+       AAFP_TEST_MODE=ping|echo|stream|handshake|discovery
+     - Each mode runs a specific scenario
+     - Can be run with: cargo test --test wan_test -- --nocapture
+     - Skips if AAFP_REMOTE_ADDR is not set
+
+  4. docs/WAN_TESTING.md:
+     - Two-machine setup instructions
+     - Server commands, client commands
+     - Expected output format
+     - Troubleshooting (firewall, NAT, UDP blocking)
+
+KEY FILES TO READ:
+  implementations/rust/crates/aafp-benchmark/benches/mcp_transport.rs
+    - Existing benchmark pattern for round-trip measurement
+  implementations/rust/crates/aafp-sdk/src/client.rs
+    - AgentClient::connect(), send(), send_and_receive()
+  implementations/rust/crates/aafp-sdk/src/server.rs
+    - AgentServer::accept()
+
+### O2: Latency and Throughput over WAN
+
+WHAT TO BUILD:
+  1. Extend wan_test.rs with ping and throughput modes:
+     - ping: 1000 round-trips, measure p50/p90/p99/p99.9
+     - throughput: 1000 1KB messages one-way, measure msg/s
+     - message_sizes: 64B, 256B, 1KB, 4KB, 16KB, 64KB
+
+  2. Run tests in these configurations:
+     - Localhost (baseline — already have: 41.47µs, 776K/s)
+     - Same LAN (two machines on same switch)
+     - Cross-network (two machines on different networks)
+     - Cross-continent (if possible — use cloud VMs)
+
+  3. Compare to localhost baseline:
+     - WAN latency = localhost + network_RTT
+     - WAN throughput = min(bandwidth_limited, processing_limited)
+
+  4. Write results to test-results/performance/wan-latency-throughput.json
+
+### O3: Packet Loss and High-Latency Conditions
+
+WHAT TO BUILD:
+  1. Set up network condition simulation:
+     - macOS: Network Link Conditioner (System Preferences > Developer)
+       Presets: 3G, Edge, Very Bad Network, or custom (loss%, delay ms)
+     - Linux: tc netem (requires root)
+       tc qdisc add dev eth0 root netem loss 5% delay 100ms
+     - Alternative: toxiproxy (userspace, no root needed)
+       Configure toxic types: latency, timeout, limit_data
+
+  2. Test scenarios:
+     - 1% packet loss: measure latency/throughput impact
+     - 5% packet loss: verify connection survives
+     - 200ms RTT: measure handshake time
+     - 500ms RTT: verify timeout handling
+     - 1% loss + 100ms RTT: realistic cross-continent
+     - 10s network outage: verify QUIC recovery
+
+  3. Document failure thresholds:
+     - At what loss % does handshake fail?
+     - At what RTT does connection timeout?
+     - How long to recover from N-second outage?
+
+  4. Write results to test-results/performance/wan-adverse-conditions.json
+
+IMPORTANT: If you can't get tc or Network Link Conditioner, use toxiproxy:
+  - Install: brew install toxiproxy (macOS) or apt install toxiproxy (Linux)
+  - Configure: toxiproxy-cli create aafp_proxy -l 127.0.0.1:4433 -l 127.0.0.1:4434
+  - Add toxicity: toxiproxy-cli toxic add aafp_proxy -t latency -n latency_100ms -a 100
+  - Test through the proxy: connect to 127.0.0.1:4434 instead of direct
+
+### O4: BBR vs Cubic Validation over WAN
+
+The critical test that couldn't be done on localhost.
+
+WHAT TO BUILD:
+  1. Run round-trip tests with each CongestionController:
+     - Use QuicConfig::low_latency() (BBR)
+     - Use QuicConfig::default() (Cubic)
+     - Use QuicConfig with CongestionController::NewReno
+
+  2. Test under multiple conditions:
+     - Clean network (no loss, low RTT)
+     - 1% packet loss (via toxiproxy or tc)
+     - 5% packet loss
+     - 100ms RTT
+     - 100ms RTT + 1% loss
+
+  3. For each condition, measure:
+     - Round-trip latency (p50, p99)
+     - Throughput (msg/s)
+     - Time to first message
+     - Connection stability (does it stay connected for 1000 messages?)
+
+  4. Expected: BBR > Cubic > NewReno under packet loss
+     If BBR doesn't show advantage, document why.
+
+  5. Write results to test-results/performance/wan-congestion-control.json
+
+KEY FILES:
+  implementations/rust/crates/aafp-transport-quic/src/congestion.rs
+    - CongestionController enum, apply_to_transport_config()
+  implementations/rust/crates/aafp-transport-quic/src/config.rs
+    - QuicConfig::low_latency() (BBR), QuicConfig::bulk_transfer() (Cubic)
+
+### O5: Cross-Network Interop Testing
+
+WHAT TO BUILD:
+  1. Python MCP SDK interop over WAN:
+     - Rust server on Machine A (or cloud VM)
+     - Python client on Machine B
+     - Run: initialize, tools/list, tools/call
+     - Compare latency to localhost interop
+
+  2. A2A interop over WAN:
+     - Rust A2A server on Machine A
+     - Rust A2A client on Machine B
+     - Run: send_message, get_task, list_tasks, cancel_task
+     - Verify all operations succeed over WAN
+
+  3. Write results to test-results/interop/wan-interop.json
+
+KEY FILES:
+  implementations/rust/crates/aafp-transport-mcp/
+    - MCP transport — test with Python MCP SDK client
+  implementations/rust/crates/aafp-transport-a2a/
+    - A2A transport — test Rust client to Rust server over WAN
+  implementations/rust/aafp-py/tests/
+    - Python interop tests — adapt for remote server
+
+### O6: Connection Migration over Real Network Changes
+
+WHAT TO BUILD:
+  1. Test WiFi → Ethernet (same machine):
+     - Agent connected via WiFi
+     - Disable WiFi, enable Ethernet
+     - Verify connection survives (quinn rebind)
+
+  2. Test WiFi → cellular (different network):
+     - Agent connected via WiFi
+     - Switch to cellular hotspot
+     - Verify connection migrates or fails gracefully
+
+  3. Test IP address change (localhost simulation):
+     - Agent bound to 127.0.0.1:PORT
+     - Rebind to 127.0.0.2:PORT
+     - Verify quinn migration works
+
+  4. Document which scenarios work and which fail
+  5. Write results to test-results/interop/wan-connection-migration.json
+
+KEY FILES:
+  implementations/rust/crates/aafp-sdk/src/connection_pool.rs
+    - I5 connection pool — migration should preserve pool
+  implementations/rust/crates/aafp-transport-quic/src/transport.rs
+    - QuicTransport — rebind logic from I6
+
+### O7: Multi-Node DHT over WAN
+
+WHAT TO BUILD:
+  1. Start 3+ agents on different machines (or different localhost ports):
+     - Agent A: announces "inference" capability
+     - Agent B: announces "translation" capability
+     - Agent C: bootstrap node
+
+  2. Test scenarios:
+     - A announces to C → B can lookup "inference" on C
+     - B announces to C → A can lookup "translation" on C
+     - A goes offline → B's lookup returns empty after TTL
+     - A comes back → re-announces → B can find it again
+
+  3. Measure:
+     - Announce time (RPC round-trip)
+     - Lookup time (RPC round-trip)
+     - Propagation time (announce → visible)
+     - Churn recovery time (offline → online → discoverable)
+
+  4. Write results to test-results/interop/wan-dht-discovery.json
+
+KEY FILES:
+  implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+    - CapabilityDht, AnnounceParams, LookupParams
+  implementations/rust/crates/aafp-discovery/src/rpc_handler.rs
+    - DiscoveryRpcHandler, DiscoveryClient
+  implementations/rust/crates/aafp-discovery/src/bootstrap.rs
+    - BootstrapDiscovery
+
+### O8: WAN Performance Report
+
+WHAT TO BUILD:
+  1. Compile all results into test-results/performance/WAN_REPORT.md:
+     - Test environment (machines, network, RTT, bandwidth)
+     - Latency: localhost vs LAN vs WAN vs adverse
+     - Throughput: localhost vs WAN
+     - Congestion control: BBR vs Cubic vs NewReno under various conditions
+     - Failure modes and recovery times
+     - Interop over WAN
+     - Connection migration
+     - DHT discovery
+     - Production deployment recommendations
+
+  2. Update PERFORMANCE_STATUS.md with WAN results
+  3. Update dashboard (test-results/generate_dashboard.py) with WAN metrics
+
+================================================================================
+SECTION 4: EXECUTION PROCEDURE
+================================================================================
+
+Same as Track N:
+1. READ the step
+2. BASELINE: Measure current behavior
+3. IMPLEMENT: Write test scripts
+4. VERIFY: Run tests, confirm criteria
+5. TEST: cargo test --workspace (0 failures)
+6. LINT: cargo clippy --workspace -- -D warnings (clean)
+7. FMT: cargo fmt --all -- --check (clean)
+8. STATUS: Update STATUS.md
+9. COMMIT: One commit per step
+10. PUSH: After track completes
+
+================================================================================
+SECTION 5: GOLDEN RULES
+================================================================================
+
+1. NEVER sacrifice security for speed.
+2. NEVER break the wire protocol. Golden traces MUST pass.
+3. NEVER skip testing. Every step needs verification.
+4. ALWAYS run cargo test --workspace before committing.
+5. ALWAYS run cargo clippy --workspace -- -D warnings.
+6. ALWAYS run cargo fmt --all -- --check.
+7. ALWAYS update STATUS.md.
+8. One feature per commit.
+
+================================================================================
+SECTION 6: WHEN TO STOP AND ASK THE USER
+================================================================================
+
+1. If you need a second machine and don't have one
+   → Use localhost simulation, document real-world setup, ask user
+2. If you need root access for tc and can't get it
+   → Use toxiproxy or Network Link Conditioner, ask user
+3. If QUIC is blocked by a firewall
+   → Document the limitation, test on an unblocked network, ask user
+4. If a test reveals a critical bug (e.g., handshake fails at 1% loss)
+   → Fix the bug, but if the fix requires a design change, ask user
+5. If you need cloud VMs and don't have access
+   → Document the test setup, ask user
+
+================================================================================
+SECTION 7: KEY FILES TO READ
+================================================================================
+
+1. implementation-plans/track-o-wan-testing/O-wan-testing.md
+2. implementations/rust/crates/aafp-benchmark/benches/mcp_transport.rs
+   - Existing benchmark pattern
+3. implementations/rust/crates/aafp-benchmark/benches/quic_tuning.rs
+   - J7 benchmark — BBR vs Cubic (localhost only, O4 extends to WAN)
+4. implementations/rust/crates/aafp-transport-quic/src/congestion.rs
+   - CongestionController enum
+5. implementations/rust/crates/aafp-transport-quic/src/config.rs
+   - QuicConfig::low_latency(), bulk_transfer()
+6. implementations/rust/crates/aafp-sdk/src/client.rs
+   - AgentClient — connect, send, send_and_receive
+7. implementations/rust/crates/aafp-sdk/src/server.rs
+   - AgentServer — accept
+8. implementations/rust/crates/aafp-discovery/src/rpc_handler.rs
+   - Discovery RPC — for O7 multi-node DHT
+9. test-results/performance/quic-tuning-j7-results.json
+   - J7 results (localhost) — compare WAN results against these
+
+================================================================================
+SECTION 8: BEGIN
+================================================================================
+
+Start now.
+
+1. Read implementation-plans/track-o-wan-testing/O-wan-testing.md
+2. Read implementations/rust/crates/aafp-benchmark/benches/mcp_transport.rs
+3. Begin O1: create WAN test infrastructure (scripts + test harness)
+4. Test locally first (127.0.0.1 → 127.0.0.1), then extend to two machines
+
+The key question this track answers: does AAFP work over real networks?
+If yes, what are the performance characteristics and failure modes?
+If no, what breaks and how do we fix it?
+
+Even if you only have one machine, implement all the test scripts.
+They are valuable for future testing and CI integration.
+
+Go.
+
+================================================================================
+END OF BUILDER PROMPT (TRACK O)
+================================================================================

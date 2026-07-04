@@ -1,0 +1,337 @@
+================================================================================
+AAFP SECURITY AUDIT — BUILDER PROMPT (TRACK Q)
+================================================================================
+Date: 2026-07-03
+Project: AAFP (Agent-to-Agent Framing Protocol)
+Repo: /Users/david/projects/AAFP-research
+GitHub: https://github.com/davidnichols-ops/AAFP-research
+Rust submodule: https://github.com/davidnichols-ops/aafp
+
+================================================================================
+SECTION 1: CONTEXT
+================================================================================
+
+AAFP implements sound cryptography (ML-DSA-65, TLS 1.3 with PQ KEX,
+ReplayCache, AEAD). But "implements the spec correctly" is not the same
+as "survives real attackers." There has been no adversarial testing,
+fuzzing, resource exhaustion testing, or attack surface analysis.
+
+This track finds and fixes security vulnerabilities before they're
+found by someone else.
+
+Current test count: 1138+ tests (all functional, none adversarial)
+
+================================================================================
+SECTION 2: WHAT TO BUILD (8 STEPS)
+================================================================================
+
+File: implementation-plans/track-q-security-audit/Q-security-audit.md
+READ THIS FILE. It has all 8 steps.
+
+EXECUTION ORDER:
+  Q1 (threat model) → Q2 (fuzzing) → Q3 (handshake attacks)
+  → Q4 (resource exhaustion) → Q5 (timing) → Q6 (malformed inputs)
+  → Q7 (attack surface review) → Q8 (report)
+
+Q1 documents what we're protecting and from whom.
+Q2-Q6 are the actual testing (can be parallelized).
+Q7 is the code review based on findings.
+Q8 compiles everything.
+
+================================================================================
+SECTION 3: STEP DETAILS
+================================================================================
+
+### Q1: Threat Model Documentation
+
+WHAT TO BUILD:
+  docs/THREAT_MODEL.md with:
+  - Assets: private keys, session data, message content, identity, metadata
+  - Attack surfaces: QUIC listener, TLS, AAFP handshake, frame parser,
+    CBOR decoder, RPC handler, DHT, relay
+  - Trust boundaries: pre-handshake, post-handshake, authorized
+  - In-scope: MITM, replay, forgery, DoS, downgrade, timing
+  - Out-of-scope: physical access, OS compromise, supply chain
+  - Attackers: passive eavesdropper, active MITM, malicious peer,
+    compromised CA, relay operator
+
+  For each attack surface: inputs, validation, failure behavior, resources
+
+### Q2: Fuzz Testing
+
+WHAT TO BUILD:
+  1. Add cargo-fuzz or afl.rs:
+     cd implementations/rust
+     cargo add cargo-fuzz --dev
+     (or use the existing fuzz/ directory if present)
+
+  2. Create fuzz targets:
+     fuzz/fuzz_targets/fuzz_cbor_decode.rs
+       - Call aafp_cbor::decode(&data)
+       - Must not panic, must return Result
+
+     fuzz/fuzz_targets/fuzz_frame_decode.rs
+       - Call frame::decode(&data)
+       - Must not panic on truncated/malformed frames
+
+     fuzz/fuzz_targets/fuzz_handshake_frame.rs
+       - Feed random bytes to handshake frame reader
+       - Must not panic
+
+     fuzz/fuzz_targets/fuzz_rpc_request.rs
+       - Feed random CBOR to DiscoveryRpcHandler::handle_request()
+       - Must not panic
+
+     fuzz/fuzz_targets/fuzz_relay_request.rs
+       - Feed random CBOR to RelayV1RpcHandler::handle_request()
+       - Must not panic
+
+  3. Run each target:
+     cargo fuzz run fuzz_cbor_decode -- -max_total_time=3600
+     (1 hour per target, 10M+ iterations)
+
+  4. Fix any panics found. Add regression tests.
+
+KEY FILES:
+  implementations/rust/crates/aafp-cbor/src/ (CBOR decoder)
+  implementations/rust/crates/aafp-messaging/src/framing.rs (frame decoder)
+  implementations/rust/crates/aafp-discovery/src/rpc_handler.rs (RPC)
+  implementations/rust/crates/aafp-nat/src/relay_v1.rs (relay RPC)
+  fuzz/ (existing fuzz directory, if any)
+
+### Q3: Adversarial Handshake Tests
+
+WHAT TO BUILD:
+  implementations/rust/crates/aafp-tests/tests/handshake_attacks.rs
+
+  8 attack tests:
+  1. test_signature_forgery: wrong key signs → reject
+  2. test_agent_id_forgery: agent_id != SHA-256(pubkey) → reject
+  3. test_replay_attack: same ClientHello twice → reject second
+  4. test_expired_handshake: expires_at in past → reject
+  5. test_version_downgrade: version=0 → reject
+  6. test_mitm_modification: modified field → signature invalid → reject
+  7. test_tls_downgrade: weak cipher → reject (verify rustls config)
+  8. test_pq_kex_downgrade: non-PQ KEX → reject (verify prefer-post-quantum)
+
+  Each test:
+  - Constructs the attack input
+  - Sends to the handshake verifier
+  - Asserts rejection with correct error
+
+KEY FILES:
+  implementations/rust/crates/aafp-crypto/src/handshake_v1.rs
+    - verify_client_hello, verify_server_hello
+  implementations/rust/crates/aafp-crypto/src/replay_cache.rs
+    - ReplayCache
+  implementations/rust/crates/aafp-sdk/src/handshake_driver.rs
+    - drive_server_handshake
+
+### Q4: Resource Exhaustion Testing
+
+WHAT TO BUILD:
+  implementations/rust/crates/aafp-tests/tests/resource_exhaustion.rs
+
+  6 DoS tests:
+  1. test_connection_flood: 1000 connections in 1s → stays responsive
+  2. test_stream_exhaustion: 1000 streams on 1 connection → rejected
+  3. test_large_frame_attack: 1GB payload_len → rejected immediately
+  4. test_slow_loris: 1 byte/s → timeout after 30s
+  5. test_memory_exhaustion: many large messages → bounded memory
+  6. test_cpu_exhaustion: many handshakes → rate limited
+
+  Add to AgentServer:
+  - max_connections config (default 100)
+  - handshake rate limiting (10/s per IP)
+  - Verify frame size limit (1MB max, already exists?)
+
+KEY FILES:
+  implementations/rust/crates/aafp-transport-quic/src/config.rs
+    - max_idle_timeout, stream limits
+  implementations/rust/crates/aafp-sdk/src/server.rs
+    - AgentServer accept loop
+  implementations/rust/crates/aafp-messaging/src/framing.rs
+    - Frame size limits
+
+### Q5: Timing Side-Channel Analysis
+
+WHAT TO BUILD:
+  implementations/rust/crates/aafp-benchmark/benches/timing_analysis.rs
+
+  4 timing tests:
+  1. bench_signature_verify_valid_vs_invalid:
+     - Measure verify time for valid vs invalid signature
+     - Compare: if difference > 10%, there's a side-channel
+
+  2. bench_agent_id_compare_match_vs_mismatch:
+     - Measure comparison time for matching vs non-matching
+     - Should be constant-time
+
+  3. bench_replay_cache_hit_vs_miss:
+     - Measure lookup time for hit vs miss
+     - Should be similar
+
+  4. bench_cbor_decode_valid_vs_invalid:
+     - Measure decode time for valid vs invalid CBOR
+     - Document any differences
+
+  Use criterion for measurement. Run with --warm-up-count 100.
+  If side-channel found: fix with subtle crate (constant-time ops).
+
+KEY FILES:
+  implementations/rust/crates/aafp-crypto/src/dsa.rs
+  implementations/rust/crates/aafp-identity/src/agent_id.rs
+  implementations/rust/crates/aafp-crypto/src/replay_cache.rs
+  implementations/rust/crates/aafp-cbor/src/
+
+### Q6: Malformed Input Testing
+
+WHAT TO BUILD:
+  Adversarial test modules in each crate:
+
+  aafp-cbor/tests/adversarial.rs:
+  - empty input, deep nesting, integer overflow, invalid UTF-8
+  - indefinite length, duplicate map keys, tagged values
+
+  aafp-messaging/tests/adversarial.rs:
+  - 0-byte payload, truncated header, unknown frame type, version 255
+  - payload_len/ext_len mismatch
+
+  aafp-crypto/tests/adversarial.rs:
+  - empty public_key, short public_key, empty signature
+  - null capabilities, malformed ClientHello/ServerHello
+
+  aafp-sdk/tests/adversarial.rs:
+  - empty method, unknown method, null params, 1MB params
+
+  Each test: construct malformed input, feed to parser, assert error
+  (not panic).
+
+### Q7: Attack Surface Review
+
+WHAT TO BUILD:
+  1. Audit all pre-handshake code paths:
+     - QUIC accept → TLS handshake → frame read → AAFP handshake
+     - Verify: input validation, error handling, resource bounds
+
+  2. Check for:
+     - unwrap()/expect() in input paths → replace with proper error
+     - Missing size limits → add them
+     - Information leakage in error messages → generalize
+     - Missing rate limiting → add it
+
+  3. Fix all issues found. Add tests for each fix.
+
+  4. Document the review in docs/ATTACK_SURFACE_REVIEW.md
+
+### Q8: Security Report
+
+WHAT TO BUILD:
+  test-results/security/SECURITY_REPORT.md compiling all findings:
+  - Threat model summary
+  - Fuzz results (bugs found, fixes)
+  - Handshake attack results
+  - Resource exhaustion results
+  - Timing analysis results
+  - Malformed input results
+  - Attack surface review
+  - Remaining risks
+  - Recommendations
+
+================================================================================
+SECTION 4: EXECUTION PROCEDURE
+================================================================================
+
+Same as previous tracks:
+1. READ the step
+2. IMPLEMENT: Write tests, fix bugs
+3. VERIFY: Run tests, confirm criteria
+4. TEST: cargo test --workspace (0 failures)
+5. LINT: cargo clippy --workspace -- -D warnings (clean)
+6. FMT: cargo fmt --all -- --check (clean)
+7. STATUS: Update STATUS.md
+8. COMMIT: One commit per step
+9. PUSH: After track completes
+
+IMPORTANT: When fuzzing finds a bug, FIX IT IMMEDIATELY. Don't continue
+to the next step with known panics. Fix, add regression test, then continue.
+
+================================================================================
+SECTION 5: GOLDEN RULES
+================================================================================
+
+1. NEVER sacrifice security. This track IS about security.
+2. NEVER break the wire protocol. Golden traces MUST pass.
+3. NEVER introduce unsafe code to fix a bug. Use safe Rust.
+4. ALWAYS fix bugs found by fuzzing before continuing.
+5. ALWAYS run cargo test --workspace before committing.
+6. ALWAYS run cargo clippy --workspace -- -D warnings.
+7. ALWAYS run cargo fmt --all -- --check.
+8. ALWAYS update STATUS.md.
+9. One fix per commit.
+
+================================================================================
+SECTION 6: WHEN TO STOP AND ASK THE USER
+================================================================================
+
+1. If fuzzing finds a critical vulnerability (e.g., memory corruption)
+   → Fix immediately, document, ask user to review
+2. If a timing side-channel can't be fixed without a new dependency
+   → Ask user (subtle crate is the standard choice)
+3. If resource exhaustion reveals a design flaw (e.g., no connection limit)
+   → Add the limit, document, ask user to confirm default values
+4. If the attack surface review reveals a fundamental design issue
+   → Document, ask user
+5. If you need to add cargo-fuzz and it conflicts with existing fuzz setup
+   → Ask user
+
+================================================================================
+SECTION 7: KEY FILES TO READ
+================================================================================
+
+1. implementation-plans/track-q-security-audit/Q-security-audit.md
+2. implementations/rust/crates/aafp-cbor/src/
+   CBOR decoder — primary fuzz target
+3. implementations/rust/crates/aafp-messaging/src/framing.rs
+   Frame decoder — second fuzz target
+4. implementations/rust/crates/aafp-crypto/src/handshake_v1.rs
+   Handshake verification — adversarial test target
+5. implementations/rust/crates/aafp-crypto/src/replay_cache.rs
+   Replay protection — adversarial test target
+6. implementations/rust/crates/aafp-sdk/src/handshake_driver.rs
+   Handshake driver — where attacks land
+7. implementations/rust/crates/aafp-sdk/src/server.rs
+   Server accept loop — resource exhaustion target
+8. implementations/rust/crates/aafp-transport-quic/src/config.rs
+   QUIC config — limits and timeouts
+9. implementations/rust/crates/aafp-discovery/src/rpc_handler.rs
+   RPC handler — fuzz target
+10. implementations/rust/crates/aafp-nat/src/relay_v1.rs
+    Relay handler — fuzz target
+11. implementations/rust/crates/aafp-conformance/src/adversarial.rs
+    EXISTING adversarial tests — extend these
+
+================================================================================
+SECTION 8: BEGIN
+================================================================================
+
+Start now.
+
+1. Read implementation-plans/track-q-security-audit/Q-security-audit.md
+2. Read implementations/rust/crates/aafp-conformance/src/adversarial.rs
+   (existing adversarial tests — see what's already covered)
+3. Begin Q1: write the threat model
+4. Then Q2: set up fuzz targets and run them
+
+The key question this track answers: can AAFP survive real attackers?
+If fuzzing finds panics, fix them. If resource exhaustion works, add
+limits. If timing side-channels exist, fix them.
+
+Security is not optional. Every panic found by fuzzing is a potential
+DoS. Every timing side-channel is a potential key leak. Fix everything.
+
+Go.
+
+================================================================================
+END OF BUILDER PROMPT (TRACK Q)
+================================================================================

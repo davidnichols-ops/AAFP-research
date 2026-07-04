@@ -1,0 +1,403 @@
+================================================================================
+AAFP IDENTITY & PKI — BUILDER PROMPT (TRACK P)
+================================================================================
+Date: 2026-07-03
+Project: AAFP (Agent-to-Agent Framing Protocol)
+Repo: /Users/david/projects/AAFP-research
+GitHub: https://github.com/davidnichols-ops/AAFP-research
+Rust submodule: https://github.com/davidnichols-ops/aafp
+
+================================================================================
+SECTION 1: CONTEXT
+================================================================================
+
+AAFP agents authenticate each other via ML-DSA-65 signatures in the
+handshake. This proves *who* you're talking to, but not *whether you
+should trust them*. The current trust model is TOFU (Trust On First Use):
+the first time you connect, you trust the peer's public key.
+
+There is no:
+- Certificate Authority (CA) to vouch for agent identity
+- Web of Trust (WoT) where peers vouch for each other
+- Key directory for looking up trusted public keys
+- Key rotation mechanism
+- Networked revocation distribution (RevocationStore is local-only)
+
+This track implements a hybrid trust model: key directory for bootstrap,
+WoT for decentralized trust, CA for enterprise, with key rotation and
+networked revocation.
+
+================================================================================
+SECTION 2: CURRENT STATE OF IDENTITY CODE
+================================================================================
+
+aafp-identity crate (implementations/rust/crates/aafp-identity/src/):
+  - identity_v1.rs: AgentRecord (self-signed CBOR document), AgentId,
+    CapabilityDescriptor, sign/verify
+  - keypair.rs: AgentKeypair (ML-DSA-65 keypair), generate(), sign(), verify()
+  - ucan.rs: UcanToken (capability delegation, sign/verify/verify_chain)
+  - revocation.rs: RevocationEntry, RevocationList, RevocationStore
+    (local-only, not networked)
+  - agent_record.rs: Legacy AgentRecord (deprecated)
+  - agent_id.rs: AgentId derivation (SHA-256 of public key)
+
+aafp-crypto crate:
+  - dsa.rs: MlDsa65 (sign, verify, keypair_from_seed, sign_deterministic)
+  - handshake_v1.rs: ClientHello, ServerHello, ClientFinished
+    (verify_client_hello, verify_server_hello, verify_client_finished)
+
+SDK:
+  - handshake_driver.rs: drive_client/server_handshake
+    (verifies agent_id == SHA-256(public_key), signature, version, expiry)
+  - transport_binding.rs: establish_session()
+    (calls handshake, then AuthorizationProvider)
+  - AgentClient::connect(): does direct dial, no trust verification
+    beyond the handshake
+
+RFCs:
+  - RFC 0003: Identity and Authentication (AgentId, AgentRecord, UCAN)
+  - No RFC for trust bootstrap, key directory, WoT, or CA
+
+================================================================================
+SECTION 3: WHAT TO BUILD (8 STEPS)
+================================================================================
+
+File: implementation-plans/track-p-identity-pki/P-identity-pki.md
+READ THIS FILE. It has all 8 steps.
+
+EXECUTION ORDER:
+  P1 (design + RFC) → P2 (key directory) → P3 (WoT) → P4 (CA)
+  → P5 (key rotation) → P6 (networked revocation) → P7 (trust API)
+  → P8 (end-to-end testing)
+
+P1 is the design step — write the RFC before implementing.
+P2-P4 are the three trust models, can be developed in parallel.
+P5-P6 are lifecycle management.
+P7 ties everything together.
+P8 validates the complete trust lifecycle.
+
+================================================================================
+SECTION 4: STEP DETAILS
+================================================================================
+
+### P1: Design the Trust Model + Write RFC 0011
+
+WHAT TO BUILD:
+  1. Write RFCs/0011-trust-bootstrap.md covering:
+     - Key directory protocol (query, publish, verify)
+     - WoT signature format (who signs whom, trust level, expiry)
+     - CA certificate format (ML-DSA-65 signed, not X.509)
+     - Key rotation protocol (old key signs new key)
+     - Networked revocation distribution (gossip + directory)
+     - Integration with existing AAFP v1 handshake
+     - Security considerations (MITM, key compromise, replay)
+
+  2. The RFC should specify:
+     - CBOR wire format for each new type
+     - RPC methods for directory and revocation
+     - Trust level semantics (0=none, 1=marginal, 2=full, 3=ultimate)
+     - How TrustManager combines trust sources
+     - When to fall back from one source to another
+
+KEY FILES TO READ:
+  RFCs/0003-identity-authentication.md
+    - Current identity spec — extend this
+  RFCs/0010-circuit-relay.md
+    - Pattern for writing AAFP RFCs (structure, CBOR examples)
+
+### P2: Key Directory
+
+WHAT TO BUILD:
+  1. KeyDirectory type (in aafp-identity):
+     - In-memory HashMap<AgentId, AgentRecord>
+     - SQLite backend (follow PersistentDht pattern)
+     - lookup(agent_id) → Option<AgentRecord>
+     - publish(record) → Result (verifies signature, rate-limits)
+     - verify(agent_id, record) → bool
+
+  2. KeyDirectoryClient + KeyDirectoryServer:
+     - RPC methods: aafp.directory.lookup, aafp.directory.publish
+     - Server stores records in SQLite
+     - Server signs responses (if it has its own key)
+     - Client connects, queries, verifies
+
+  3. AgentBuilder integration:
+     - .with_directory("quic://dir.example.com:4433")
+     - On connect to unknown peer: query directory, verify record
+     - If directory confirms: trust the peer
+     - If directory doesn't know: fall back to TOFU
+
+  4. Tests:
+     - A publishes to directory, B looks up A, B verifies A's record
+     - Directory rejects invalid records (bad signature, wrong agent_id)
+     - Rate limiting: can't publish more than 1/hour per agent
+
+KEY FILES:
+  implementations/rust/crates/aafp-identity/src/identity_v1.rs
+    - AgentRecord (self-signed, has verify())
+  implementations/rust/crates/aafp-discovery/src/persistent_dht.rs
+    - SQLite backend pattern
+  implementations/rust/crates/aafp-discovery/src/rpc_handler.rs
+    - RPC handler pattern
+
+### P3: Web of Trust
+
+WHAT TO BUILD:
+  1. TrustSignature type (in aafp-identity/src/web_of_trust.rs):
+     - signer_agent_id, signed_agent_id, signed_public_key
+     - trust_level (0-3), expiry, signature
+     - sign(), verify(), CBOR encode/decode
+
+  2. WebOfTrust type:
+     - Store trust signatures
+     - trust_level(agent_id) → u8: compute via BFS with trust decay
+     - add_trust_signature(sig)
+     - export_trust() / import_trust()
+
+  3. RPC method aafp.wot.sign:
+     - A requests B to sign A's key
+     - B signs with trust level, returns TrustSignature
+     - A stores it, can show to others
+
+  4. Handshake integration:
+     - After handshake, exchange trust signatures
+     - Store received signatures in WebOfTrust
+     - Use WoT to compute trust for unknown peers
+
+  5. Tests:
+     - A signs B (full trust), B signs C (full trust)
+     - A's trust_level(C) should be marginal (transitive, decayed)
+     - Expired signatures are ignored
+     - Invalid signatures are rejected
+
+KEY FILES:
+  implementations/rust/crates/aafp-identity/src/ucan.rs
+    - UcanToken (similar signing pattern)
+  implementations/rust/crates/aafp-identity/src/revocation.rs
+    - RevocationEntry (similar signature pattern)
+
+### P4: CA Certificates
+
+WHAT TO BUILD:
+  1. CaCertificate type (in aafp-identity/src/ca.rs):
+     - agent_id, public_key, issuer, issuer_public_key
+     - serial_number, not_before, not_after, capabilities
+     - ca_signature (ML-DSA-65 over all fields)
+     - sign(), verify(), CBOR encode/decode
+
+  2. CaVerifier type:
+     - Store trusted root CA public keys
+     - Verify certificate chains (agent → intermediate → root)
+     - Check revocation (using RevocationStore)
+     - Check expiry
+
+  3. Handshake integration:
+     - Agent presents CA certificate alongside AgentRecord
+     - Peer verifies CA cert (if it trusts the CA)
+     - If verified: skip TOFU, trust the peer
+     - If no CA cert: fall back to TOFU/WoT/directory
+
+  4. AgentBuilder:
+     - .with_ca_cert(path) — load agent's CA certificate
+     - .with_trusted_ca(path) — load trusted root CA keys
+
+  5. Tests:
+     - CA signs A's key, B trusts CA, B verifies A's cert
+     - Expired certificate is rejected
+     - Revoked certificate is rejected
+     - Self-signed cert (CA = agent) is rejected unless CA is trusted
+
+KEY FILES:
+  implementations/rust/crates/aafp-identity/src/identity_v1.rs
+    - AgentRecord (pattern for signed records)
+  implementations/rust/crates/aafp-identity/src/revocation.rs
+    - RevocationStore (CA verification uses this)
+  implementations/rust/crates/aafp-crypto/src/dsa.rs
+    - MlDsa65::sign(), verify()
+
+### P5: Key Rotation
+
+WHAT TO BUILD:
+  1. KeyRotationRecord type (in aafp-identity/src/key_rotation.rs):
+     - old_agent_id, new_agent_id, new_public_key, timestamp
+     - old_signature (proves old key authorized rotation)
+     - new_signature (proves new key is controlled)
+     - verify(): check both signatures, check agent_id derivation
+     - CBOR encode/decode
+
+  2. Directory integration:
+     - aafp.directory.rotate(rotation_record)
+     - Directory verifies rotation, updates mapping
+
+  3. WoT integration:
+     - Trust signatures carry over from old to new agent_id
+     - WoT graph updates automatically
+
+  4. CA integration:
+     - Old CA certificate must be revoked
+     - New CA certificate must be issued
+
+  5. Tests:
+     - A generates new keypair, signs rotation record
+     - B receives rotation, updates trust, connects to A's new identity
+     - Old key is revoked after rotation
+     - Attacker can't rotate without old private key
+
+### P6: Networked Revocation Distribution
+
+WHAT TO BUILD:
+  1. Revocation distribution protocol:
+     - aafp.revocation.publish(crl) — publish CRL to peers/directory
+     - aafp.revocation.query(agent_id) — check if revoked
+     - aafp.revocation.list() — get all known revocations
+
+  2. Gossip-based CRL exchange:
+     - Every 5 minutes, exchange CRLs with connected peers
+     - Merge received CRLs into local RevocationStore
+     - Push new revocations immediately to connected peers
+
+  3. Directory integration:
+     - CRLs published to directory
+     - Queryable by anyone
+
+  4. Handshake integration:
+     - Before accepting peer: check RevocationStore
+     - If revoked: reject connection
+     - After handshake: exchange CRLs
+
+  5. Tests:
+     - A is revoked, revocation gossips to B, B rejects A
+     - CRL expiry: old revocations are evicted
+     - Large CRL (1000 entries) doesn't slow down handshake
+
+KEY FILES:
+  implementations/rust/crates/aafp-identity/src/revocation.rs
+    - RevocationStore, RevocationList, RevocationEntry (existing)
+
+### P7: TrustManager API
+
+WHAT TO BUILD:
+  1. TrustManager type (in aafp-sdk/src/trust_manager.rs):
+     - Combines: direct trust, WoT, CA, directory, revocation
+     - verify_peer(agent_id, public_key) → TrustResult
+     - TrustResult: Trusted, Untrusted, Revoked, Unknown
+
+  2. TrustResult variants:
+     - Trusted { source, level } — trusted by CA/WoT/directory/TOFU
+     - Untrusted { reason } — verification failed
+     - Revoked { entry } — key is revoked
+     - Unknown { suggestion } — no trust info, suggest action
+
+  3. Agent integration:
+     - Agent::verify_peer(peer_id) → TrustResult
+     - Called after handshake, before accepting connection
+     - Configurable policy: reject untrusted, warn only, etc.
+
+  4. CLI commands:
+     - aafp trust list — list trusted peers
+     - aafp trust revoke <agent_id> — manually revoke
+     - aafp trust sign <agent_id> — sign a peer's key (WoT)
+
+  5. Tests:
+     - Each trust source returns correct TrustResult
+     - Revocation overrides all other trust sources
+     - Unknown peer gets suggestion (query directory, request WoT sign)
+
+### P8: End-to-End Trust Scenarios
+
+WHAT TO BUILD:
+  1. Test all 8 trust scenarios (see P-identity-pki.md P8)
+  2. Write results to test-results/security/trust-scenarios.json
+  3. Verify MITM detection: attacker presents wrong key → rejected
+
+================================================================================
+SECTION 5: EXECUTION PROCEDURE
+================================================================================
+
+Same as previous tracks:
+1. READ the step
+2. IMPLEMENT: Write code + tests
+3. VERIFY: Run tests, confirm criteria
+4. TEST: cargo test --workspace (0 failures)
+5. LINT: cargo clippy --workspace -- -D warnings (clean)
+6. FMT: cargo fmt --all -- --check (clean)
+7. STATUS: Update STATUS.md
+8. COMMIT: One commit per step
+9. PUSH: After track completes
+
+================================================================================
+SECTION 6: GOLDEN RULES
+================================================================================
+
+1. NEVER sacrifice security. The trust model must be cryptographically sound.
+2. NEVER break the wire protocol. Golden traces MUST pass.
+3. NEVER weaken the existing handshake. New trust layers are additive.
+4. ALWAYS run cargo test --workspace before committing.
+5. ALWAYS run cargo clippy --workspace -- -D warnings.
+6. ALWAYS run cargo fmt --all -- --check.
+7. ALWAYS update STATUS.md.
+8. One feature per commit.
+
+================================================================================
+SECTION 7: WHEN TO STOP AND ASK THE USER
+================================================================================
+
+1. If the trust model design (P1) needs a decision not covered in the plan
+   → Write the RFC with your best recommendation, ask user to review
+2. If a new dependency is needed
+   → Check maintained, published >7 days, ask user
+3. If CA implementation requires X.509 compatibility
+   → Ask user (current plan uses ML-DSA-65 signed CBOR, not X.509)
+4. If key rotation reveals a security issue with the current handshake
+   → STOP and ask user
+5. If you need to make a design decision about trust level semantics
+   → Ask user
+
+================================================================================
+SECTION 8: KEY FILES TO READ
+================================================================================
+
+1. implementation-plans/track-p-identity-pki/P-identity-pki.md
+2. RFCs/0003-identity-authentication.md
+   Current identity spec
+3. implementations/rust/crates/aafp-identity/src/identity_v1.rs
+   AgentRecord, sign/verify pattern
+4. implementations/rust/crates/aafp-identity/src/keypair.rs
+   AgentKeypair, generate/sign/verify
+5. implementations/rust/crates/aafp-identity/src/ucan.rs
+   UcanToken, verify_chain (WoT will follow this pattern)
+6. implementations/rust/crates/aafp-identity/src/revocation.rs
+   RevocationStore, RevocationList (P6 makes this networked)
+7. implementations/rust/crates/aafp-crypto/src/dsa.rs
+   MlDsa65 signing and verification
+8. implementations/rust/crates/aafp-sdk/src/handshake_driver.rs
+   Where trust verification will be added
+9. implementations/rust/crates/aafp-sdk/src/transport_binding.rs
+   establish_session() — trust check goes here
+10. implementations/rust/crates/aafp-discovery/src/persistent_dht.rs
+    SQLite backend pattern (for key directory)
+
+================================================================================
+SECTION 9: BEGIN
+================================================================================
+
+Start now.
+
+1. Read implementation-plans/track-p-identity-pki/P-identity-pki.md
+2. Read RFCs/0003-identity-authentication.md
+3. Begin P1: write RFC 0011 (trust bootstrap design)
+4. Then P2: implement key directory
+
+The key question this track answers: how does an agent decide whether
+to trust a peer it has never seen before? The answer is a hybrid model:
+directory for bootstrap, WoT for decentralized trust, CA for enterprise,
+with key rotation and networked revocation.
+
+The most important step is P1 (the RFC). Get the design right before
+implementing. The implementation should follow the RFC exactly.
+
+Go.
+
+================================================================================
+END OF BUILDER PROMPT (TRACK P)
+================================================================================
