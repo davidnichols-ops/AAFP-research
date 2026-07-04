@@ -622,7 +622,7 @@ all 1011 Rust tests pass.
 ## Track P — Identity & PKI (Production Readiness Phase 2)
 
 ### P: Trust Bootstrap for Production
-- [ ] **P1** Design trust model + write RFC 0011
+- [x] **P1** Design trust model + write RFC 0011
 - [ ] **P2** Key directory (lookup, publish, verify)
 - [ ] **P3** Web of Trust (peer key signing, transitive trust)
 - [ ] **P4** CA-based certificate support (ML-DSA-65 signed)
@@ -631,10 +631,14 @@ all 1011 Rust tests pass.
 - [ ] **P7** TrustManager API (combine all trust sources)
 - [ ] **P8** End-to-end trust scenario testing (8 scenarios)
 
-**P status:** NOT STARTED
+**P status:** IN PROGRESS (P1 complete)
 **P blocked by:** nothing
 **P plan:** `implementation-plans/track-p-identity-pki/P-identity-pki.md`
 **P builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_P.txt`
+**P notes:** P1 complete — RFC 0011 written covering hybrid trust model
+(key directory, WoT, CA certs, key rotation, networked revocation, TrustManager API).
+Trust levels 0-3, domain separators for all new signature types, CBOR wire formats
+specified, RPC methods defined, security considerations documented.
 
 ---
 
