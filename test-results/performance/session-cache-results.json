@@ -1,0 +1,67 @@
+{
+  "track": "I",
+  "step": "I1",
+  "description": "TLS session ticket cache + rustls session resumption",
+  "date": "2026-07-03",
+  "platform": "Apple M4, release build",
+  "methodology": {
+    "framework": "criterion",
+    "warmup": "2s",
+    "measurement_time": "3s",
+    "sample_size": 10,
+    "runtime": "tokio multi-thread"
+  },
+  "results": {
+    "cold_connect": {
+      "time_median_us": 240,
+      "description": "First connection to server (full TLS handshake + PQ KEX)",
+      "includes": "QUIC handshake + TLS 1.3 with X25519MLKEM768 + ALPN negotiation"
+    },
+    "warm_connect": {
+      "time_median_ms": 1.76,
+      "description": "Second connection to same server (TLS session resumption)",
+      "note": "Includes first connection setup in each iteration (fresh server per iter). Actual warm connect time is masked by first connection overhead."
+    },
+    "pooled_connect": {
+      "time_median_us": 14,
+      "description": "Open new bidirectional stream on existing connection",
+      "note": "No TLS handshake at all — just QUIC stream creation. Baseline for Track I5 (connection pool)."
+    }
+  },
+  "analysis": {
+    "cold_connect_breakdown": "240µs = QUIC handshake + TLS 1.3 with X25519MLKEM768 PQ KEX + ALPN",
+    "pooled_vs_cold": "14µs vs 240µs = 17x faster (stream open vs full handshake)",
+    "resumption_benefit": "TLS session resumption skips the PQ KEX on reconnect, reducing handshake time. The exact savings depend on whether the server accepts the ticket.",
+    "pooled_benefit": "Connection pooling (Track I5) eliminates the handshake entirely — 17x improvement for repeated RPCs to the same peer."
+  },
+  "implementation": {
+    "new_module": "aafp-transport-quic/src/session_cache.rs",
+    "new_types": ["SessionCache", "DEFAULT_SESSION_CACHE_SIZE"],
+    "new_methods": [
+      "QuicTransport::new_with_resumption()",
+      "QuicTransport::new_with_resumption_cache()",
+      "QuicTransport::session_cache()",
+      "QuicTransport::has_resumption()",
+      "QuicConfig::build_client_config_with_resumption()"
+    ],
+    "server_change": "send_tls13_tickets = 4 (was 2 default) — more tickets for more resumptions",
+    "client_change": "Cached ClientConfig with shared SessionCache reused across dial() calls",
+    "backward_compat": "QuicTransport::new() unchanged — no resumption, builds fresh config per dial",
+    "security": "0-RTT early data NOT enabled (replay risk). AAFP handshake still runs after TLS resumption."
+  },
+  "verify_criteria": {
+    "session_cache_created": "PASS — SessionCache with 1024 entries (default)",
+    "resumption_enabled": "PASS — ClientConfig uses Resumption::store() with shared cache",
+    "second_connection_works": "PASS — resumption_two_connections_to_same_server test",
+    "stream_works_after_reconnect": "PASS — resumption_stream_works_after_reconnect test",
+    "backward_compat": "PASS — new() still works without resumption",
+    "custom_cache_size": "PASS — SessionCache::with_size(256) works"
+  },
+  "tests": {
+    "new_tests": 10,
+    "total_tests": 1223,
+    "failures": 0,
+    "clippy": "clean",
+    "fmt": "clean"
+  }
+}

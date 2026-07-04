@@ -32,15 +32,15 @@
 |-------|------|--------|-------|----------|
 | G | Zero-Copy Data Path | COMPLETE | 8/8 | Q1 |
 | H | Lock-Free Concurrency | COMPLETE | 7/7 | Q1-Q2 |
-| I | Connection Lifecycle | NOT STARTED | 0/8 | Q2 |
+| I | Connection Lifecycle | IN PROGRESS | 1/8 | Q2 |
 | J | QUIC Transport Tuning | NOT STARTED | 0/7 | Q2-Q3 |
 | K | Serialization Optimization | NOT STARTED | 0/7 | Q3 |
 | L | Kernel & Hardware | NOT STARTED | 0/8 | Q3-Q4 |
 | M | Benchmarking & Profiling | IN PROGRESS | 2/7 | Ongoing |
 
 **Total steps:** 52
-**Completed:** 17
-**In progress:** 2
+**Completed:** 18
+**In progress:** 3
 **Blocked:** 0
 
 ---
