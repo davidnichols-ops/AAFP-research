@@ -10,7 +10,7 @@
 - `[!]` — Blocked (add note)
 - `[-]` — Skipped / N/A (add reason)
 
-**Last updated:** 2026-07-04 (Track S2 COMPLETE — 100-agent load test, 399K msgs, 0% error)
+**Last updated:** 2026-07-04 (Track O COMPLETE — O1-O8 WAN testing, 26 tests pass)
 
 **Test Results Infrastructure:** A `test-results/` directory has been added to the
 umbrella repo with:
@@ -676,15 +676,19 @@ Documentation: docs/NAT_TRAVERSAL_TESTING.md. Total new tests: 85 + 7 + 8 + 5
       *(3 agents with ML-DSA-65 keypairs, 4 capabilities. Announce 15.7ms,
         lookup 0.005ms. Churn: 10 join, 5 leave, 3 rejoin = 8 active.
         JSON: test-results/interop/wan-dht-discovery.json.)*
-- [ ] **O8** WAN performance report
+- [x] **O8** WAN performance report
+      *(Comprehensive WAN_REPORT.md with latency, throughput, adverse
+        conditions, congestion control, interop, migration, DHT results.
+        PERFORMANCE_STATUS.md updated with WAN results.)*
 
-**O status:** IN PROGRESS (O1-O7 complete, O8 remaining)
+**O status:** COMPLETE (O1-O8 all verified)
 **O blocked by:** Track N (NAT traversal for cross-NAT tests) — N COMPLETE
 **O plan:** `implementation-plans/track-o-wan-testing/O-wan-testing.md`
 **O builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_O.txt`
 **O notes:** WAN conditions simulated in userspace (QUIC uses UDP, toxiproxy
-only supports TCP). 15 new tests in wan_simulation.rs covering O2/O3/O4.
-Real-world WAN validation with second machine or tc/dnctl (root) pending.
+only supports TCP). 26 total tests (20 in wan_simulation.rs + 6 in wan_test.rs).
+Real-world WAN validation with second machine or tc/dnctl (root) recommended
+for final production sign-off. All 8 steps verified.
 
 ---
 
@@ -860,16 +864,16 @@ usage), CLI binary. S2 (100-agent load test) in progress.
 | F4 | COMPLETE | E2 | 11/11 |
 | G-M | COMPLETE | — | 52/52 (performance) |
 | N | COMPLETE | — | 8/8 |
-| O | NOT STARTED | N (done) | 0.5/8 (O1 partial, uncommitted) |
+| O | COMPLETE | N (done) | 8/8 |
 | P | COMPLETE | — | 8/8 |
 | Q | IN PROGRESS | P (done) | 1/8 (Q1 done: threat model) |
 | R | NOT STARTED | O | 0.5/8 (R1 partial, uncommitted) |
 | S | NOT STARTED | N (done) | 0.5/8 (S1 partial, uncommitted) |
 
 **Total steps:** 282 (218 Tracks A-F + 52 Tracks G-M + 48 Tracks N-S)
-**Completed:** 278 (218 + 52 + 8 P + 8 N)
+**Completed:** 286 (218 + 52 + 8 P + 8 N + 8 O)
 **In progress:** 0
-**Blocked:** 1 (R blocked by O)
+**Blocked:** 1 (R blocked by O — O now COMPLETE, R can proceed)
 **Not started:** 39 (O1-O8, Q1-Q8, R1-R8, S1-S8 — O1/R1/S1 have uncommitted partial work)
 
 **Tests:** 1461 passing, 0 failures, 7 ignored

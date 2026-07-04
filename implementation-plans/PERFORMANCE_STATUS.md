@@ -48,9 +48,10 @@
 | K | Serialization Optimization | COMPLETE | 3/7 (K3-K6 not needed) | Q3 |
 | L | Kernel & Hardware | COMPLETE | 8/8 (L2/L4/L7 documented) | Q3-Q4 |
 | M | Benchmarking & Profiling | COMPLETE | 7/7 | Ongoing |
+| O | WAN Testing | COMPLETE | 8/8 | 2026-07-04 |
 
-**Total steps:** 52
-**Completed:** 52
+**Total steps:** 52 (+ 8 WAN) = 60
+**Completed:** 60
 **In progress:** 0
 **Blocked:** 0
 
@@ -92,3 +93,36 @@ After each track, the following must pass:
 5. **No security regressions** (PQ handshake still enforced, identity still verified)
 6. **Benchmark improvement** (measured improvement vs baseline, statistically significant)
 7. **No new allocations** (allocation count same or lower than before)
+
+---
+
+## WAN Testing Results (Track O, 2026-07-04)
+
+Full report: [`test-results/performance/WAN_REPORT.md`](../test-results/performance/WAN_REPORT.md)
+
+| Metric | Localhost | Simulated 50ms WAN | Simulated 200ms RTT |
+|--------|-----------|--------------------|---------------------|
+| Round-trip p50 | 41.47 µs | 52,092 µs | 203,088 µs |
+| 1KB throughput | 776K msg/s | 167K msg/s | N/A |
+| Handshake | 240 µs | N/A | 31.2 ms |
+
+### Adverse Conditions
+
+| Condition | Success Rate | Status |
+|-----------|-------------|--------|
+| 1% packet loss | 99.5% | PASS |
+| 5% packet loss | 96.5% | PASS |
+| 500ms RTT (satellite) | 100% (5/5 pings) | PASS |
+| 1% loss + 100ms RTT | 96% | PASS |
+
+### Congestion Control (1% loss, p50)
+
+| Controller | p50 (µs) |
+|------------|----------|
+| BBR | 236 |
+| Cubic | 313 |
+| NewReno | 128 |
+
+**Note:** WAN conditions simulated in userspace (QUIC uses UDP, toxiproxy
+only supports TCP). Real-world validation with second machine or tc/dnctl
+(root) recommended for final production sign-off.
