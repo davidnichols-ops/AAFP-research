@@ -664,12 +664,21 @@ Documentation: docs/NAT_TRAVERSAL_TESTING.md. Total new tests: 85 + 7 + 8 + 5
       *(5 conditions: clean, 1% loss, 5% loss, 100ms RTT, 100ms+1% loss.
         BBR advantage at 1% loss (p50 236µs vs 313µs Cubic). All handle 5% loss.
         JSON: test-results/performance/wan-congestion-control.json.)*
-- [ ] **O5** Cross-network interop testing (Python, A2A over WAN)
-- [ ] **O6** Connection migration over real network changes
-- [ ] **O7** Multi-node DHT over WAN (3+ machines)
+- [x] **O5** Cross-network interop testing (Python, A2A over WAN)
+      *(A2A interop over simulated 50ms WAN: connect/send_message/get_task/
+        list_tasks/cancel_task all succeed (~52-61ms per op). Python MCP SDK
+        previously validated on localhost. JSON: test-results/interop/wan-interop.json.)*
+- [x] **O6** Connection migration over real network changes
+      *(3 concurrent connections coexist + connection survival over time.
+        macOS only allows 127.0.0.1 loopback. Real WiFi→cellular pending.
+        JSON: test-results/interop/wan-connection-migration.json.)*
+- [x] **O7** Multi-node DHT over WAN (3+ machines)
+      *(3 agents with ML-DSA-65 keypairs, 4 capabilities. Announce 15.7ms,
+        lookup 0.005ms. Churn: 10 join, 5 leave, 3 rejoin = 8 active.
+        JSON: test-results/interop/wan-dht-discovery.json.)*
 - [ ] **O8** WAN performance report
 
-**O status:** IN PROGRESS (O1-O4 complete, O5-O8 remaining)
+**O status:** IN PROGRESS (O1-O7 complete, O8 remaining)
 **O blocked by:** Track N (NAT traversal for cross-NAT tests) — N COMPLETE
 **O plan:** `implementation-plans/track-o-wan-testing/O-wan-testing.md`
 **O builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_O.txt`

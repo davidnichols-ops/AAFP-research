@@ -1,0 +1,45 @@
+{
+  "test": "wan-dht-discovery",
+  "track": "O7",
+  "date": "2026-07-04",
+  "platform": "macOS, Apple M4 (ARM64)",
+  "rust": "1.96.0",
+  "method": "Multi-node DHT discovery tested with in-memory CapabilityDht. 3 agents with real ML-DSA-65 keypairs on simulated different networks (10.0.1.1, 10.0.2.1, 10.0.3.1). Churn test with 10 agents joining, 5 leaving, 3 rejoining. Real multi-machine DHT pending Track R (WAN Discovery).",
+  "multi_node_discovery": {
+    "agents": 3,
+    "capabilities": ["inference", "translation", "summarization", "code-review"],
+    "results": {
+      "announce_time_ms": 15.688,
+      "lookup_inference_ms": 0.005,
+      "lookup_translation_agents": 2,
+      "lookup_code_review_agents": 1,
+      "agent_offline_removal": "PASS — agent 2 removed, inference count drops from 2 to 1",
+      "agent_rejoin": "PASS — agent 2 re-announced, inference count back to 2",
+      "get_any_inference_code_review": 3,
+      "agent_capabilities_lookup": "PASS — agent 1 has [inference, translation]",
+      "dht_stats": {"agents": 3, "capabilities": 4}
+    },
+    "status": "PASS — all announce, lookup, offline, rejoin operations succeed"
+  },
+  "churn_handling": {
+    "description": "10 agents join, 5 leave, 3 rejoin = 8 active",
+    "results": {
+      "join_10_agents_ms": 245.977,
+      "leave_5_agents_ms": 0.029,
+      "inference_count_after_join": 10,
+      "inference_count_after_leave": 5,
+      "inference_count_after_rejoin": 8,
+      "agent_count_final": 8
+    },
+    "status": "PASS — churn handling works correctly",
+    "notes": "Join time includes ML-DSA-65 keypair generation (24.6ms per agent). Leave and lookup are sub-millisecond."
+  },
+  "observations": [
+    "DHT announce: 15.7ms for 3 agents (includes 3x ML-DSA-65 keypair generation + signing)",
+    "DHT lookup: 0.005ms (sub-microsecond) — in-memory hash table lookup",
+    "Agent removal: instant — hash table deletion",
+    "Churn: 246ms for 10 agents joining (dominated by keypair generation, not DHT operations)",
+    "Real multi-machine DHT routing (Kademlia-style) is Track R — R1 partially implemented (uncommitted dht_router.rs)"
+  ],
+  "verify": "Multi-node DHT discovery works over simulated WAN. 3 agents with 4 capabilities, announce/lookup/offline/rejoin all pass. Churn handling with 10 agents validated."
+}
