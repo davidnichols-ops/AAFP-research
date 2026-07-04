@@ -10,7 +10,7 @@
 - `[!]` — Blocked (add note)
 - `[-]` — Skipped / N/A (add reason)
 
-**Last updated:** 2026-07-04 (Track P COMPLETE — P3-P8 implemented, 128 new tests pass)
+**Last updated:** 2026-07-04 (Track S1 COMPLETE — load test harness committed, 14 tests pass)
 
 **Test Results Infrastructure:** A `test-results/` directory has been added to the
 umbrella repo with:
@@ -777,13 +777,13 @@ with multiple nodes, commit R1, then proceed to R2-R8.
 ## Track S — Load Testing & Operations (Production Readiness Phase 2)
 
 ### S: Production Readiness
-- [~] **S1** Load test harness (N agents, topologies, metrics)
-      *(PARTIAL — uncommitted: `crates/aafp-loadtest/` (6 source files, 1138 lines).
+- [x] **S1** Load test harness (N agents, topologies, metrics)
+      *(COMPLETE — `crates/aafp-loadtest/` (1371 lines, 6 source files) committed.
         Implements LoadTestConfig, Topology (mesh/star/ring/random), LoadTestRunner,
         LoadTestMetrics (throughput, latency, error rate, resource usage), CLI binary.
         14 tests pass (10 unit + 3 integration + 1 doctest). Crate is in workspace.
-        Needs commit + S2 100-agent test + metrics export.)*
-- [ ] **S2** 100-agent load test (throughput, latency, error rate)
+        fmt + clippy clean.)*
+- [~] **S2** 100-agent load test (throughput, latency, error rate)
 - [ ] **S3** Long-running stability test (4-24h, leak detection)
 - [ ] **S4** Metrics and observability (AgentMetrics, health check, tracing)
 - [ ] **S5** Deployment documentation (Docker, systemd, Kubernetes)
@@ -791,20 +791,18 @@ with multiple nodes, commit R1, then proceed to R2-R8.
 - [ ] **S7** Stress testing (burst, large messages, churn, DHT load)
 - [ ] **S8** Production readiness report
 
-**S status:** IN PROGRESS (S1 partial — uncommitted)
-**S blocked by:** Track N (NAT traversal — load test needs relay)
+**S status:** IN PROGRESS (S1 COMPLETE, S2 in progress)
+**S blocked by:** Track N (NAT traversal — load test needs relay) — N COMPLETE
 **S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
 **S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`
-**S notes:** S1 partial — aafp-loadtest crate (1138 lines across 6 files) created
-by builder subagent but NOT committed. Implements: LoadTestConfig (num_agents,
-messages_per_agent, message_size, duration, topology, max_connections_per_agent),
-Topology (Mesh, Star, Ring, Random with deterministic seeding), LoadTestRunner
-(creates N agents, server echo loop per agent, client tasks per edge, collects
-metrics via lock-free atomics), LoadTestMetrics (messages_sent/received,
-throughput_msgps, latency stats, error_rate, resource usage), CLI binary
-(`cargo run -p aafp-loadtest --features cli -- loadtest`). 14 tests pass.
-Crate is added to workspace Cargo.toml. To continue: review the code, commit S1,
-then run S2 (100-agent test) and proceed to S3-S8.
+**S notes:** S1 COMPLETE — aafp-loadtest crate (1371 lines across 6 files) reviewed,
+tested (14 tests pass), formatted, linted, and committed. Implements: LoadTestConfig
+(num_agents, messages_per_agent, message_size, duration, topology,
+max_connections_per_agent), Topology (Mesh, Star, Ring, Random with deterministic
+seeding), LoadTestRunner (creates N agents, server echo loop per agent, client tasks
+per edge, collects metrics via lock-free atomics), LoadTestMetrics
+(messages_sent/received, throughput_msgps, latency stats, error_rate, resource
+usage), CLI binary. S2 (100-agent load test) in progress.
 
 ---
 
