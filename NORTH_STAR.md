@@ -9,22 +9,55 @@ remaining work to make AAFP carry real agent traffic over the public internet.
 
 ## 1. The Mission
 
-**Make AI agents talk to each other over the internet with post-quantum security,
-sub-millisecond protocol overhead, and zero centralized dependencies.**
+**AAFP's objective is not to replace HTTP. Its objective is to become the
+decentralized execution substrate for autonomous software. Transport is only
+the foundation. The long-term value lies in creating an adaptive,
+capability-aware, self-optimizing network where agents discover, trust,
+schedule, migrate, and coordinate work without dependence on centralized
+orchestration. Every feature should move the protocol toward a network that
+becomes more efficient, resilient, and intelligent as more agents join.**
 
-AAFP is the "TCP for agents." It sits between the transport layer (QUIC) and
-the application layer (MCP, A2A, custom JSON-RPC). It provides:
-- Post-quantum identity (ML-DSA-65) and key exchange (X25519MLKEM768)
-- QUIC-native transport (stream multiplexing, 0-RTT, connection migration)
-- UCAN capability chains (cryptographic delegation)
-- CBOR deterministic framing (3-5x smaller than JSON)
-- NAT traversal (relay + DCUtR hole punching)
-- Capability-based DHT discovery
+The competitor is not HTTPS. The competitor is cloud silos — OpenAI APIs,
+Anthropic APIs, proprietary agent buses, closed orchestration systems. Those
+systems own the agent graph. AAFP should own the **open graph**.
 
-**Success looks like:** Two AI agents on different networks, behind different
-NATs, discovering each other by capability, connecting through a relay, upgrading
-to direct, and exchanging MCP/A2A messages with post-quantum security — all
-without a central server.
+**Success looks like:** A developer writes `Agent::new().discover("python").execute(code)`
+and AAFP handles discovery, trust, NAT traversal, routing, and execution —
+invisibly. The developer never learns QUIC, UCAN, DHT, or relay reservations.
+Every new agent that joins makes the network more capable.
+
+**Full strategic vision:** [`STRATEGIC_VISION.md`](STRATEGIC_VISION.md)
+
+---
+
+## 1.5 The Architecture
+
+```
+Applications (MCP, A2A, custom agents)
+    ↓
+Execution Fabric (scheduling, routing, checkpointing, migration)    ← Future
+    ↓
+Adaptive Routing Plane (capability graphs, reputation, learning)     ← Future
+    ↓
+Discovery (semantic capability graphs, not string lookups)           ← Future
+    ↓
+Trust & Identity (cryptographic + reputation + performance)          ← Partial (Track P)
+    ↓
+Transport (QUIC + PQ-TLS + CBOR framing + NAT traversal)             ← COMPLETE (Tracks A-N)
+    ↓
+UDP → IP → the same internet everyone uses
+```
+
+**The immutable boundary:**
+- **STABLE (barely changes):** Wire format, identity, handshake, frame encoding, QUIC transport
+- **EVOLVING (changes constantly):** Routing, scheduling, trust scoring, discovery, prediction, optimization
+
+Never bake algorithms into the protocol. Bake **interfaces**. The wire protocol
+is frozen (Rev 6). Everything above it is where the innovation happens.
+
+**The acid test for every RFC:** Does this make the network more intelligent,
+or merely more complicated? If "more complicated," it belongs in an
+implementation, not the protocol.
 
 ---
 
@@ -121,29 +154,46 @@ performance, security, and reliability.**
 | Kernel bypass (XDP/DPDK) | NO | Standard sockets only | Future track (world-scale) |
 | Message persistence | NO | DHT records persist (SQLite), messages don't | Future track |
 
-### The 3 phases to "internet-ready"
+### The phases to "internet-ready" and beyond
 
-**Phase 1: Make it work over the internet (2-3 weeks)**
-- Commit uncommitted relay/DHT/loadtest/WAN work
-- Track N (N1-N8): NAT traversal — relay forwarding, AutoNAT, DCuTR, SDK integration
-- Track O (O1-O8): WAN testing — at least ONE real two-machine test over different networks
+**Phase 1: Make it work over the internet (2-3 weeks) — NOW**
+- Track O (O1-O8): WAN testing — real network validation
+- Track Q (Q1-Q8): Security audit — fuzz, adversarial, DoS
+- Track S (S1-S8): Load testing — 100 agents, stability, deployment
+- Track R (R1-R8): WAN discovery — multi-node DHT (after O)
 
-**Milestone:** "Two agents on different WiFi networks can connect via relay and exchange messages."
+**Milestone:** "Two agents on different WiFi networks can connect via relay and exchange messages. 100 agents run for 4 hours without crashes. Fuzzing finds no panics."
 
-**Phase 2: Prove it's safe and scales (2-3 weeks)**
-- Track Q (Q1-Q8): Security audit — fuzz all parsers, DoS testing, adversarial handshake
-- Track S (S2-S8): Load testing — 100-agent test, 4-hour stability, metrics, deployment docs
-
-**Milestone:** "AAFP survives 100 agents for 4 hours, fuzzing finds no crashes, DoS attacks are mitigated."
-
-**Phase 3: Make it deployable (1-2 weeks)**
+**Phase 2: Make it deployable (1-2 weeks)**
 - Dockerfile + docker-compose for relay nodes and agents
 - Prometheus metrics endpoint + Grafana dashboard
 - Deployment runbook (setup, key rotation, debugging, updates)
+- 3-line developer API (`Agent::new().discover("python").execute(code)`)
 
-**Milestone:** "Anyone can `docker compose up` and have a working AAFP relay + agent."
+**Milestone:** "Anyone can `docker compose up` and have a working AAFP relay + agent. Developers can build agents without understanding the protocol."
 
-**Total: ~6-8 weeks of focused work from current state.**
+**Phase 3: Build the ecosystem (ongoing)**
+- SDK in Rust, Python, TypeScript (3 languages minimum)
+- CLI for agent management (`aafp discover`, `aafp connect`, `aafp serve`)
+- Examples that work with 3 lines of code
+- Tutorials that don't mention QUIC, UCAN, or DHT
+- Reference apps (a working multi-agent system people can clone)
+- Plugin system for custom capability providers
+
+**Milestone:** "Developers are building agents on AAFP without us asking them to."
+
+**Phase 4: Adaptive Routing Plane (future, after ecosystem forms)**
+- Track T: Nodes share resource metrics (CPU, GPU, queue depth, latency, trust)
+- Track U: Semantic capability graphs replace string lookups
+- Track V: Execution Fabric — work scheduling, pipeline assembly, checkpointing
+- Track W: Agent Reputation — performance history becomes part of identity
+- Track X: Economic Layer — resource accounting, priority, compensation
+
+**Milestone:** "The network becomes more intelligent as more agents join. Routing optimizes for speed, cost, trust, and reliability automatically."
+
+**Total to internet-ready: ~6-8 weeks (Phases 1-2).**
+**Total to ecosystem: ~3-6 months (Phase 3).**
+**Total to agent operating system: ~12-18 months (Phases 4-5).**
 
 ---
 
@@ -297,8 +347,9 @@ These findings inform implementation decisions for tracks N-S:
 
 ## 8. What Does NOT Need to Be Done for "Internet-Ready"
 
-These are explicitly OUT OF SCOPE for v1 "internet-ready" and belong to v2 "world-scale":
+These are explicitly OUT OF SCOPE for v1 "internet-ready" and belong to later phases:
 
+**v2 "world-scale" (after ecosystem forms):**
 - Gateway/Router/Agent separation (needed for 100K+ agents)
 - Kernel bypass (XDP/DPDK) (needed for 10K+ connections per node)
 - Kafka/NATS event bus (needed for decoupling at scale)
@@ -312,7 +363,24 @@ These are explicitly OUT OF SCOPE for v1 "internet-ready" and belong to v2 "worl
 - Hierarchical DHT (needed for billion-node scale)
 - Global anycast relay network (needed for <30ms relay latency worldwide)
 
-**v1 = make it work over the internet. v2 = make it scale to millions.**
+**v3 "agent operating system" (after world-scale):**
+- Adaptive Routing Plane (nodes share resource metrics, routing optimizes)
+- Semantic Capability Graphs (discovery becomes planning, not string lookup)
+- Execution Fabric (work scheduling, pipeline assembly, checkpointing)
+- Stateful Mobility (checkpoint, serialize, move, resume)
+- Agent Reputation (performance history as part of identity)
+- Economic Layer (resource accounting, priority, compensation)
+- Autonomous Organizations (10K agents forming persistent self-healing groups)
+
+**Never (stay focused, be the glue):**
+- Storage systems (leave to ScyllaDB, FoundationDB, S3)
+- Databases (leave to PostgreSQL, MongoDB, Redis)
+- Inference engines (leave to vLLM, TGI, TensorRT-LLM)
+- Model formats (leave to GGUF, SafeTensors, ONNX)
+- Vector databases (leave to Pinecone, Weaviate, Qdrant)
+- Blockchain/cryptocurrency (use resource accounting, not tokens)
+
+**v1 = make it work over the internet. v2 = make it scale. v3 = make it intelligent.**
 
 ---
 
@@ -320,24 +388,35 @@ These are explicitly OUT OF SCOPE for v1 "internet-ready" and belong to v2 "worl
 
 When deciding what to work on next, use this priority order:
 
-1. **Does it make AAFP work over the real internet?** (Tracks N, O) — HIGHEST
+1. **Does it make AAFP work over the real internet?** (Tracks O, R) — HIGHEST
 2. **Does it prove AAFP is safe?** (Track Q) — HIGH
 3. **Does it prove AAFP scales to 100 agents?** (Track S) — HIGH
-4. **Does it make AAFP deployable?** (S5, S6) — MEDIUM
-5. **Does it make AAFP scale to 10K+ agents?** (future tracks) — LOW for v1
-6. **Does it optimize performance further?** — LOW (already 6x optimized)
+4. **Does it make AAFP deployable and invisible to developers?** (S5, S6, ecosystem) — HIGH
+5. **Does it make the network more intelligent?** (future tracks T-X) — MEDIUM (after ecosystem)
+6. **Does it make AAFP scale to 10K+ agents?** (future tracks) — LOW for v1
+7. **Does it optimize performance further?** — LOW (already 6x optimized)
 
-If a task is not in categories 1-4, it's v2 work. Don't do it now.
+**The acid test for every feature:** Does this make the network more
+intelligent, or merely more complicated? If "more complicated," it belongs
+in an implementation, not the protocol.
+
+**The adoption test:** Can a developer use this without understanding the
+protocol? If no, simplify the API before adding more features.
+
+**The moat test:** Will this feature be a commodity in 5 years? If yes, it's
+table stakes, not a competitive advantage. The durable moat is network
+effects — the number of interoperable agents and the quality of the
+capability graph.
 
 ---
 
-## 10. Success Criteria for "Internet-Ready"
+## 10. Success Criteria
 
-A checklist that, when all items are checked, means AAFP is internet-ready:
+### "Internet-Ready" (v1 — Phases 1-2)
 
-- [ ] Two agents on different networks connect via relay (Track N7)
-- [ ] AutoNAT correctly detects NAT status (Track N2)
-- [ ] DCuTR upgrades relayed to direct for cone NATs (Track N3)
+- [x] Two agents on different networks connect via relay (Track N7 — documented)
+- [x] AutoNAT correctly detects NAT status (Track N2)
+- [x] DCuTR upgrades relayed to direct for cone NATs (Track N3)
 - [ ] WAN test passes with <100ms RTT, <1% packet loss (Track O2)
 - [ ] BBR vs Cubic tested over WAN, fairness documented (Track O4)
 - [ ] Fuzz testing runs 1+ hour per target, no crashes (Track Q2)
@@ -348,8 +427,28 @@ A checklist that, when all items are checked, means AAFP is internet-ready:
 - [ ] Dockerfile + docker-compose for relay and agent (Track S5)
 - [ ] Deployment runbook published (Track S6)
 - [ ] Multi-node DHT: 10 nodes, churn, partition recovery (Track R7)
+- [ ] Developer can build an agent in 3 lines of code (ecosystem)
+- [ ] SDK available in at least 2 languages (Rust + Python)
 
-When all 13 items are checked, AAFP is internet-ready.
+### "Ecosystem Forming" (v2 — Phase 3)
+
+- [ ] SDK available in 3 languages (Rust, Python, TypeScript)
+- [ ] CLI tool (`aafp discover`, `aafp connect`, `aafp serve`)
+- [ ] 5+ reference applications that people can clone
+- [ ] Tutorials that don't mention QUIC, UCAN, or DHT
+- [ ] Plugin system for custom capability providers
+- [ ] 100+ agents running on the network (not just our tests)
+- [ ] At least 1 third-party developer building on AAFP
+
+### "Agent Operating System" (v3 — Phases 4-5)
+
+- [ ] Adaptive Routing Plane: nodes share resource metrics
+- [ ] Semantic Capability Graphs: discovery becomes planning
+- [ ] Execution Fabric: automatic pipeline assembly
+- [ ] Stateful Mobility: checkpoint, move, resume
+- [ ] Agent Reputation: performance history as identity
+- [ ] Network becomes more efficient as more agents join
+- [ ] 10K+ agents, self-organizing, self-healing
 
 ---
 
@@ -358,12 +457,13 @@ When all 13 items are checked, AAFP is internet-ready.
 | File | Purpose |
 |------|---------|
 | `NORTH_STAR.md` (this file) | Strategic direction and gap analysis |
+| `STRATEGIC_VISION.md` | Full strategic vision (the agent operating system) |
+| `AAFP_COMPLETE_BRIEFING.md` | Complete briefing for collaborative AI |
 | `implementation-plans/STATUS.md` | Tactical step-by-step tracking |
 | `implementation-plans/WORLD_SCALE_RESEARCH.md` | Research on world-scale gaps |
 | `implementation-plans/CONTEXT.md` | Project background and architecture |
 | `ROADMAP.md` | Protocol freeze roadmap (Phase 2, complete) |
-| `RELEASE_READINESS.md` | Pre-release assessment (stale, needs update) |
-| `RFCs/0001-0011` | Protocol specifications |
+| `RFCs/0001-0011` | Protocol specifications (frozen, Rev 6) |
 | `implementations/rust/AGENTS.md` | Build & test guide |
 | `BUILD.md` | Build from scratch instructions |
 
