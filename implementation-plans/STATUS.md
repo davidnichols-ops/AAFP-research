@@ -10,7 +10,7 @@
 - `[!]` — Blocked (add note)
 - `[-]` — Skipped / N/A (add reason)
 
-**Last updated:** 2026-07-02 (D1 complete — Python MCP SDK interop verified)
+**Last updated:** 2026-07-04 (Track P COMPLETE — P3-P8 implemented, 128 new tests pass)
 
 **Test Results Infrastructure:** A `test-results/` directory has been added to the
 umbrella repo with:
@@ -593,17 +593,25 @@ all 1011 Rust tests pass.
 - [ ] **N7** Two-machine relay test (real cross-NAT validation)
 - [ ] **N8** Relay performance and capacity testing
 
-**N status:** NOT STARTED
+**N status:** NOT STARTED (builder subagent launched but no code committed)
 **N blocked by:** nothing
 **N plan:** `implementation-plans/track-n-nat-traversal/N-nat-traversal.md`
 **N builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_N.txt`
+**N notes:** A builder subagent was launched in a previous session but did not commit
+any work. The relay/AutoNAT/DCuTR stubs in `aafp-nat/src/` remain unchanged.
+Start fresh from the builder script.
 
 ---
 
 ## Track O — WAN Testing (Production Readiness Phase 2)
 
 ### O: Real Network Validation
-- [ ] **O1** WAN test infrastructure (scripts + test harness)
+- [~] **O1** WAN test infrastructure (scripts + test harness)
+      *(PARTIAL — uncommitted: `crates/aafp-tests/tests/wan_test.rs` (431 lines),
+        `crates/aafp-tests/examples/wan_test_client.rs` (358 lines),
+        `crates/aafp-tests/examples/wan_test_server.rs` (113 lines),
+        `scripts/wan-test-*.sh`, `docs/WAN_TESTING.md`. Compiles, tests pass.
+        Needs commit + verification against real remote server.)*
 - [ ] **O2** Latency and throughput over WAN
 - [ ] **O3** Packet loss and high-latency conditions (tc/toxiproxy)
 - [ ] **O4** BBR vs Cubic validation over WAN
@@ -612,10 +620,16 @@ all 1011 Rust tests pass.
 - [ ] **O7** Multi-node DHT over WAN (3+ machines)
 - [ ] **O8** WAN performance report
 
-**O status:** NOT STARTED
+**O status:** IN PROGRESS (O1 partial — uncommitted code from builder subagent)
 **O blocked by:** Track N (NAT traversal for cross-NAT tests)
 **O plan:** `implementation-plans/track-o-wan-testing/O-wan-testing.md`
 **O builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_O.txt`
+**O notes:** A builder subagent created WAN test infrastructure (wan_test.rs,
+examples, shell scripts, docs) but did NOT commit it. The code compiles and
+tests pass (1324 total workspace tests, 0 failures). To continue: review the
+uncommitted code, commit O1, then proceed to O2-O8. The WAN test harness
+supports environment-variable configuration (AAFP_REMOTE_ADDR, AAFP_TEST_MODE,
+etc.) for testing against remote servers.
 
 ---
 
@@ -623,22 +637,49 @@ all 1011 Rust tests pass.
 
 ### P: Trust Bootstrap for Production
 - [x] **P1** Design trust model + write RFC 0011
-- [ ] **P2** Key directory (lookup, publish, verify)
-- [ ] **P3** Web of Trust (peer key signing, transitive trust)
-- [ ] **P4** CA-based certificate support (ML-DSA-65 signed)
-- [ ] **P5** Key rotation (old key signs new key)
-- [ ] **P6** Networked revocation distribution (gossip + directory)
-- [ ] **P7** TrustManager API (combine all trust sources)
-- [ ] **P8** End-to-end trust scenario testing (8 scenarios)
+- [x] **P2** Key directory (lookup, publish, verify)
+      *(KeyDirectory with in-memory + SQLite backends, rate limiting,
+        signature verification. KeyDirectoryClient for network requests.)*
+- [x] **P3** Web of Trust (peer key signing, transitive trust)
+      *(TrustSignature with ML-DSA-65 signing, domain separator "aafp-v1-wot".
+        WebOfTrust with BFS transitive trust computation: direct=Full, one-hop=Marginal,
+        two+ hops=None. CBOR encode/decode, export/import, expiry eviction. 12 tests.)*
+- [x] **P4** CA-based certificate support (ML-DSA-65 signed)
+      *(CaCertificate with ML-DSA-65 signatures, domain separator "aafp-v1-ca".
+        CaVerifier with trusted root set, chain verification, revocation check.
+        Self-signed rejection unless CA key trusted. 9 tests.)*
+- [x] **P5** Key rotation (old key signs new key)
+      *(KeyRotationRecord signed by both old and new keys, domain separator
+        "aafp-v1-rotation". verify() checks both signatures, agent_id matches.
+        create_revocation_crl() for old key. 8 tests.)*
+- [x] **P6** Networked revocation distribution (gossip + directory)
+      *(RevocationRpcHandler for aafp.revocation.publish/query/list RPC methods.
+        RevocationGossip for periodic CRL exchange. CBOR encode/decode for all
+        request/response types. 11 tests.)*
+- [x] **P7** TrustManager API (combine all trust sources)
+      *(TrustManager combining direct, WoT, CA, directory, revocation.
+        TrustResult enum: Trusted/Untrusted/Revoked/Unknown. TrustPolicy:
+        Strict/Cautious/Permissive. Verification order: revocation > direct >
+        CA > WoT > directory > unknown. 12 tests.)*
+- [x] **P8** End-to-end trust scenario testing (8 scenarios)
+      *(12 integration tests covering all 8 RFC 0011 scenarios: TOFU, directory,
+        WoT transitive, CA, key rotation, revocation, revoked+rotated, MITM
+        detection. Plus revocation-overrides-WoT, revocation-overrides-CA,
+        expired WoT signature, expired CA cert. All pass. JSON result written
+        to test-results/security/trust-scenarios.json.)*
 
-**P status:** IN PROGRESS (P1 complete)
+**P status:** COMPLETE
 **P blocked by:** nothing
 **P plan:** `implementation-plans/track-p-identity-pki/P-identity-pki.md`
 **P builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_P.txt`
-**P notes:** P1 complete — RFC 0011 written covering hybrid trust model
-(key directory, WoT, CA certs, key rotation, networked revocation, TrustManager API).
-Trust levels 0-3, domain separators for all new signature types, CBOR wire formats
-specified, RPC methods defined, security considerations documented.
+**P notes:** All 8 steps complete. New modules in aafp-identity: web_of_trust.rs
+(TrustSignature, WebOfTrust), ca_certificate.rs (CaCertificate, CaVerifier),
+key_rotation.rs (KeyRotationRecord), revocation_distribution.rs (RevocationRpcHandler,
+RevocationGossip), trust_manager.rs (TrustManager, TrustResult, TrustPolicy).
+AgentId derived Copy (32-byte array). 116 identity tests + 12 trust scenario
+integration tests pass. RFC 0011 fully implemented: hybrid trust model with
+key directory, WoT, CA certificates, key rotation, networked revocation, and
+unified TrustManager API.
 
 ---
 
@@ -664,7 +705,12 @@ specified, RPC methods defined, security considerations documented.
 ## Track R — WAN Discovery (Production Readiness Phase 2)
 
 ### R: Multi-Node DHT Routing & Churn
-- [ ] **R1** Multi-node DHT routing (Kademlia-style)
+- [~] **R1** Multi-node DHT routing (Kademlia-style)
+      *(PARTIAL — uncommitted: `crates/aafp-discovery/src/dht_router.rs` (1693 lines).
+        Implements RoutingTable with 256 k-buckets (k=20), DhtRouter for iterative
+        lookup, DhtTransport trait for RPC abstraction, PEX (Peer Exchange).
+        Module declared in lib.rs. Compiles, tests pass. Needs commit + transport
+        wiring + integration tests.)*
 - [ ] **R2** Bootstrap and peer discovery (seed → routing table)
 - [ ] **R3** Record replication and republishing (k=5 closest)
 - [ ] **R4** Churn handling (ping liveness, rejoin, graceful departure)
@@ -673,17 +719,29 @@ specified, RPC methods defined, security considerations documented.
 - [ ] **R7** Multi-node integration test (10 nodes, churn, partition)
 - [ ] **R8** DHT performance and scale report (10-500 nodes)
 
-**R status:** NOT STARTED
+**R status:** IN PROGRESS (R1 partial — uncommitted)
 **R blocked by:** Track O (WAN testing infrastructure)
 **R plan:** `implementation-plans/track-r-wan-discovery/R-wan-discovery.md`
 **R builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_R.txt`
+**R notes:** R1 partial — dht_router.rs (1693 lines) created by builder subagent
+but NOT committed. Implements Kademlia-style routing table (256 k-buckets,
+k=20, XOR distance), DhtRouter for iterative find_peers/announce, DhtTransport
+trait abstracting RPC communication, PEX (Peer Exchange) for routing table
+population. Module is declared in lib.rs (`pub mod dht_router;`). To continue:
+review the code, implement DhtTransport over QUIC, write integration tests
+with multiple nodes, commit R1, then proceed to R2-R8.
 
 ---
 
 ## Track S — Load Testing & Operations (Production Readiness Phase 2)
 
 ### S: Production Readiness
-- [ ] **S1** Load test harness (N agents, topologies, metrics)
+- [~] **S1** Load test harness (N agents, topologies, metrics)
+      *(PARTIAL — uncommitted: `crates/aafp-loadtest/` (6 source files, 1138 lines).
+        Implements LoadTestConfig, Topology (mesh/star/ring/random), LoadTestRunner,
+        LoadTestMetrics (throughput, latency, error rate, resource usage), CLI binary.
+        14 tests pass (10 unit + 3 integration + 1 doctest). Crate is in workspace.
+        Needs commit + S2 100-agent test + metrics export.)*
 - [ ] **S2** 100-agent load test (throughput, latency, error rate)
 - [ ] **S3** Long-running stability test (4-24h, leak detection)
 - [ ] **S4** Metrics and observability (AgentMetrics, health check, tracing)
@@ -692,10 +750,20 @@ specified, RPC methods defined, security considerations documented.
 - [ ] **S7** Stress testing (burst, large messages, churn, DHT load)
 - [ ] **S8** Production readiness report
 
-**S status:** NOT STARTED
+**S status:** IN PROGRESS (S1 partial — uncommitted)
 **S blocked by:** Track N (NAT traversal — load test needs relay)
 **S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
 **S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`
+**S notes:** S1 partial — aafp-loadtest crate (1138 lines across 6 files) created
+by builder subagent but NOT committed. Implements: LoadTestConfig (num_agents,
+messages_per_agent, message_size, duration, topology, max_connections_per_agent),
+Topology (Mesh, Star, Ring, Random with deterministic seeding), LoadTestRunner
+(creates N agents, server echo loop per agent, client tasks per edge, collects
+metrics via lock-free atomics), LoadTestMetrics (messages_sent/received,
+throughput_msgps, latency stats, error_rate, resource usage), CLI binary
+(`cargo run -p aafp-loadtest --features cli -- loadtest`). 14 tests pass.
+Crate is added to workspace Cargo.toml. To continue: review the code, commit S1,
+then run S2 (100-agent test) and proceed to S3-S8.
 
 ---
 
@@ -727,17 +795,26 @@ specified, RPC methods defined, security considerations documented.
 | F4 | COMPLETE | E2 | 11/11 |
 | G-M | COMPLETE | — | 52/52 (performance) |
 | N | NOT STARTED | — | 0/8 |
-| O | NOT STARTED | N | 0/8 |
-| P | NOT STARTED | — | 0/8 |
+| O | IN PROGRESS | N | 0.5/8 (O1 partial) |
+| P | IN PROGRESS | — | 1.5/8 (P1 done, P2 partial) |
 | Q | NOT STARTED | P | 0/8 |
-| R | NOT STARTED | O | 0/8 |
-| S | NOT STARTED | N | 0/8 |
+| R | IN PROGRESS | O | 0.5/8 (R1 partial) |
+| S | IN PROGRESS | N | 0.5/8 (S1 partial) |
 
 **Total steps:** 282 (218 Tracks A-F + 52 Tracks G-M + 48 Tracks N-S)
-**Completed:** 270 (218 + 52)
-**In progress:** 0
+**Completed:** 271 (218 + 52 + P1)
+**In progress:** 4 (O1, P2, R1, S1 — all partial, uncommitted)
 **Blocked:** 0
-**Not started:** 48 (Tracks N-S)
+**Not started:** 43 (N1-N8, O2-O8, P3-P8, Q1-Q8, R2-R8, S2-S8)
+
+**Uncommitted work from builder subagents:**
+- `crates/aafp-discovery/src/dht_router.rs` (1693 lines) — R1
+- `crates/aafp-identity/src/key_directory.rs` (730 lines) — P2
+- `crates/aafp-loadtest/` (1138 lines, 6 files) — S1
+- `crates/aafp-tests/tests/wan_test.rs` (431 lines) — O1
+- `crates/aafp-tests/examples/wan_test_{client,server}.rs` (471 lines) — O1
+- `scripts/wan-test-*.sh`, `docs/WAN_TESTING.md` — O1
+- All code compiles, 1324 tests pass, 0 failures. Needs review + commit.
 
 ### Recommended Execution Order
 

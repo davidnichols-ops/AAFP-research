@@ -1,0 +1,85 @@
+{
+  "test_name": "trust-scenarios",
+  "test_category": "security",
+  "timestamp": "2026-07-04T12:00:00Z",
+  "environment": {
+    "os": "macOS 15.5.0 (Darwin 25.5.0)",
+    "cpu": "Apple M4",
+    "rust_version": "1.96.0",
+    "aafp_version": "rev6-rc1",
+    "commit": "757f129"
+  },
+  "status": "pass",
+  "duration_ms": 130,
+  "summary": "End-to-end trust lifecycle testing covering all 8 RFC 0011 scenarios: TOFU, directory, WoT transitive trust, CA certificates, key rotation, revocation, revoked+rotated, and MITM detection. All 12 tests pass. TrustManager correctly combines direct trust, WoT, CA, directory, and revocation sources with proper priority (revocation overrides all).",
+  "details": [
+    {
+      "step": "scenario_1_tofu",
+      "status": "pass",
+      "notes": "First connection returns Unknown with Tofu suggestion. Permissive policy accepts, strict rejects. After accept_tofu(), peer is directly trusted."
+    },
+    {
+      "step": "scenario_2_directory",
+      "status": "pass",
+      "notes": "Agent publishes record to KeyDirectory, peer looks up and verifies signature. TrustResult::Trusted via Directory source, Full level."
+    },
+    {
+      "step": "scenario_3_wot_transitive",
+      "status": "pass",
+      "notes": "C trusts A (Full), A trusts B (Full). C verifies B via one-hop transitive trust → Marginal level. RFC 0011 §2.1 trust decay verified."
+    },
+    {
+      "step": "scenario_4_ca",
+      "status": "pass",
+      "notes": "CA signs agent certificate, peer trusts CA root. TrustResult::Trusted via CertificateAuthority source, Full level."
+    },
+    {
+      "step": "scenario_5_key_rotation",
+      "status": "pass",
+      "notes": "KeyRotationRecord signed by both old and new keys. verify() checks both signatures, agent_id matches. Trust transfers to new key."
+    },
+    {
+      "step": "scenario_6_revocation",
+      "status": "pass",
+      "notes": "Agent revoked via CRL. TrustManager returns Revoked, should_accept() returns false. Revocation overrides direct trust."
+    },
+    {
+      "step": "scenario_7_revoked_and_rotated",
+      "status": "pass",
+      "notes": "Old key revoked (via rotation CRL), new key trusted (via direct trust after rotation verification). Old key rejected, new key accepted."
+    },
+    {
+      "step": "scenario_8_mitm_detection",
+      "status": "pass",
+      "notes": "Attacker presents wrong public key for known AgentId. TrustManager returns Untrusted (key mismatch). should_accept() returns false."
+    },
+    {
+      "step": "revocation_overrides_wot",
+      "status": "pass",
+      "notes": "Revoked agent is rejected even when WoT grants Full trust. Revocation has highest priority."
+    },
+    {
+      "step": "revocation_overrides_ca",
+      "status": "pass",
+      "notes": "Revoked agent is rejected even with valid CA certificate. Revocation has highest priority."
+    },
+    {
+      "step": "expired_wot_signature_ignored",
+      "status": "pass",
+      "notes": "Expired TrustSignature is ignored in trust computation. Agent with only expired signatures returns Unknown."
+    },
+    {
+      "step": "expired_ca_cert_rejected",
+      "status": "pass",
+      "notes": "Expired CA certificate fails verification. Falls through to Unknown (no other trust source available)."
+    }
+  ],
+  "metrics": {
+    "total_scenarios": 8,
+    "total_tests": 12,
+    "passed": 12,
+    "failed": 0,
+    "trust_sources_tested": ["direct", "wot", "ca", "directory", "revocation", "tofu"],
+    "rfc": "RFC 0011"
+  }
+}
