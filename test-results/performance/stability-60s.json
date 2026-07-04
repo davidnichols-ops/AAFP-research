@@ -1,0 +1,84 @@
+{
+  "analysis": {
+    "leak_detected": false,
+    "memory_baseline_bytes": 17170432,
+    "memory_first_bytes": 13533184,
+    "memory_growth_pct": 2.480916030534351,
+    "memory_last_bytes": 17596416,
+    "verdict": "PASS",
+    "verdict_details": "Steady-state memory growth 2.5% (baseline after warmup: 17.2MB, final: 17.6MB, threshold: <10%)"
+  },
+  "config": {
+    "duration_secs": 60,
+    "message_size_bytes": 1024,
+    "metrics_interval_secs": 10,
+    "num_clients": 10,
+    "rate_per_client": 1
+  },
+  "final_metrics": {
+    "connections_active": 0,
+    "elapsed_secs": 65.005937667,
+    "file_descriptors": 0,
+    "memory_bytes": 17645568,
+    "messages_failed": 0,
+    "messages_received": 600,
+    "messages_sent": 600
+  },
+  "metrics_log": [
+    {
+      "connections_active": 0,
+      "elapsed_secs": 0.000640208,
+      "file_descriptors": 0,
+      "memory_bytes": 13533184,
+      "messages_failed": 0,
+      "messages_received": 0,
+      "messages_sent": 0
+    },
+    {
+      "connections_active": 10,
+      "elapsed_secs": 10.00622625,
+      "file_descriptors": 0,
+      "memory_bytes": 17170432,
+      "messages_failed": 0,
+      "messages_received": 100,
+      "messages_sent": 100
+    },
+    {
+      "connections_active": 10,
+      "elapsed_secs": 20.010807042,
+      "file_descriptors": 0,
+      "memory_bytes": 17317888,
+      "messages_failed": 0,
+      "messages_received": 200,
+      "messages_sent": 200
+    },
+    {
+      "connections_active": 10,
+      "elapsed_secs": 30.015607917,
+      "file_descriptors": 0,
+      "memory_bytes": 17367040,
+      "messages_failed": 0,
+      "messages_received": 300,
+      "messages_sent": 300
+    },
+    {
+      "connections_active": 10,
+      "elapsed_secs": 40.020929042,
+      "file_descriptors": 0,
+      "memory_bytes": 17399808,
+      "messages_failed": 0,
+      "messages_received": 400,
+      "messages_sent": 400
+    },
+    {
+      "connections_active": 10,
+      "elapsed_secs": 50.025519208,
+      "file_descriptors": 0,
+      "memory_bytes": 17596416,
+      "messages_failed": 0,
+      "messages_received": 500,
+      "messages_sent": 500
+    }
+  ],
+  "test_name": "AAFP Stability Test (Track S3)"
+}

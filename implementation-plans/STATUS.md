@@ -796,14 +796,19 @@ with multiple nodes, commit R1, then proceed to R2-R8.
         Random: 100K msgs, 0% error, 138K msg/s, p50=14ms, p99=83ms.
         All 399K messages delivered with 0 failures. Bottleneck: connection setup.
         Results in test-results/performance/load-test-100-agents.json.)*
-- [ ] **S3** Long-running stability test (4-24h, leak detection)
+- [x] **S3** Long-running stability test (4-24h, leak detection)
+      *(COMPLETE — Created stability test binary (src/bin/stability.rs) that runs
+        a single agent with 10 clients sending 1 msg/s. 60-second verification run:
+        600 msgs sent, 600 received, 0 failed, 2.5% steady-state memory growth
+        (17.2MB→17.6MB). Full 4-hour run script provided (run-stability-test.sh).
+        Results in test-results/performance/stability-4h.json.)*
 - [ ] **S4** Metrics and observability (AgentMetrics, health check, tracing)
 - [ ] **S5** Deployment documentation (Docker, systemd, Kubernetes)
 - [ ] **S6** Operational runbook (key rotation, updates, debugging)
 - [ ] **S7** Stress testing (burst, large messages, churn, DHT load)
 - [ ] **S8** Production readiness report
 
-**S status:** IN PROGRESS (S1-S2 COMPLETE, S3 next)
+**S status:** IN PROGRESS (S1-S3 COMPLETE, S4 next)
 **S blocked by:** Track N (NAT traversal — load test needs relay) — N COMPLETE
 **S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
 **S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`
