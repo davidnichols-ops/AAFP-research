@@ -1,0 +1,596 @@
+================================================================================
+AAFP PERFORMANCE OPTIMIZATION — BUILDER PROMPT (PHASE 3)
+================================================================================
+Date: 2026-07-03 (continuation)
+Project: AAFP (Agent-to-Agent Framing Protocol)
+Repo: /Users/david/projects/AAFP-research
+GitHub: https://github.com/davidnichols-ops/AAFP-research
+Rust submodule: https://github.com/davidnichols-ops/aafp
+
+================================================================================
+SECTION 1: WHAT HAPPENED IN PHASES 1 AND 2
+================================================================================
+
+Phase 1 completed Track G (Zero-Copy Data Path) — all 8 steps — plus
+M1 (Benchmark Harness) and M3 (Allocation Tracking). 10 of 52 total
+steps done.
+
+Phase 2 completed Track H (Lock-Free Concurrency) — all 7 steps — plus
+M2 (Flamegraph Integration) and I1 (TLS Session Ticket Cache). 18 of 52
+total steps done. All work is committed and pushed to GitHub.
+
+Commits (rust submodule, newest first):
+  04f813f  perf(i-1): TLS session ticket cache + rustls session resumption
+  2eecf57  perf(h-7): end-to-end lock-free benchmark -- 1.25M msg/s
+  7324ebf  perf(h-6): ConnectionHandle + concurrency model documentation
+  ec12c86  perf(h-5): lock-free DHT reads via ArcSwap
+  75b54ee  perf(h-4): shard DHT 256-way with per-shard RwLock
+  b08de3f  perf(h-3): lock-free receive path via spawn_reader() + channel
+  46e34bd  perf(h-2): replace send Mutex with mpsc channel + writer task
+  82ec3fa  perf(h-1,m2): lock contention baseline + flamegraph script
+  32bd225  perf(g-7,g-8): zero-copy raw JSON send/recv + end-to-end verification
+  11acc73  perf(g-5,g-6): zero-copy MCP transport send and receive paths
+  08b6b31  perf(g-3,g-4): zero-copy frame encode and decode
+  68643a0  perf(g-2): implement BytesMut buffer pool
+  cdabeff  perf(m1,m3,g1): benchmark harness + allocation tracking + baseline
+
+================================================================================
+SECTION 2: CURRENT PERFORMANCE NUMBERS (post-Track H + I1)
+================================================================================
+
+MEASURED on Apple M4, release build, after Track H + I1:
+
+  Round-trip ping (localhost):     42.4 µs   (was 250 µs — 5.9x improvement)
+  One-way throughput (lock-free):  1.25M msg/s (target was 800K — 1.56x)
+  Send path allocations:           0 per msg  (was 2 — 100% eliminated)
+  Recv path allocations:           7 per msg  (was 7 — JSON Value tree, Track K)
+  Cold connect time:               240 µs     (full TLS + PQ KEX handshake)
+  Pooled connect time:             14 µs      (open stream on existing conn)
+  Lock acquisitions per send:      0          (was 1 — eliminated by H2)
+  DHT reads:                       lock-free  (ArcSwap, H5)
+  Tests:                           1223 pass, 0 failures
+  Clippy:                          clean
+  Fmt:                             clean
+
+Track H exceeded expectations:
+  - Target was >800K msg/s with 8 senders. Achieved 1.25M msg/s (1 sender).
+  - Throughput is FLAT at ~1.2M across 1-8 senders (bottleneck shifted
+    from lock contention to writer task I/O — the expected result).
+  - 11.1x improvement at 2 senders (1.23M vs 111K baseline).
+
+Track I1 (TLS session resumption):
+  - Cold connect: 240µs (full TLS handshake + PQ KEX)
+  - Pooled connect: 14µs (open stream on existing conn — 17x faster)
+  - SessionCache: 1024 entries, LRU eviction, shared across dial() calls
+  - Server sends 4 TLS 1.3 tickets per connection (was 2 default)
+
+================================================================================
+SECTION 3: WHAT WAS BUILT IN PHASE 2
+================================================================================
+
+New files created:
+
+  implementations/rust/crates/aafp-transport-quic/src/session_cache.rs
+    - SessionCache: shared TLS 1.3 session ticket store (Track I1)
+    - Wraps rustls ClientSessionMemoryCache with configurable size
+    - DEFAULT_SESSION_CACHE_SIZE = 1024
+    - 4 unit tests
+
+  implementations/rust/crates/aafp-benchmark/benches/lock_contention.rs
+    - Lock contention benchmarks (H1 baseline + H2 channel + H7 ConnectionHandle)
+    - bench_concurrent_senders (mutex path)
+    - bench_channel_senders (H2 channel send path)
+    - bench_connection_handle (H7 full lock-free path)
+
+  implementations/rust/crates/aafp-benchmark/benches/connection_lifecycle.rs
+    - Connection lifecycle benchmarks (Track I1)
+    - bench_cold_connect, bench_warm_connect, bench_pooled_connect
+
+  implementations/rust/crates/aafp-benchmark/src/alloc_tracker.rs (Phase 1)
+    - CountingAllocator wrapping System allocator
+
+  implementations/rust/crates/aafp-benchmark/src/harness.rs (Phase 1)
+    - BenchmarkRunner with p50/p90/p99/p99.9
+
+  test-results/performance/
+    - connection-handle-lockfree-results.json (H7 results)
+    - session-cache-results.json (I1 results)
+    - alloc-profile-baseline.json (G baseline)
+    - zerocopy-results.json (G results)
+
+New APIs added (additive, old APIs unchanged):
+
+  aafp-transport-quic:
+    - SessionCache, DEFAULT_SESSION_CACHE_SIZE
+    - QuicTransport::new_with_resumption() — enables TLS session resumption
+    - QuicTransport::new_with_resumption_cache() — custom cache size
+    - QuicTransport::session_cache() — access shared cache
+    - QuicTransport::has_resumption() — check if resumption enabled
+    - QuicConfig::build_client_config_with_resumption() — build with cache
+
+  aafp-transport-mcp:
+    - AafpMcpTransport::spawn_writer() — channel-based send (H2)
+    - AafpMcpTransport::spawn_reader() — channel-based receive (H3)
+    - AafpMcpTransport::connection_handle() — combined H2+H3 (H6)
+    - ConnectionHandle: clonable, lock-free send, mutex-guarded recv
+    - send_raw_json_via_channel() — channel-based raw JSON send
+    - send_raw_json_on_handle_zero_copy() — zero-copy via handle
+
+  aafp-discovery:
+    - ShardedCapabilityDht: 256-way sharded DHT with per-shard RwLock (H4)
+    - ArcSwapDht: 256-way sharded DHT with lock-free reads via ArcSwap (H5)
+    - DhtShardSnapshot: immutable snapshot for copy-on-write writes
+    - SharedShardedDht, SharedArcSwapDht type aliases
+
+================================================================================
+SECTION 4: WHAT TO DO IN PHASE 3
+================================================================================
+
+The next tracks to execute, in order:
+
+  1. Track I (remaining steps): I5, I6, I7, I8 — START HERE
+     - I2-I4 (0-RTT resumption) were SKIPPED by user decision because
+       they require a wire protocol change (RFC amendment). The AAFP
+       handshake provides ML-DSA-65 identity verification that TLS
+       resumption doesn't, so 0-RTT can't be done at TLS level alone.
+       Connection pooling (I5) gives a bigger win anyway (14µs vs 240µs).
+  2. Track J: QUIC Transport Tuning (7 steps) — after I
+  3. Track K: Serialization Optimization (7 steps) — can run in parallel with J
+  4. Track M (remaining): M4-M7 — CI regression, latency distribution, etc.
+  5. Track L: Kernel & Hardware (8 steps) — after K (advanced, last mile)
+
+================================================================================
+SECTION 5: TRACK I (REMAINING STEPS) — DETAILED
+================================================================================
+
+File: implementation-plans/track-i-connection-lifecycle/I-connection-lifecycle.md
+READ THIS FILE before starting. It has all 8 steps.
+
+I1 IS DONE. I2-I4 ARE SKIPPED (user decision — requires wire protocol change).
+START WITH I5.
+
+### I5: Connection pool
+- Create `crates/aafp-sdk/src/connection_pool.rs`
+- `ConnectionPool`: HashMap<AgentId, PooledConnection>
+- `PooledConnection`: QuicConnection + last_used timestamp + idle timeout
+- `pool.get_or_connect(agent_id, addr)`: returns existing connection or creates new
+- `pool.release(agent_id)`: marks connection as idle (returns to pool, doesn't close)
+- Idle timeout: 60s (configurable). Idle connections are closed and removed.
+- Max pool size: 100 connections (configurable)
+- Health check: PING before reuse. If PING fails, discard and create new.
+- **VERIFY:** 100 sequential RPCs to same peer use 1 connection (not 100)
+
+IMPORTANT CONTEXT FOR I5:
+- The AgentClient (crates/aafp-sdk/src/client.rs) already has a simple
+  HashMap<AgentId, PeerConnection> but NO pooling semantics. It creates
+  a new connection on every connect() call. The pool should wrap this.
+- The benchmark showed pooled connect = 14µs vs cold connect = 240µs
+  (17x improvement). The pool should deliver this improvement.
+- The pool needs to work with the AAFP handshake — a pooled connection
+  is one that has already completed the handshake. Reusing it skips
+  both TLS handshake AND AAFP handshake.
+- The pool should integrate with the existing AgentClient or be a
+  standalone type that AgentClient uses internally.
+- Consider: what happens when a pooled connection's peer closes it?
+  The pool needs a health check (open a stream, if it fails, discard).
+- The pool should be async-friendly (tokio::sync::Mutex or DashMap).
+
+KEY FILES TO READ FOR I5:
+  implementations/rust/crates/aafp-sdk/src/client.rs
+    - AgentClient, PeerConnection, connect(), send(), disconnect()
+  implementations/rust/crates/aafp-sdk/src/transport_binding.rs
+    - establish_session() — the function that does TLS + AAFP handshake
+  implementations/rust/crates/aafp-sdk/src/lib.rs
+    - Agent struct, module exports
+  implementations/rust/crates/aafp-transport-quic/src/transport.rs
+    - QuicTransport, QuicConnection, dial(), open_bi()
+
+### I6: Connection migration (QUIC CID-based)
+- Quinn supports QUIC connection migration via connection IDs
+- Implement `Agent::migrate_connection(old_conn, new_addr)`:
+  1. Client opens new UDP socket bound to new address
+  2. Quinn migrates the existing connection to the new path
+  3. No handshake needed — connection ID identifies the connection
+- Use case: agent moves from WiFi to cellular, or from one subnet to another
+- **VERIFY:** Connection survives address change (test with two localhost addresses)
+
+NOTE: Quinn's migration support may be limited. Check quinn docs for
+`Connection::migrate()` or similar. If quinn doesn't support it natively,
+this step may need to be skipped or deferred. Investigate first.
+
+### I7: Keep-alive optimization
+- Current keep-alive: 30s interval (PING/PONG from E1)
+- Add adaptive keep-alive:
+  - Default: 30s
+  - After 3 consecutive PONGs: increase to 60s (connection is stable)
+  - After a missed PONG: decrease to 10s (connection may be unstable)
+  - After 3 missed PONGs: close connection (peer is gone)
+- PING/PONG frames are 28 bytes (header only, no payload) — minimal overhead
+- **VERIFY:** Adaptive keep-alive test shows interval changes based on PONG responses
+
+KEY FILES FOR I7:
+  implementations/rust/crates/aafp-messaging/src/
+    - Look for KeepAliveConfig, PING/PONG frame handling
+  implementations/rust/crates/aafp-transport-quic/src/config.rs
+    - QuicConfig.keep_alive_interval (currently 30s)
+
+### I8: End-to-end connection lifecycle benchmark
+- The connection_lifecycle.rs benchmark already exists (from I1).
+  EXTEND it, don't replace it.
+- Add scenarios:
+  1. Cold connect (no session cache): ALREADY DONE — 240µs
+  2. Warm connect (session cache hit): ALREADY DONE — needs better measurement
+  3. Pooled connect (connection reuse): ALREADY DONE — 14µs (stream open)
+  4. 100 sequential RPCs with pool vs without pool: NEW
+  5. Migration: measure time to resume after address change: NEW (if I6 done)
+  6. Adaptive keep-alive overhead: NEW (if I7 done)
+- Write results to test-results/performance/connection-lifecycle.json
+- Update PERFORMANCE_STATUS.md
+- **VERIFY:**
+  - Cold connect: <1ms (localhost, already achieved — 240µs)
+  - Pooled connect: <50µs (already achieved — 14µs)
+  - 100 RPCs with pool: 1 connection (not 100)
+
+================================================================================
+SECTION 6: TRACK J — QUIC TRANSPORT TUNING (PREVIEW)
+================================================================================
+
+File: implementation-plans/track-j-quic-tuning/J-quic-tuning.md
+READ THIS FILE before starting Track J. It has all 7 steps.
+
+Start Track J AFTER Track I is complete (J depends on I — needs pooling
+for realistic benchmarks).
+
+Key steps:
+  J1: Switch to BBR congestion control (or custom CongestionController)
+  J2: Tune initial RTT (10ms, not 333ms) and timeouts
+  J3: Disable Nagle's equivalent (tune stream initial window)
+  J4: Tune ACK frequency (max_ack_delay 5ms, not 25ms)
+  J5: GSO (Generic Segmentation Offload) support
+  J6: Multi-path QUIC (experimental — may need to skip)
+  J7: End-to-end QUIC tuning benchmark
+
+KEY FILES FOR TRACK J:
+  implementations/rust/crates/aafp-transport-quic/src/config.rs
+    - QuicConfig, build_server_config(), build_client_config()
+    - TransportConfig settings (initial_rtt, max_idle_timeout, etc.)
+  implementations/rust/crates/aafp-transport-quic/src/transport.rs
+    - QuicTransport, Endpoint creation
+
+IMPORTANT: J1 (BBR) may require adding a dependency or implementing a
+custom CongestionController. Check if quinn-proto exports BBR or if
+you need a separate crate. If a new dependency is needed, follow the
+golden rules (check maintained, published >7 days).
+
+================================================================================
+SECTION 7: TRACK K — SERIALIZATION OPTIMIZATION (PREVIEW)
+================================================================================
+
+File: implementation-plans/track-k-serialization/K-serialization.md
+READ THIS FILE before starting Track K. It has all 7 steps.
+
+Track K can run in PARALLEL with Track J (they don't depend on each other).
+Consider using a subagent for one while you work on the other.
+
+Key steps:
+  K1: Benchmark serialization baseline (serde_json vs simd-json vs minicbor)
+  K2: Switch to simd-json for MCP transport (2-4x faster JSON)
+  K3: Switch to minicbor for AAFP protocol messages (3-10x faster CBOR)
+  K4: Pre-allocated serialization buffers (heapless for handshake msgs)
+  K5: Custom codec for hot path messages
+  K6: Zero-copy deserialization (borrow instead of clone)
+  K7: End-to-end serialization benchmark
+
+KEY FILES FOR TRACK K:
+  implementations/rust/crates/aafp-transport-mcp/src/lib.rs
+    - Where serde_json::to_vec() and from_slice() are used
+  implementations/rust/crates/aafp-crypto/src/handshake_v1.rs
+    - Where ciborium is used for handshake message CBOR encoding
+  implementations/rust/crates/aafp-cbor/src/
+    - The CBOR crate (ciborium wrapper)
+
+IMPORTANT FOR K3: The golden traces (conformance tests) verify
+byte-identical CBOR output. If you switch to minicbor, you MUST
+ensure the output is byte-identical or keep ciborium for golden
+trace generation. Run the golden trace tests after K3.
+
+================================================================================
+SECTION 8: CURRENT STATE OF KEY FILES
+================================================================================
+
+MCP Transport (the hot path):
+  implementations/rust/crates/aafp-transport-mcp/src/lib.rs
+    - AafpMcpTransport now has:
+      send: Arc<Mutex<Option<QuicSendStream>>>  (legacy path)
+      tx: Option<mpsc::Sender<BytesMut>>        (H2 channel path)
+      recv: Option<QuicRecvStream>              (moved to reader task in H3)
+      reader_task: Option<JoinHandle<()>>       (H3 reader task)
+      writer_task: Option<JoinHandle<()>>       (H2 writer task)
+    - ConnectionHandle (H6): clonable, channel-based send + recv
+    - 4 concurrency modes documented in crate-level docs
+
+QUIC Transport:
+  implementations/rust/crates/aafp-transport-quic/src/
+    - config.rs: QuicConfig, build_server_config(), build_client_config()
+      build_client_config_with_resumption() (I1)
+      Server sends 4 TLS 1.3 tickets (I1)
+    - transport.rs: QuicTransport
+      new() — no resumption (backward compat)
+      new_with_resumption() — with TLS session cache (I1)
+      new_with_resumption_cache() — custom cache size (I1)
+      dial() — uses cached config if resumption enabled
+    - session_cache.rs: SessionCache (I1)
+    - buffer_pool.rs: BytesMut buffer pool (Track G)
+
+Discovery DHT:
+  implementations/rust/crates/aafp-discovery/src/discovery_v1.rs
+    - CapabilityDht: original single-RwLock DHT
+    - ShardedCapabilityDht: 256-way sharded with RwLock (H4)
+    - ArcSwapDht: 256-way sharded with lock-free reads (H5)
+
+SDK:
+  implementations/rust/crates/aafp-sdk/src/
+    - client.rs: AgentClient, PeerConnection, connect(), send()
+    - server.rs: AgentServer, accept_one()
+    - transport_binding.rs: establish_session() (TLS + AAFP handshake)
+    - handshake_driver.rs: drive_client_handshake, drive_server_handshake
+    - builder.rs: AgentBuilder
+    - lib.rs: Agent struct, module exports, SdkError
+
+Benchmark infrastructure:
+  implementations/rust/crates/aafp-benchmark/benches/
+    - mcp_transport.rs (round-trip ping, throughput)
+    - lock_contention.rs (H1 baseline, H2 channel, H7 ConnectionHandle)
+    - connection_lifecycle.rs (I1 cold/warm/pooled connect)
+    - alloc_profile.rs (allocation profiling)
+    - framing.rs, handshake.rs, session.rs, discovery.rs, etc.
+
+================================================================================
+SECTION 9: LESSONS LEARNED FROM PHASES 1 AND 2
+================================================================================
+
+1. #[global_allocator] can only be declared once per binary.
+   - Don't put it in library code (except #[cfg(test)] modules)
+   - Put it in benchmark binaries and test modules
+
+2. Criterion sample_size must be >= 10.
+   - sample_size=3 causes panic: "assertion failed: num_size >= 10"
+
+3. Doc tests compile as separate binaries.
+   - Don't use serde_json in doc tests for crates that don't depend on serde_json
+
+4. Tokio Mutex in tests can cause 30s timeouts when run in parallel.
+   - The TRACKING_MUTEX in alloc_tracker serializes tracking operations
+
+5. git pull --rebase is needed before pushing if the remote has new commits.
+   - Always run: git pull --rebase origin master && git push origin master
+
+6. The buffer pool works best when warmed up before measurement.
+
+7. serde_json::from_slice::<Value> allocates the JSON Value tree (7 allocs).
+   - Track K (simd-json) will reduce this
+
+8. Track H exceeded expectations (1.25M vs 800K target).
+   - The lock-free path eliminated contention entirely.
+   - The bottleneck shifted to writer task I/O (expected).
+
+9. Connection handle tests need to drop handles before closing transport.
+   - The writer/reader tasks hold references via channels.
+   - Drop all ConnectionHandle clones before calling Transport::close().
+   - Otherwise close() hangs waiting for the tasks to finish.
+
+10. iter_custom() is needed for criterion benchmarks that include setup.
+    - iter() measures the entire closure including setup.
+    - iter_custom() lets you return a Duration for just the measured part.
+    - The connection_lifecycle benchmark initially measured setup + connect
+      together, giving misleading numbers. Fixed with iter_custom().
+
+11. QuicTransport::new() builds a fresh ClientConfig per dial() call.
+    - This prevents TLS session ticket reuse (each config has its own store).
+    - I1 fixed this by caching the config with a shared SessionCache.
+    - Lesson: always check if configs are being reused across calls.
+
+12. 0-RTT resumption requires wire protocol changes for AAFP.
+    - The AAFP handshake provides ML-DSA-65 identity verification.
+    - TLS resumption only skips the TLS KEX, not the AAFP handshake.
+    - Skipping the AAFP handshake would lose identity verification.
+    - Connection pooling (I5) is a better approach — it eliminates the
+      handshake entirely by reusing an existing connection (14µs vs 240µs).
+
+================================================================================
+SECTION 10: EXECUTION PROCEDURE (SAME AS PHASES 1 AND 2)
+================================================================================
+
+For EVERY step:
+
+1. READ the step in the track plan file
+2. BASELINE: Run the relevant benchmark BEFORE any changes. Save numbers.
+3. IMPLEMENT: Write the code. Add tests.
+4. VERIFY: Run benchmark AGAIN. Compare to baseline.
+5. TEST: cargo test --workspace (0 failures expected — currently 1223)
+6. LINT: cargo clippy --workspace -- -D warnings (clean)
+7. FMT: cargo fmt --all -- --check (clean)
+8. STATUS: Update PERFORMANCE_STATUS.md — mark step [x], update metrics
+9. COMMIT: One commit per step, with before/after numbers
+10. PUSH: After each TRACK completes
+
+Commit format:
+  git commit -m "$(cat <<'EOF'
+  perf(i-5): connection pool — 17x faster repeated RPCs
+
+  Before: 100 RPCs to same peer = 100 connections (240µs each = 24ms total)
+  After:  100 RPCs to same peer = 1 connection (14µs per stream open)
+  Improvement: 17x per RPC, 100x fewer connections
+
+  Add ConnectionPool: HashMap<AgentId, PooledConnection> with idle timeout
+  (60s), max size (100), and health check (PING before reuse).
+  pool.get_or_connect() returns existing or creates new.
+  pool.release() marks idle. Idle connections are evicted after timeout.
+
+  Generated with [Devin](https://devin.ai)
+
+  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  EOF
+  )"
+
+================================================================================
+SECTION 11: QUICK VERIFICATION COMMANDS
+================================================================================
+
+# Build
+cd /Users/david/projects/AAFP-research/implementations/rust
+cargo build --workspace
+
+# Test (must be 0 failures — currently 1223 tests)
+cargo test --workspace
+
+# Lint (must be clean)
+cargo clippy --workspace -- -D warnings
+cargo fmt --all -- --check
+
+# Benchmarks
+cargo bench -p aafp-benchmark --bench mcp_transport -- --warm-up-time 3 --measurement-time 5
+cargo bench -p aafp-benchmark --bench lock_contention -- --warm-up-time 2 --measurement-time 3 --sample-size 10
+cargo bench -p aafp-benchmark --bench connection_lifecycle -- --warm-up-time 2 --measurement-time 3 --sample-size 10
+cargo bench -p aafp-benchmark --bench alloc_profile -- "zerocopy" --warm-up-time 1 --measurement-time 2 --sample-size 10
+cargo bench --bench framing
+cargo bench --bench handshake
+
+# Golden traces (wire compatibility — MUST still pass)
+cargo test --test golden_traces -- --nocapture
+
+================================================================================
+SECTION 12: SUBMODULE WORKFLOW
+================================================================================
+
+cd implementations/rust
+git add -A
+git commit -m "perf(i-5): ..."
+git push origin master
+
+# Then update umbrella:
+cd /Users/david/projects/AAFP-research
+git add implementations/rust
+git commit -m "chore: update rust submodule — perf(i-5): ..."
+git push origin master
+
+If push fails (remote has new commits):
+  cd implementations/rust && git pull --rebase origin master && git push origin master
+  cd /Users/david/projects/AAFP-research && git pull --rebase origin master && git push origin master
+
+================================================================================
+SECTION 13: GOLDEN RULES (NON-NEGOTIABLE — SAME AS PHASES 1 AND 2)
+================================================================================
+
+1. NEVER sacrifice security for speed.
+2. NEVER break the wire protocol. Golden traces MUST pass.
+   If a change alters the wire format, STOP and ask the user.
+3. NEVER skip benchmarking. Every step needs before/after numbers.
+4. NEVER mark a step complete unless benchmarks show improvement.
+5. NEVER use `unsafe` without a SAFETY comment.
+6. ALWAYS run cargo test --workspace before committing. (0 failures)
+7. ALWAYS run cargo clippy --workspace -- -D warnings. (clean)
+8. ALWAYS run cargo fmt --all -- --check. (clean)
+9. ALWAYS update PERFORMANCE_STATUS.md in the same commit.
+10. One optimization per commit.
+
+================================================================================
+SECTION 14: WHEN TO STOP AND ASK THE USER
+================================================================================
+
+1. A proposed optimization would change the wire protocol
+   (e.g., Track I2-I4 — 0-RTT resumption — ALREADY SKIPPED by user)
+
+2. A dependency needs to be added
+   (e.g., simd-json for K2, minicbor for K3 — check maintained, published >7 days)
+
+3. `unsafe` code is required and you're unsure about safety justification
+
+4. A benchmark regresses and you can't figure out why
+
+5. A track is blocked by an external factor
+   (e.g., I6 connection migration — quinn may not support it natively)
+
+6. You need to make a design decision not covered in the plan files
+
+For everything else, make a decision and proceed. Full autonomy.
+
+================================================================================
+SECTION 15: KEY FILES TO READ BEFORE STARTING PHASE 3
+================================================================================
+
+Read in order:
+
+1. implementation-plans/PERFORMANCE_STATUS.md
+   Current status — 18/52 steps done, Track G+H complete, I1 done.
+
+2. implementation-plans/track-i-connection-lifecycle/I-connection-lifecycle.md
+   START HERE. Steps I5-I8 (I1 done, I2-I4 skipped).
+
+3. implementations/rust/crates/aafp-sdk/src/client.rs
+   AgentClient, PeerConnection — I5 will add pooling to this.
+
+4. implementations/rust/crates/aafp-sdk/src/transport_binding.rs
+   establish_session() — I5 pool will wrap this.
+
+5. implementations/rust/crates/aafp-transport-quic/src/transport.rs
+   QuicTransport, QuicConnection — I5 pool stores these.
+
+6. implementations/rust/crates/aafp-transport-quic/src/session_cache.rs
+   SessionCache (I1) — already done, pool builds on this.
+
+7. implementations/rust/crates/aafp-benchmark/benches/connection_lifecycle.rs
+   Existing benchmark — I8 will extend this.
+
+8. implementation-plans/track-j-quic-tuning/J-quic-tuning.md
+   Read after I is complete. 7 steps for Track J.
+
+9. implementation-plans/track-k-serialization/K-serialization.md
+   Can run in parallel with J. 7 steps for Track K.
+
+================================================================================
+SECTION 16: WHAT "DONE" LOOKS LIKE FOR PHASE 3
+================================================================================
+
+Phase 3 is complete when:
+
+[ ] I5: Connection pool — 100 RPCs to same peer use 1 connection
+[ ] I6: Connection migration — connection survives address change
+      (OR skipped if quinn doesn't support it — investigate first)
+[ ] I7: Adaptive keep-alive — 30s → 60s stable, 10s unstable
+[ ] I8: End-to-end connection lifecycle benchmark — all scenarios measured
+[ ] J1-J7: QUIC transport tuning (7 steps)
+[ ] K1-K7: Serialization optimization (7 steps)
+[ ] M4-M7: Benchmarking remaining steps
+[ ] PERFORMANCE_STATUS.md updated — all completed steps marked [x]
+[ ] All 1223+ tests pass, clippy clean, fmt clean
+[ ] All changes committed and pushed
+
+================================================================================
+SECTION 17: BEGIN
+================================================================================
+
+Start now.
+
+1. Read implementation-plans/track-i-connection-lifecycle/I-connection-lifecycle.md
+2. Read implementations/rust/crates/aafp-sdk/src/client.rs
+3. Begin I5: create connection_pool.rs with ConnectionPool type
+4. Implement get_or_connect(), release(), idle eviction, health check
+5. Benchmark: 100 sequential RPCs with pool vs without pool
+
+The key question I5 answers: can we reuse an existing QUIC connection
+for multiple RPCs to the same peer, eliminating the 240µs handshake
+cost? The benchmark already showed pooled connect = 14µs (17x faster).
+The pool needs to deliver this in a real SDK API.
+
+For I6 (connection migration): investigate quinn's migration support
+FIRST. If quinn doesn't expose migration APIs, skip I6 and document why.
+
+For Track K (serialization): consider running it in parallel with Track J
+via a subagent. K2 (simd-json) and K3 (minicbor) are independent of J.
+
+Go.
+
+================================================================================
+END OF BUILDER PROMPT (PHASE 3)
+================================================================================
