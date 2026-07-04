@@ -835,10 +835,15 @@ with multiple nodes, commit R1, then proceed to R2-R8.
         management, DHT maintenance, backup and recovery) and
         docs/TROUBLESHOOTING.md (connection issues, high latency, memory growth,
         handshake failures, DHT lookup, crashes, relay, DCuTR, error messages).)*
-- [ ] **S7** Stress testing (burst, large messages, churn, DHT load)
+- [x] **S7** Stress testing (burst, large messages, churn, DHT load)
+      *(COMPLETE — Created crates/aafp-tests/tests/stress_tests.rs with 7 tests:
+        burst traffic (10 agents × 100 msgs), large messages (1MB, 100KB),
+        100 concurrent streams, 20 connection churn cycles, DHT 100 announce +
+        5 lookups, DHT 10 concurrent access. All 7 tests pass. Results in
+        test-results/performance/stress-tests.json.)*
 - [ ] **S8** Production readiness report
 
-**S status:** IN PROGRESS (S1-S6 COMPLETE, S7 next)
+**S status:** IN PROGRESS (S1-S7 COMPLETE, S8 next)
 **S blocked by:** Track N (NAT traversal — load test needs relay) — N COMPLETE
 **S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
 **S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`

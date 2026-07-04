@@ -1,0 +1,85 @@
+{
+  "test_name": "AAFP Stress Tests (Track S7)",
+  "date": "2026-07-04T19:39:01.339769+00:00",
+  "tests": {
+    "burst_traffic": {
+      "name": "Burst Traffic \u2014 10 agents send 100 messages simultaneously",
+      "config": {
+        "num_agents": 10,
+        "messages_per_agent": 100,
+        "message_size": 1024
+      },
+      "result": "PASS",
+      "verdict": ">80% success rate",
+      "notes": "10 agents each send 100 messages to all other agents simultaneously. Tests thundering herd scenario."
+    },
+    "large_message_1mb": {
+      "name": "Large Message \u2014 1MB",
+      "config": {
+        "message_size": 1048576
+      },
+      "result": "PASS",
+      "verdict": "Message delivered without timeout or OOM",
+      "notes": "1MB message sent and echoed. Tests frame encoding/decoding with large payloads."
+    },
+    "large_message_100kb": {
+      "name": "Large Message \u2014 100KB",
+      "config": {
+        "message_size": 102400
+      },
+      "result": "PASS",
+      "verdict": "Message delivered without timeout",
+      "notes": "100KB message sent and echoed."
+    },
+    "many_streams_100": {
+      "name": "Many Streams \u2014 100 concurrent streams",
+      "config": {
+        "num_streams": 100,
+        "message_size": 256
+      },
+      "result": "PASS",
+      "verdict": ">=90% success rate",
+      "notes": "100 concurrent QUIC streams on a single connection. Tests stream multiplexing."
+    },
+    "connection_churn_20": {
+      "name": "Connection Churn \u2014 20 connect/disconnect cycles",
+      "config": {
+        "num_cycles": 20,
+        "messages_per_cycle": 1
+      },
+      "result": "PASS",
+      "verdict": ">=90% success rate",
+      "notes": "20 cycles of connect, send 1 message, disconnect. Tests FD and memory recovery."
+    },
+    "dht_100_announce_lookup": {
+      "name": "DHT Under Load \u2014 100 announce + 5 lookups",
+      "config": {
+        "num_records": 100,
+        "num_capabilities": 5
+      },
+      "result": "PASS",
+      "verdict": "All 100 records found",
+      "notes": "100 DHT records announced across 5 capabilities, then all looked up. Tests DHT throughput."
+    },
+    "dht_concurrent_access": {
+      "name": "DHT Concurrent Access \u2014 10 concurrent lookups",
+      "config": {
+        "num_records": 50,
+        "num_concurrent_lookups": 10
+      },
+      "result": "PASS",
+      "verdict": "All lookups return correct results",
+      "notes": "10 concurrent DHT lookups with 50 records. Tests thread safety."
+    }
+  },
+  "summary": {
+    "total_tests": 7,
+    "passed": 7,
+    "failed": 0,
+    "verdict": "PASS \u2014 Agent survives all stress tests without crash or OOM"
+  },
+  "verification": {
+    "target": "Agent survives all stress tests without crash or OOM",
+    "result": "PASS"
+  }
+}
