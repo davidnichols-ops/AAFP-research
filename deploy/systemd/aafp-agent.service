@@ -1,0 +1,76 @@
+# AAFP Agent systemd service file
+#
+# Install:
+#   sudo cp deploy/systemd/aafp-agent.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable aafp-agent
+#   sudo systemctl start aafp-agent
+#
+# View logs:
+#   journalctl -u aafp-agent -f
+#
+# Override settings:
+#   sudo systemctl edit aafp-agent
+
+[Unit]
+Description=AAFP Agent — secure agent-to-agent networking
+Documentation=https://github.com/cognition-ai/aafp
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Binary location
+ExecStart=/usr/local/bin/aafp-agent serve \
+  --bind 0.0.0.0:4433 \
+  --capabilities inference \
+  --bootstrap-relays quic://relay.example.com:4433
+
+# Environment variables
+Environment=RUST_LOG=info
+Environment=AAFP_DATA_DIR=/var/lib/aafp
+
+# User isolation — run as dedicated user
+User=aafp
+Group=aafp
+
+# Working directory
+WorkingDirectory=/var/lib/aafp
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+LimitNOFILE=65536
+LimitNPROC=256
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Data directory
+StateDirectory=aafp
+ReadWritePaths=/var/lib/aafp
+
+[Install]
+WantedBy=multi-user.target

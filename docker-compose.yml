@@ -1,0 +1,108 @@
+# AAFP Docker Compose — 3-agent setup (relay + 2 agents behind NAT)
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f agent-1
+#   docker-compose down
+#
+# This starts:
+#   - relay:    Public relay node (port 4433/udp)
+#   - agent-1:  Agent behind NAT (uses relay for traversal)
+#   - agent-2:  Another agent behind NAT (uses relay for traversal)
+
+version: "3.9"
+
+services:
+  # ── Relay Node ─────────────────────────────────────────────────────────────
+  relay:
+    build:
+      context: ./implementations/rust
+      dockerfile: Dockerfile
+    container_name: aafp-relay
+    ports:
+      - "4433:4433/udp"
+    environment:
+      AAFP_BIND: "0.0.0.0:4433"
+      AAFP_RELAY_MODE: "true"
+      AAFP_CAPABILITIES: "relay"
+      RUST_LOG: "info"
+    volumes:
+      - relay-keys:/data/keys
+      - relay-dht:/data/dht
+    restart: unless-stopped
+    healthcheck:
+      test: ["/aafp-agent", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - aafp-net
+
+  # ── Agent 1 (behind NAT) ───────────────────────────────────────────────────
+  agent-1:
+    build:
+      context: ./implementations/rust
+      dockerfile: Dockerfile
+    container_name: aafp-agent-1
+    environment:
+      AAFP_BIND: "0.0.0.0:4433"
+      AAFP_CAPABILITIES: "inference,translation"
+      AAFP_RELAY: "quic://relay:4433"
+      RUST_LOG: "info"
+    volumes:
+      - agent1-keys:/data/keys
+      - agent1-dht:/data/dht
+    depends_on:
+      relay:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["/aafp-agent", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - aafp-net
+
+  # ── Agent 2 (behind NAT) ───────────────────────────────────────────────────
+  agent-2:
+    build:
+      context: ./implementations/rust
+      dockerfile: Dockerfile
+    container_name: aafp-agent-2
+    environment:
+      AAFP_BIND: "0.0.0.0:4433"
+      AAFP_CAPABILITIES: "inference,summarization"
+      AAFP_RELAY: "quic://relay:4433"
+      RUST_LOG: "info"
+    volumes:
+      - agent2-keys:/data/keys
+      - agent2-dht:/data/dht
+    depends_on:
+      relay:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["/aafp-agent", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - aafp-net
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  relay-keys:
+  relay-dht:
+  agent1-keys:
+  agent1-dht:
+  agent2-keys:
+  agent2-dht:
+
+# ── Network ──────────────────────────────────────────────────────────────────
+networks:
+  aafp-net:
+    driver: bridge

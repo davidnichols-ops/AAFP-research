@@ -822,12 +822,18 @@ with multiple nodes, commit R1, then proceed to R2-R8.
         Agent::metrics() returns MetricsSnapshot, Agent::health_check() returns HealthStatus
         (Healthy/Degraded/Unhealthy). MetricsRpcResponse for aafp.metrics RPC (CBOR+JSON).
         13 new tests pass (10 metrics module + 3 agent integration).)*
-- [ ] **S5** Deployment documentation (Docker, systemd, Kubernetes)
+- [x] **S5** Deployment documentation (Docker, systemd, Kubernetes)
+      *(COMPLETE — Created docs/DEPLOYMENT.md (quick start, Docker, systemd, K8s,
+        configuration, security, monitoring, scaling, system requirements,
+        performance benchmarks). Dockerfile (multi-stage, distroless runtime).
+        docker-compose.yml (3-agent relay setup). deploy/systemd/aafp-agent.service
+        (resource limits, security hardening). deploy/kubernetes/aafp-agent.yaml
+        (Deployment, Service, ConfigMap, Secret, PDB, HPA).)*
 - [ ] **S6** Operational runbook (key rotation, updates, debugging)
 - [ ] **S7** Stress testing (burst, large messages, churn, DHT load)
 - [ ] **S8** Production readiness report
 
-**S status:** IN PROGRESS (S1-S4 COMPLETE, S5 next)
+**S status:** IN PROGRESS (S1-S5 COMPLETE, S6 next)
 **S blocked by:** Track N (NAT traversal — load test needs relay) — N COMPLETE
 **S plan:** `implementation-plans/track-s-load-operations/S-load-operations.md`
 **S builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_S.txt`

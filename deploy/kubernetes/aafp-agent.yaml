@@ -1,0 +1,178 @@
+# AAFP Agent Kubernetes Deployment
+#
+# Deploy:
+#   kubectl apply -f deploy/kubernetes/aafp-agent.yaml
+#
+# Scale:
+#   kubectl scale deployment aafp-agent --replicas=10
+#
+# View pods:
+#   kubectl get pods -l app=aafp-agent
+#
+# View logs:
+#   kubectl logs -l app=aafp-agent --tail=50
+#
+# Get metrics:
+#   kubectl exec -it deploy/aafp-agent -- /aafp-agent metrics
+
+---
+# ── ConfigMap ────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aafp-agent-config
+  labels:
+    app: aafp-agent
+data:
+  AAFP_BIND: "0.0.0.0:4433"
+  AAFP_CAPABILITIES: "inference,translation"
+  AAFP_RELAY: "quic://aafp-relay:4433"
+  RUST_LOG: "info"
+  AAFP_DATA_DIR: "/data"
+
+---
+# ── Secret (agent keypair) ───────────────────────────────────────────────────
+# Generate with: kubectl create secret generic aafp-agent-key \
+#   --from-file=agent.key=/path/to/agent.key
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aafp-agent-key
+  labels:
+    app: aafp-agent
+type: Opaque
+data:
+  # Base64-encoded agent keypair — REPLACE with your actual key
+  agent.key: ""
+
+---
+# ── Deployment ───────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aafp-agent
+  labels:
+    app: aafp-agent
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: aafp-agent
+  template:
+    metadata:
+      labels:
+        app: aafp-agent
+    spec:
+      containers:
+        - name: aafp-agent
+          image: aafp-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4433
+              protocol: UDP
+              name: quic
+          envFrom:
+            - configMapRef:
+                name: aafp-agent-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: keys
+              mountPath: /data/keys
+              readOnly: true
+            - name: dht
+              mountPath: /data/dht
+          livenessProbe:
+            exec:
+              command: ["/aafp-agent", "healthcheck"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["/aafp-agent", "healthcheck"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: keys
+          secret:
+            secretName: aafp-agent-key
+        - name: dht
+          emptyDir: {}
+
+---
+# ── Service ──────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: aafp-agent
+  labels:
+    app: aafp-agent
+spec:
+  type: ClusterIP
+  selector:
+    app: aafp-agent
+  ports:
+    - port: 4433
+      targetPort: 4433
+      protocol: UDP
+      name: quic
+
+---
+# ── Pod Disruption Budget ────────────────────────────────────────────────────
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: aafp-agent-pdb
+  labels:
+    app: aafp-agent
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: aafp-agent
+
+---
+# ── Horizontal Pod Autoscaler ────────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: aafp-agent-hpa
+  labels:
+    app: aafp-agent
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: aafp-agent
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
