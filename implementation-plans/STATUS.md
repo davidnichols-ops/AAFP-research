@@ -584,7 +584,15 @@ all 1011 Rust tests pass.
 ## Track N — NAT Traversal (Production Readiness Phase 2)
 
 ### N: DCUtR Hole Punching + Real Relay Testing
-- [ ] **N1** Implement relay data forwarding (real QUIC stream forwarding)
+- [x] **N1** Implement relay data forwarding (real QUIC stream forwarding)
+      *(RelayV1Server: accepts QUIC connections, handles RPC on control streams,
+        forwards data on data streams. Wire format: [0xFF + 8-byte connection_id]
+        for caller→relay, [0xFE + 8-byte connection_id] for relay→target.
+        RelayV1TargetHandler: target-side handler that reserves and accepts
+        incoming relayed connections. RelayV1CallerHelper: caller-side helper
+        that connects to target through relay. forward_data(): bidirectional
+        byte copying with tokio tasks. 3 integration tests: end-to-end
+        forwarding, multiple messages, close cleanup. All pass.)*
 - [ ] **N2** Implement AutoNAT dial-back (real NAT detection)
 - [ ] **N3** Implement DCuTR hole punching (replace stub)
 - [ ] **N4** Relay discovery and bootstrap (find relay nodes)
@@ -593,13 +601,16 @@ all 1011 Rust tests pass.
 - [ ] **N7** Two-machine relay test (real cross-NAT validation)
 - [ ] **N8** Relay performance and capacity testing
 
-**N status:** NOT STARTED (builder subagent launched but no code committed)
+**N status:** IN PROGRESS (N1 complete — 3 relay forwarding tests pass)
 **N blocked by:** nothing
 **N plan:** `implementation-plans/track-n-nat-traversal/N-nat-traversal.md`
 **N builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_N.txt`
-**N notes:** A builder subagent was launched in a previous session but did not commit
-any work. The relay/AutoNAT/DCuTR stubs in `aafp-nat/src/` remain unchanged.
-Start fresh from the builder script.
+**N notes:** N1 complete — new module `relay_forwarding.rs` in aafp-nat implements
+real QUIC stream forwarding. RelayV1Server runs an accept loop, handles RPC on
+control streams, and forwards data on data streams. The relay opens bi-streams
+to targets when a connect RPC is received. Targets accept incoming relayed
+connections via RelayV1TargetHandler. Callers use RelayV1CallerHelper to connect
+through the relay. aafp-transport-quic added as dependency to aafp-nat.
 
 ---
 
