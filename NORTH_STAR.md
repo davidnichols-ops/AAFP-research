@@ -150,7 +150,7 @@ finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 
 **Phase 2: Make it deployable and invisible (1-2 weeks) — IN PROGRESS**
 - [x] P2.1: 3-line developer API — `Agent::serve().capability("echo").handler(...).start()`
-- [ ] P2.2: CLI polish — `aafp serve`, `aafp call`, `aafp peers`, `aafp metrics`
+- [x] P2.2: CLI polish — `aafp serve`, `aafp call`, `aafp peers`, `aafp metrics`, `aafp health`, `aafp quickstart`
 - [ ] P2.3: Quickstart tutorial (5 minutes, no jargon)
 - [ ] P2.4: Python SDK high-level API
 - [ ] P2.5: 5 working examples

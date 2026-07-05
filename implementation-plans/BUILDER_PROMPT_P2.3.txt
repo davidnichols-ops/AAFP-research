@@ -1,0 +1,144 @@
+# BUILDER PROMPT — P2.3: Quickstart Tutorial
+
+## Objective
+
+Create `docs/QUICKSTART.md` — a tutorial that a complete beginner can follow
+to get a working AAFP agent running in 5 minutes. No protocol jargon.
+
+## Rules
+
+1. **NO protocol jargon.** Do not mention: QUIC, CBOR, UCAN, DHT, NAT, relay,
+   ML-DSA-65, post-quantum, RFC, Rev 6, AgentId, AgentRecord, multiaddr,
+   k-bucket, Kademlia, bootstrap, PEX, replication, churn, X25519MLKEM768,
+   handshake, session, capability descriptor, or any other protocol term.
+
+2. **NO prerequisites** beyond having Rust installed (or Docker).
+
+3. **Every command must work** as written. Test each one.
+
+4. **Include expected output** for each command so the reader knows it worked.
+
+5. **5 minutes or less** from start to working agent.
+
+## Tutorial Structure
+
+### Section 1: Install (30 seconds)
+
+```bash
+# Clone and build
+git clone https://github.com/davidnichols-ops/aafp.git
+cd aafp/implementations/rust
+cargo build --release
+
+# The CLI is now at ./target/release/aafp
+# Add to PATH (optional):
+export PATH="$PWD/target/release:$PATH"
+```
+
+Expected output: `Finished release [optimized] target(s)`
+
+### Section 2: Your First Agent (1 minute)
+
+```bash
+# Start an echo agent (responds with whatever you send it)
+aafp serve --capability echo
+```
+
+Expected output:
+```
+Agent ID:     a3f4...
+Serving on:   127.0.0.1:12345
+Capabilities: echo
+Press Ctrl+C to stop
+```
+
+### Section 3: Call an Agent (30 seconds)
+
+Open a new terminal:
+
+```bash
+# Call the echo agent
+aafp call echo "hello"
+```
+
+Expected output:
+```
+Response: hello
+```
+
+### Section 4: Build Your Own Agent (2 minutes)
+
+Show a 3-line Rust agent:
+
+```rust
+// Cargo.toml: aafp-sdk = { path = "implementations/rust/crates/aafp-sdk" }
+
+use aafp_sdk::simple::{Agent, Request, Response};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    Agent::serve()
+        .capability("greet")
+        .handler(|req: Request| async move {
+            Ok(Response::text(format!("Hello, {}!", req.body())))
+        })
+        .start()
+        .await?;
+    Ok(())
+}
+```
+
+Then call it:
+```bash
+aafp call greet "World"
+# Response: Hello, World!
+```
+
+### Section 5: Python Agent (1 minute)
+
+```python
+# pip install aafp  (when available — for now, use the Rust API)
+
+from aafp import Agent
+
+agent = Agent.serve(capability="greet")
+
+@agent.handler
+async def greet(request):
+    return {"text": f"Hello, {request['text']}!"}
+
+await agent.start()
+```
+
+### Section 6: Docker (30 seconds)
+
+```bash
+docker compose up
+# Starts 3 agents that can discover and talk to each other
+```
+
+### Section 7: What's Next?
+
+- `aafp quickstart` — interactive setup wizard
+- `aafp peers` — see who's on the network
+- `aafp metrics` — check agent health
+- Full docs at: (link to docs site when it exists)
+
+## File to Create
+
+`/Users/david/Projects/AAFP-research/docs/QUICKSTART.md`
+
+## Verification
+
+1. Read through the tutorial — does it mention any protocol terms? If yes, remove them.
+2. Can a person who has never heard of AAFP follow it in 5 minutes?
+3. Does every command work? (Test them)
+4. Is expected output included for each step?
+
+## Do NOT
+
+- Do NOT mention QUIC, CBOR, UCAN, DHT, NAT, relay, ML-DSA-65, or any protocol term
+- Do NOT link to RFCs
+- Do NOT explain how AAFP works internally
+- Do NOT add a "How it works" section — that's for the docs site, not quickstart
+- Do NOT make it longer than 1 page
