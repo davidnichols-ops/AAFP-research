@@ -153,7 +153,7 @@ finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 - [x] P2.2: CLI polish — `aafp serve`, `aafp call`, `aafp peers`, `aafp metrics`, `aafp health`, `aafp quickstart`
 - [x] P2.3: Quickstart tutorial (5 minutes, no jargon) — docs/QUICKSTART.md
 - [x] P2.4: Python SDK high-level API — `from aafp import Agent, Request, Response`
-- [ ] P2.5: 5 working examples
+- [x] P2.5: 5 working examples — echo, translation pipeline, python weather, relay setup, multi-agent chat
 - [ ] P2.6: Prometheus + Grafana dashboard
 - [ ] P2.7: Documentation site (mdbook)
 - [ ] P2.8: Install script + Homebrew

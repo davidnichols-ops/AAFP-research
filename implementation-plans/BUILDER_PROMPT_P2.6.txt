@@ -1,0 +1,321 @@
+# BUILDER PROMPT — P2.6: Prometheus Metrics + Grafana Dashboard
+
+## Objective
+
+Make AAFP observability plug-and-play. A developer runs `docker compose up`
+and gets AAFP + Prometheus + Grafana with a pre-loaded dashboard showing
+live agent metrics.
+
+## Current State (What Already Exists)
+
+### AgentMetrics (crates/aafp-sdk/src/metrics.rs)
+Lock-free atomic counters with these fields:
+- `connections_active` — current connection count
+- `connections_total` — cumulative connections
+- `messages_sent` / `messages_received` — message counts
+- `bytes_sent` / `bytes_received` — byte counts
+- `handshakes_completed` / `handshakes_failed` — handshake stats
+- `dht_records` — DHT record count
+- `relay_connections` — active relay connections
+- `messages_failed` — failed message count
+- `uptime_seconds` — agent uptime
+
+### MetricsSnapshot (serde-serializable struct)
+All the above as u64 fields. Can be serialized to JSON via `MetricsRpcResponse::to_json()`.
+
+### CLI `aafp metrics` command
+Already prints metrics to terminal in a nice formatted display.
+
+### MetricsRpcResponse
+Has `to_json()` and `to_cbor()` methods. Contains metrics + health + agent_id.
+
+### docker-compose.yml
+Already has 3 services: relay, agent-1, agent-2. No Prometheus or Grafana yet.
+
+### HealthStatus
+Derived from MetricsSnapshot. Has status enum (Healthy/Degraded/Unhealthy).
+
+## What to Build
+
+### 1. Prometheus Metrics Exporter (crates/aafp-sdk/src/prometheus.rs)
+
+Create a Prometheus-format HTTP exporter that exposes agent metrics on a
+configurable HTTP endpoint.
+
+**Implementation:**
+```rust
+pub struct PrometheusExporter {
+    metrics: Arc<AgentMetrics>,
+    agent_id: String,
+}
+
+impl PrometheusExporter {
+    pub fn new(metrics: Arc<AgentMetrics>, agent_id: String) -> Self;
+
+    /// Start serving Prometheus metrics on the given HTTP port.
+    /// Endpoint: http://0.0.0.0:9090/metrics
+    pub async fn serve(self, addr: SocketAddr) -> Result<()>;
+
+    /// Generate Prometheus-format text for the current metrics.
+    pub fn render(&self) -> String;
+}
+```
+
+**Prometheus format output:**
+```
+# HELP aafp_connections_active Current active connections
+# TYPE aafp_connections_active gauge
+aafp_connections_active{agent_id="abc123"} 3
+
+# HELP aafp_connections_total Total connections established
+# TYPE aafp_connections_total counter
+aafp_connections_total{agent_id="abc123"} 42
+
+# HELP aafp_messages_sent_total Total messages sent
+# TYPE aafp_messages_sent_total counter
+aafp_messages_sent_total{agent_id="abc123"} 1337
+
+# HELP aafp_messages_received_total Total messages received
+# TYPE aafp_messages_received_total counter
+aafp_messages_received_total{agent_id="abc123"} 1335
+
+# HELP aafp_bytes_sent_total Total bytes sent
+# TYPE aafp_bytes_sent_total counter
+aafp_bytes_sent_total{agent_id="abc123"} 1048576
+
+# HELP aafp_bytes_received_total Total bytes received
+# TYPE aafp_bytes_received_total counter
+aafp_bytes_received_total{agent_id="abc123"} 524288
+
+# HELP aafp_handshakes_completed_total Total handshakes completed
+# TYPE aafp_handshakes_completed_total counter
+aafp_handshakes_completed_total{agent_id="abc123"} 40
+
+# HELP aafp_handshakes_failed_total Total handshakes failed
+# TYPE aafp_handshakes_failed_total counter
+aafp_handshakes_failed_total{agent_id="abc123"} 2
+
+# HELP aafp_dht_records DHT records stored
+# TYPE aafp_dht_records gauge
+aafp_dht_records{agent_id="abc123"} 150
+
+# HELP aafp_relay_connections Active relay connections
+# TYPE aafp_relay_connections gauge
+aafp_relay_connections{agent_id="abc123"} 1
+
+# HELP aafp_messages_failed_total Total messages that failed
+# TYPE aafp_messages_failed_total counter
+aafp_messages_failed_total{agent_id="abc123"} 3
+
+# HELP aafp_uptime_seconds Agent uptime in seconds
+# TYPE aafp_uptime_seconds gauge
+aafp_uptime_seconds{agent_id="abc123"} 3600
+```
+
+**HTTP server:** Use a minimal HTTP server (hyper or tiny_http). Only needs
+to handle GET /metrics. No framework needed.
+
+**Dependency:** Add `hyper` (or `tiny_http`) to aafp-sdk Cargo.toml. Prefer
+`tiny_http` for minimal footprint, or `hyper` if already a dependency.
+
+### 2. Simple API Integration
+
+Add to `crates/aafp-sdk/src/simple.rs`:
+
+```rust
+impl ServeBuilder {
+    /// Enable Prometheus metrics endpoint.
+    /// Default: http://0.0.0.0:9090/metrics
+    pub fn with_metrics(mut self, addr: SocketAddr) -> Self {
+        self.metrics_addr = Some(addr);
+        self
+    }
+}
+```
+
+When `with_metrics()` is set, the serving agent starts a Prometheus exporter
+in addition to the AAFP listener.
+
+### 3. Grafana Dashboard (deploy/grafana/aafp-dashboard.json)
+
+Create a pre-built Grafana dashboard JSON with these panels:
+
+**Row 1: Overview**
+- Active connections (gauge)
+- Messages sent/received rate (graph, per second)
+- Uptime (stat)
+
+**Row 2: Traffic**
+- Bytes sent/received (graph, per second)
+- Total messages (counter graph)
+
+**Row 3: Handshakes**
+- Handshake success rate (gauge, percentage)
+- Handshakes completed vs failed (graph)
+
+**Row 4: DHT & Relay**
+- DHT records (gauge)
+- Relay connections (gauge)
+
+**Row 5: Errors**
+- Messages failed (graph)
+- Error rate (gauge, percentage)
+
+Dashboard config:
+- Datasource: Prometheus
+- Refresh interval: 5s
+- Time range: Last 1 hour
+- Templating: agent_id variable (multi-select from Prometheus labels)
+
+### 4. Grafana Datasource (deploy/grafana/datasource.yml)
+
+```yaml
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+```
+
+### 5. Grafana Dashboard Provider (deploy/grafana/dashboards.yml)
+
+```yaml
+apiVersion: 1
+providers:
+  - name: 'AAFP'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+```
+
+### 6. Prometheus Config (deploy/prometheus/prometheus.yml)
+
+```yaml
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'aafp-relay'
+    static_configs:
+      - targets: ['relay:9090']
+        labels:
+          agent_role: 'relay'
+
+  - job_name: 'aafp-agent-1'
+    static_configs:
+      - targets: ['agent-1:9090']
+        labels:
+          agent_role: 'agent'
+
+  - job_name: 'aafp-agent-2'
+    static_configs:
+      - targets: ['agent-2:9090']
+        labels:
+          agent_role: 'agent'
+```
+
+### 7. Update docker-compose.yml
+
+Add Prometheus and Grafana services:
+
+```yaml
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aafp-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - aafp-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aafp-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./deploy/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./deploy/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./deploy/grafana/aafp-dashboard.json:/etc/grafana/provisioning/dashboards/aafp-dashboard.json
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - aafp-net
+    restart: unless-stopped
+```
+
+Also add `AAFP_METRICS: "0.0.0.0:9090"` to relay, agent-1, agent-2 environment
+so they start the Prometheus exporter.
+
+Add `grafana-data` to volumes.
+
+### 8. Agent Binary Integration
+
+The agent binary (or CLI `aafp serve`) should respect an `AAFP_METRICS`
+environment variable. If set, start the Prometheus exporter on that address.
+
+In `crates/aafp-cli/src/commands/serve.rs` (or wherever the serve command
+is implemented):
+```rust
+if let Ok(metrics_addr) = env::var("AAFP_METRICS") {
+    let addr: SocketAddr = metrics_addr.parse()?;
+    let exporter = PrometheusExporter::new(agent.metrics.clone(), agent_id);
+    tokio::spawn(async move { exporter.serve(addr).await });
+}
+```
+
+## Files to Create/Modify
+
+| File | Action |
+|------|--------|
+| `crates/aafp-sdk/src/prometheus.rs` | NEW — Prometheus exporter |
+| `crates/aafp-sdk/src/lib.rs` | MODIFY — add `pub mod prometheus;` |
+| `crates/aafp-sdk/src/simple.rs` | MODIFY — add `with_metrics()` to ServeBuilder |
+| `crates/aafp-sdk/Cargo.toml` | MODIFY — add HTTP server dependency |
+| `crates/aafp-cli/src/commands/serve.rs` | MODIFY — respect AAFP_METRICS env var |
+| `deploy/prometheus/prometheus.yml` | NEW — Prometheus config |
+| `deploy/grafana/aafp-dashboard.json` | NEW — Pre-built dashboard |
+| `deploy/grafana/datasource.yml` | NEW — Grafana datasource |
+| `deploy/grafana/dashboards.yml` | NEW — Grafana dashboard provider |
+| `docker-compose.yml` | MODIFY — add prometheus + grafana services |
+
+## Verification
+
+1. `cargo build --workspace` — 0 errors, 0 warnings
+2. `cargo clippy --workspace -- -D warnings` — 0 warnings
+3. `cargo test --workspace` — all tests pass
+4. `cargo test -p aafp-sdk prometheus` — new prometheus tests pass
+5. Start an agent with `AAFP_METRICS=0.0.0.0:9090 aafp serve --capability echo`
+6. `curl http://localhost:9090/metrics` — returns Prometheus-format text
+7. `docker compose up` — starts relay + 2 agents + Prometheus + Grafana
+8. Open `http://localhost:3000` — Grafana login (admin/admin)
+9. AAFP dashboard is pre-loaded with all panels
+10. Dashboard shows live metrics from all 3 agents
+
+## Do NOT
+
+- Do NOT use a heavy web framework — just a minimal HTTP handler for /metrics
+- Do NOT require manual Grafana setup — everything must be auto-provisioned
+- Do NOT add authentication to the metrics endpoint (it's internal)
+- Do NOT forget to add the new dependency to Cargo.toml
+- Do NOT break existing tests
+- Do NOT modify the wire protocol or AgentMetrics struct
+
+## Acid Test
+
+Can a developer run `docker compose up` and see a Grafana dashboard with
+live AAFP metrics in under 2 minutes? If yes, it's done.
