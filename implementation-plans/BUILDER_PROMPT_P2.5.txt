@@ -1,0 +1,196 @@
+# BUILDER PROMPT — P2.5: Examples That Work
+
+## Objective
+
+Create 5 working examples that people can clone and run. Each example
+demonstrates a different aspect of AAFP and works out of the box on localhost.
+
+## Current API Surface (P2.1-P2.4)
+
+### Rust simple API:
+```rust
+use aafp_sdk::simple::{Agent, Request, Response};
+
+// Serve
+Agent::serve()
+    .capability("echo")
+    .handler(|req: Request| async move { Ok(Response::text(req.body())) })
+    .start().await?;  // → ServingAgent
+
+// Connect + call
+let mut agent = Agent::connect().connect().await?;
+agent.register(&serving.record());  // populate DHT
+let result = agent.discover("echo").call(Request::text("hello")).await?;
+// Or direct: agent.call_at("quic://127.0.0.1:12345", Request::text("hello")).await?;
+```
+
+### Python simple API:
+```python
+from aafp import Agent, Request, Response
+
+# Serve
+builder = Agent.serve("echo")
+builder.handler(echo_handler)
+server = await builder.start()
+
+# Connect + call
+client = await Agent.connect()
+result = await client.call_at(server.addr, Request.text("hello"))
+```
+
+### CLI:
+```bash
+aafp serve --capability echo
+aafp call echo "hello" --addr quic://127.0.0.1:12345
+```
+
+## Examples to Build
+
+### 1. examples/echo-agent/ — Minimal Echo Agent (Rust)
+
+The simplest possible AAFP agent. 10 lines of Rust.
+
+```
+examples/echo-agent/
+├── Cargo.toml
+├── README.md    # "Run in 30 seconds" — no jargon
+└── src/main.rs  # 10-line echo agent
+```
+
+**src/main.rs:**
+```rust
+use aafp_sdk::simple::{Agent, Request, Response};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("Starting echo agent...");
+    Agent::serve()
+        .capability("echo")
+        .handler(|req: Request| async move {
+            Ok(Response::text(req.body()))
+        })
+        .start()
+        .await?;
+    Ok(())
+}
+```
+
+**README.md:** 2-step instructions (cargo run, then aafp call from another terminal).
+
+### 2. examples/translation-pipeline/ — Agent Chaining (Rust)
+
+Three agents chained: uppercase → reverse → base64-encode.
+
+```
+examples/translation-pipeline/
+├── Cargo.toml
+├── README.md
+└── src/main.rs  # Starts 3 agents, chains them, demonstrates pipeline
+```
+
+This demonstrates:
+- Multiple agents with different capabilities
+- One agent discovering and calling another
+- Pipeline assembly (output of agent 1 → input of agent 2)
+
+**Implementation:**
+- Agent 1: "uppercase" — converts text to uppercase
+- Agent 2: "reverse" — reverses text
+- Agent 3: "encode" — base64 encodes text
+- Main: starts all 3, then calls uppercase → reverse → encode
+- Prints the final result
+
+### 3. examples/python-weather-agent/ — Python Agent (Python)
+
+A Python agent that "calls a weather API" (use a mock for offline operation).
+
+```
+examples/python-weather-agent/
+├── README.md
+├── requirements.txt   # aafp, aiohttp
+└── main.py            # Python agent using aafp SDK
+```
+
+**main.py:**
+```python
+import asyncio
+from aafp import Agent, Request, Response
+
+async def weather_handler(request: Request):
+    city = request.body
+    # Mock weather data (no API key needed)
+    weather = {"city": city, "temp": 72, "condition": "sunny"}
+    return Response.text(f"Weather in {city}: {weather['temp']}°F, {weather['condition']}")
+
+async def main():
+    builder = Agent.serve("weather")
+    builder.handler(weather_handler)
+    server = await builder.start()
+    print(f"Weather agent serving at {server.addr}")
+    # Keep running
+    await asyncio.Event().wait()
+
+asyncio.run(main())
+```
+
+**README.md:** 2-step instructions (pip install, python main.py, then call from CLI).
+
+### 4. examples/relay-setup/ — Deploy a Relay (Docker)
+
+How to deploy a relay node on a cloud VM.
+
+```
+examples/relay-setup/
+├── README.md          # Step-by-step: rent VM, install, run
+├── docker-compose.yml # Relay container
+└── Dockerfile         # Multi-stage build
+```
+
+**README.md covers:**
+1. Rent a $5/month VM (DigitalOcean, Linode, etc.)
+2. `docker compose up -d`
+3. Verify: `aafp health --addr quic://your-vm-ip:4434`
+4. Configure agents to use it: `aafp serve --capability echo --relay quic://your-vm-ip:4434`
+
+### 5. examples/multi-agent-chat/ — 3 Agents Chatting (Rust)
+
+Three agents that discover each other and exchange messages.
+
+```
+examples/multi-agent-chat/
+├── Cargo.toml
+├── README.md
+└── src/main.rs  # Starts 3 agents, they discover each other, send messages
+```
+
+**Implementation:**
+- Agent Alice: capability "chat", handler receives messages, prints them
+- Agent Bob: capability "chat", same
+- Agent Carol: capability "chat", same
+- Main: starts all 3, registers their records with each other
+- Alice sends "Hello!" to Bob, Bob sends "Hi!" to Carol, Carol sends "Hey!" to Alice
+- Prints the conversation to stdout
+
+## Verification
+
+Each example must:
+1. Run with `cargo run` or `python main.py` (no manual configuration)
+2. Produce expected output within 5 seconds
+3. Have a README with "run in 2 minutes" instructions
+4. Have NO protocol jargon in the README
+5. Work on localhost without any external services
+
+```bash
+cd examples/echo-agent && cargo run &
+sleep 2
+aafp call echo "hello" --addr quic://127.0.0.1:<port>
+# Should print: hello
+```
+
+## Do NOT
+
+- Do NOT modify aafp-sdk or aafp-py — just use the existing APIs
+- Do NOT add protocol jargon to READMEs
+- Do NOT require external services (no real weather API, no real LLM API)
+- Do NOT make examples that need more than 2 minutes to understand
+- Do NOT forget to test each example actually runs

@@ -152,7 +152,7 @@ finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 - [x] P2.1: 3-line developer API — `Agent::serve().capability("echo").handler(...).start()`
 - [x] P2.2: CLI polish — `aafp serve`, `aafp call`, `aafp peers`, `aafp metrics`, `aafp health`, `aafp quickstart`
 - [x] P2.3: Quickstart tutorial (5 minutes, no jargon) — docs/QUICKSTART.md
-- [ ] P2.4: Python SDK high-level API
+- [x] P2.4: Python SDK high-level API — `from aafp import Agent, Request, Response`
 - [ ] P2.5: 5 working examples
 - [ ] P2.6: Prometheus + Grafana dashboard
 - [ ] P2.7: Documentation site (mdbook)
@@ -424,7 +424,7 @@ capability graph.
 - [x] Deployment runbook published (Track S6)
 - [x] Multi-node DHT: 500 nodes, churn, partition recovery (Track R7)
 - [x] Developer can build an agent in 3 lines of code (P2.1 — DONE)
-- [ ] SDK available in at least 2 languages (Phase 2 — Rust done, Python partial)
+- [x] SDK available in at least 2 languages (Rust + Python — P2.4 DONE)
 
 ### "Ecosystem Forming" (v2 — Phase 3)
 
