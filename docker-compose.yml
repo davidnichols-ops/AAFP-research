@@ -1,16 +1,18 @@
-# AAFP Docker Compose — 3-agent setup (relay + 2 agents behind NAT)
+# AAFP Docker Compose — 3-agent setup with Prometheus + Grafana
 #
 # Usage:
-#   docker-compose up -d
-#   docker-compose logs -f agent-1
-#   docker-compose down
+#   docker compose up -d
+#   docker compose logs -f agent-1
+#   docker compose down
 #
 # This starts:
-#   - relay:    Public relay node (port 4433/udp)
-#   - agent-1:  Agent behind NAT (uses relay for traversal)
-#   - agent-2:  Another agent behind NAT (uses relay for traversal)
-
-version: "3.9"
+#   - relay:      Public relay node (port 4433/udp)
+#   - agent-1:    Agent behind NAT (uses relay for traversal)
+#   - agent-2:    Another agent behind NAT (uses relay for traversal)
+#   - prometheus: Metrics scraper (port 9090)
+#   - grafana:    Dashboard UI (port 3000, admin/admin)
+#
+# After starting, open http://localhost:3000 for the AAFP dashboard.
 
 services:
   # ── Relay Node ─────────────────────────────────────────────────────────────
@@ -25,13 +27,14 @@ services:
       AAFP_BIND: "0.0.0.0:4433"
       AAFP_RELAY_MODE: "true"
       AAFP_CAPABILITIES: "relay"
+      AAFP_METRICS: "0.0.0.0:9090"
       RUST_LOG: "info"
     volumes:
       - relay-keys:/data/keys
       - relay-dht:/data/dht
     restart: unless-stopped
     healthcheck:
-      test: ["/aafp-agent", "healthcheck"]
+      test: ["CMD", "/aafp-agent", "healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -49,6 +52,7 @@ services:
       AAFP_BIND: "0.0.0.0:4433"
       AAFP_CAPABILITIES: "inference,translation"
       AAFP_RELAY: "quic://relay:4433"
+      AAFP_METRICS: "0.0.0.0:9090"
       RUST_LOG: "info"
     volumes:
       - agent1-keys:/data/keys
@@ -58,7 +62,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["/aafp-agent", "healthcheck"]
+      test: ["CMD", "/aafp-agent", "healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -76,6 +80,7 @@ services:
       AAFP_BIND: "0.0.0.0:4433"
       AAFP_CAPABILITIES: "inference,summarization"
       AAFP_RELAY: "quic://relay:4433"
+      AAFP_METRICS: "0.0.0.0:9090"
       RUST_LOG: "info"
     volumes:
       - agent2-keys:/data/keys
@@ -85,13 +90,45 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["/aafp-agent", "healthcheck"]
+      test: ["CMD", "/aafp-agent", "healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
     networks:
       - aafp-net
+
+  # ── Prometheus (metrics scraper) ───────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aafp-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - aafp-net
+    restart: unless-stopped
+
+  # ── Grafana (dashboard UI) ─────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aafp-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./deploy/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./deploy/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./deploy/grafana/aafp-dashboard.json:/etc/grafana/provisioning/dashboards/aafp-dashboard.json
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - aafp-net
+    restart: unless-stopped
 
 # ── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
@@ -101,6 +138,7 @@ volumes:
   agent1-dht:
   agent2-keys:
   agent2-dht:
+  grafana-data:
 
 # ── Network ──────────────────────────────────────────────────────────────────
 networks:
