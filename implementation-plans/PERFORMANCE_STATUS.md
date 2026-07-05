@@ -48,10 +48,15 @@
 | K | Serialization Optimization | COMPLETE | 3/7 (K3-K6 not needed) | Q3 |
 | L | Kernel & Hardware | COMPLETE | 8/8 (L2/L4/L7 documented) | Q3-Q4 |
 | M | Benchmarking & Profiling | COMPLETE | 7/7 | Ongoing |
+| N | NAT Traversal | COMPLETE | 8/8 | 2026-07-04 |
 | O | WAN Testing | COMPLETE | 8/8 | 2026-07-04 |
+| P | Identity & PKI | COMPLETE | 8/8 | 2026-07-04 |
+| Q | Security Audit | COMPLETE | 8/8 | 2026-07-04 |
+| R | WAN Discovery | COMPLETE | 8/8 | 2026-07-04 |
+| S | Load & Operations | COMPLETE | 8/8 | 2026-07-04 |
 
-**Total steps:** 52 (+ 8 WAN) = 60
-**Completed:** 60
+**Total steps:** 52 (+ 8 WAN + 48 tracks N-S) = 108
+**Completed:** 108
 **In progress:** 0
 **Blocked:** 0
 
@@ -86,7 +91,7 @@ Phase 4 (Q4): J4-J7 (QUIC Advanced) + L (Kernel/Hardware)
 
 After each track, the following must pass:
 
-1. **All existing tests pass** (1144+ Rust tests, 0 failures)
+1. **All existing tests pass** (1597 Rust tests, 0 failures, 7 ignored)
 2. **Clippy clean** (`cargo clippy --workspace -- -D warnings`)
 3. **Fmt clean** (`cargo fmt --all -- --check`)
 4. **No wire protocol changes** (golden traces still pass)

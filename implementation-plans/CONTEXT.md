@@ -1,7 +1,7 @@
 # AAFP Project Context
 
 **Read this before executing any plan.** This document is a self-contained
-reference for the AAFP project state as of 2026-07-01.
+reference for the AAFP project state as of 2026-07-04.
 
 ---
 
@@ -30,19 +30,20 @@ Transport Layer (QUIC via quinn + PQ TLS via rustls)
 4. CBOR deterministic framing (RFC 8949, 3-5x smaller than JSON)
 5. Cross-connection replay protection (time-bounded nonce cache)
 
-**Strategic position:** AAFP is the "TCP for agents." Adoption path = interop
+**Strategic position:** AAFP is the decentralized execution substrate for
+autonomous software (see STRATEGIC_VISION.md). Adoption path = interop
 with MCP/A2A, NOT replacement (ADR-0004). AAFP provides PQ security + QUIC
 performance as enhancements to protocols agents already use.
 
 ---
 
-## 2. Current Verified State (2026-07-02, post-Tracks A & B)
+## 2. Current Verified State (2026-07-04, all 19 tracks (A-S) complete)
 
 | Metric | Value |
 |--------|-------|
-| Rust tests | 1011, 0 failures (2 ignored) |
+| Rust tests | 1597, 0 failures, 7 ignored |
 | Go tests | 664, 0 failures |
-| Rust crates | 15 (14 workspace + 1 standalone aafp-py) |
+| Rust crates | 17 (15 workspace + aafp-py + aafp-loadtest) |
 | Go packages | 13 |
 | RFCs | 8 (0001-0006 core, 0007 MCP binding, 0008 A2A binding) |
 | ADRs | 4 (all Accepted) |
@@ -51,8 +52,8 @@ performance as enhancements to protocols agents already use.
 | Golden wire traces | 17 (all verified by both impls) |
 | Interop fixtures | 37 (all round-trip verified) |
 | CI workflows | Fixed (A2), functional |
-| Git history | 910MB in packfile (A1 untracked, C2 will clean) |
-| Remote push | NOT DONE (C3 will push) |
+| Git history | Clean (12MB, C2 filter-repo completed) |
+| Remote push | DONE (C3 pushed to GitHub) |
 
 **Implementation status by area:**
 - CBOR encoding: Stable
@@ -60,30 +61,35 @@ performance as enhancements to protocols agents already use.
 - Identity (AgentId, AgentRecord): Stable, v1 RFC-compliant
 - Cryptography (ML-DSA-65): Stable (fips204 + aws-lc-rs)
 - Handshake (v1): Implemented, state machine wired into SDK
-- Transport (QUIC): Functional Prototype (ALPN aafp/1 enforced)
+- Transport (QUIC): Stable (ALPN aafp/1 enforced)
 - Messaging (framing, RPC, ERROR/CLOSE): Implemented
-- Messaging (PubSub): In-memory only (E3 will add networked PubSub)
-- Discovery (DHT): Functional Prototype (in-memory only, E2 adds QUIC protocol)
-- NAT traversal: Stubs only (E4 will implement relay + DCUtR)
-- SDK: Functional Prototype (authenticated sessions, graceful shutdown)
+- Messaging (PubSub): Implemented (networked floodsub over QUIC, RFC 0009)
+- Discovery (DHT): Stable (in-memory + SQLite persistent + Kademlia DHT router)
+- NAT traversal: Implemented (relay forwarding, AutoNAT, DCuTR, RFC 0010)
+- SDK: Stable (authenticated sessions, graceful shutdown, NAT integration)
 - MCP Transport (RFC 0007): **Implemented** (aafp-transport-mcp crate)
 - A2A Transport (RFC 0008): **Implemented** (aafp-transport-a2a crate, B1)
-- Python Adapter: **Implemented** (aafp-py crate, B2) — has segfault on cleanup (C1 fixes)
+- Python Adapter: **Implemented** (aafp-py crate, B2) — segfault fixed (C1)
 - Shared Handshake: **Extracted** (establish_session in aafp-sdk, B3)
 - Conformance testing: Stable
 - CI/CD: Functional (A2 fixed workflows)
-- PING/PONG keep-alive: Frame types defined, logic NOT implemented (E1)
-- Revocation: NOT implemented (F3)
-- Persistent DHT: NOT implemented (F4)
-- Performance validation: NOT done (F1)
-- Rustdoc: Partial (F2 will complete)
+- PING/PONG keep-alive: **Implemented** (PingTracker, E1)
+- Revocation: **Implemented** (CRL-based, F3)
+- Persistent DHT: **Implemented** (SQLite backend, F4)
+- Performance validation: **Done** (F1, 6x improvement, Tracks G-M)
+- Rustdoc: **Complete** (F2)
+- Identity & PKI: **Implemented** (Track P — KeyDirectory, WoT, CA, rotation, revocation, TrustManager)
+- WAN testing: **Implemented** (Track O — simulated WAN, packet loss, BBR, migration)
+- Security audit: **Implemented** (Track Q — fuzzing, adversarial, hardening)
+- WAN discovery: **Implemented** (Track R — Kademlia DHT router, bootstrap, churn, 500-node scale)
+- Load & operations: **Implemented** (Track S — 100-agent load test, stability, metrics, deployment)
 
 ---
 
 ## 3. Repository Layout
 
 ```
-/Users/david/projects/AAFP-research/          (umbrella repo, master branch)
+/Users/david/Projects/AAFP-research/          (umbrella repo, master branch)
 ├── RFCs/                                       8 RFCs + amendments + reviews
 │   ├── 0001-protocol-overview.md
 │   ├── 0002-transport-framing.md               (102KB — the wire format spec)
@@ -103,7 +109,7 @@ performance as enhancements to protocols agents already use.
 │   └── 0004-interoperability-over-replacement.md
 ├── implementations/
 │   ├── rust/                                   (submodule → davidnichols-ops/aafp)
-│   │   ├── Cargo.toml                          (workspace manifest, 15 crates)
+│   │   ├── Cargo.toml                          (workspace manifest, 17 crates)
 │   │   ├── crates/
 │   │   │   ├── aafp-cbor/                      Canonical CBOR
 │   │   │   ├── aafp-crypto/                    ML-DSA-65, AEAD, HKDF, handshake_v1, ReplayCache
@@ -293,7 +299,7 @@ No unauthenticated code path exists. All messaging requires MessagingEnabled.
 ## 8. Conventions
 
 ### Rust
-- **Workspace:** 14 crates, edition 2021, MIT OR Apache-2.0
+- **Workspace:** 15 crates, edition 2021, MIT OR Apache-2.0
 - **v1 types are primary:** `rpc_v1`, `handshake_v1`, `identity_v1` are RFC-compliant.
   Legacy modules (`rpc`, `handshake`, `agent_record`) are `#[deprecated]`.
 - **Verification commands:**
@@ -302,7 +308,7 @@ No unauthenticated code path exists. All messaging requires MessagingEnabled.
   cargo fmt --all -- --check     # 0 diffs expected
   cargo build --workspace         # 0 warnings expected
   cargo clippy --workspace        # 0 warnings expected
-  cargo test --workspace          # 1011 tests, 0 failures expected
+  cargo test --workspace          # 1597 tests, 0 failures expected
   ```
 - **Commit style:** Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, `style:`)
 
@@ -322,7 +328,7 @@ the umbrella repo:
 ```bash
 cd implementations/rust
 # ... make changes, commit ...
-cd /Users/david/projects/AAFP-research
+cd /Users/david/Projects/AAFP-research
 git add implementations/rust
 git commit -m "chore: update rust submodule — <description>"
 ```
@@ -465,7 +471,7 @@ are done.
 
 ### Rust
 ```bash
-cd /Users/david/projects/AAFP-research/implementations/rust
+cd /Users/david/Projects/AAFP-research/implementations/rust
 cargo fmt --all -- --check
 cargo build --workspace
 cargo clippy --workspace
@@ -475,7 +481,7 @@ cargo bench --workspace
 
 ### Go
 ```bash
-cd /Users/david/projects/AAFP-research/implementations/go
+cd /Users/david/Projects/AAFP-research/implementations/go
 gofmt -l .
 go vet ./...
 go build ./...

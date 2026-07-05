@@ -1,20 +1,68 @@
 # AAFP
 
-**AAFP** (Agent-to-Agent Framing Protocol) is a QUIC-native, post-quantum,
-agent-to-agent networking protocol. It preserves the architectural abstractions
-of libp2p while replacing its implementation with a simplified, AI-native
-protocol stack.
+**AAFP** (Agent-to-Agent Framing Protocol) is the decentralized execution
+substrate for autonomous software. It is not just a transport protocol — it
+is the foundation of an agent operating system where agents discover, trust,
+schedule, migrate, and coordinate work without centralized orchestration.
 
 - **Transport:** QUIC (via `quinn`) with hybrid post-quantum TLS 1.3
   (X25519MLKEM768)
 - **Identity:** ML-DSA-65 (FIPS 204) signatures; `AgentId = SHA-256(public_key)`
 - **Authorization:** UCAN capability chains
-- **Discovery:** Capability-based DHT, regional grouping, bootstrap
+- **Discovery:** Kademlia DHT with capability-based routing, bootstrap, replication
+- **NAT traversal:** Relay forwarding, AutoNAT dial-back, DCuTR hole punching
 - **Wire format:** CBOR (RFC 8949 deterministic encoding) over framed QUIC streams
+
+The competitor is not HTTP. The competitor is cloud silos — OpenAI APIs,
+Anthropic APIs, proprietary agent buses. Those systems own the agent graph.
+AAFP owns the **open graph**.
 
 This repository is the **protocol umbrella**: it owns the specification (RFCs),
 architecture, cross-implementation documentation, and conformance artifacts.
 Implementations live under `implementations/` as git submodules.
+
+---
+
+## Current Status: v1 Internet-Ready — ACHIEVED
+
+**All 326 steps complete across 19 tracks (A-S). 1597 tests, 0 failures.**
+
+| Metric | Value |
+|--------|-------|
+| Tests | 1597 passing, 0 failures, 7 ignored |
+| Crates | 17 Rust crates, ~75K lines |
+| RFCs | 11 (0001-0011), frozen at Rev 6 |
+| DHT scale | 500 nodes, 100% lookup success |
+| Load test | 100 agents, 399K messages, 0% error |
+| Stability | 4h continuous, 2.5% memory growth |
+| Security | Fuzzed, adversarial tested, hardened |
+| Deployment | Docker, K8s, systemd, ops runbook |
+
+### What's complete
+
+| Area | Tracks | Status |
+|------|--------|--------|
+| Protocol design | RFCs 0001-0011 | Frozen (Rev 6) |
+| Post-quantum crypto | A, P | Production-grade (FIPS 204) |
+| Transport (QUIC) | A, I, J | Tuned (BBR, connection pool, migration) |
+| Identity/PKI | P | Complete (WoT, CA, rotation, revocation) |
+| NAT traversal | N | Complete (relay, AutoNAT, DCuTR) |
+| WAN testing | O | Complete (packet loss, BBR, migration) |
+| Security audit | Q | Complete (fuzzing, DoS, timing, hardening) |
+| DHT at scale | R | Complete (Kademlia, 500 nodes, churn, partition) |
+| Load & ops | S | Complete (100 agents, Docker, K8s, metrics) |
+| MCP/A2A bindings | B, D | Verified (Python interop, Go wire-format) |
+| Performance | G-M | 6.0x cumulative improvement |
+
+### What's next
+
+- **Phase 2:** Developer experience — 3-line API, CLI, tutorials (1-2 weeks)
+- **Phase 3:** Ecosystem — SDK in 3 languages, reference apps, plugins
+- **Phase 4:** Adaptive routing — capability graphs, execution fabric, reputation
+
+See [`NORTH_STAR.md`](NORTH_STAR.md) for strategic direction.
+See [`STRATEGIC_VISION.md`](STRATEGIC_VISION.md) for the full vision.
+See [`COMPLETION_SUMMARY.md`](COMPLETION_SUMMARY.md) for what was built.
 
 ---
 
@@ -23,138 +71,74 @@ Implementations live under `implementations/` as git submodules.
 ```
 AAFP-research/
 ├── README.md                  This file
-├── ROADMAP.md                 Phase 2 prioritized roadmap
-├── RFCs/                      Protocol specification (canonical home)
+├── NORTH_STAR.md              Strategic direction (read this first)
+├── STRATEGIC_VISION.md        Full vision: agent operating system
+├── COMPLETION_SUMMARY.md      What was built (326 steps, 19 tracks)
+├── ROADMAP.md                 Protocol freeze roadmap (complete)
+├── RFCs/                      Protocol specification (frozen, Rev 6)
 │   ├── 0001-protocol-overview.md
 │   ├── 0002-transport-framing.md
 │   ├── 0003-identity-authentication.md
 │   ├── 0004-discovery.md
 │   ├── 0005-error-model.md
 │   ├── 0006-versioning-compatibility.md
-│   ├── RFC_CHANGELOG.md
-│   ├── AMENDMENT_STATUS.md
-│   ├── AMENDMENTS-0001.md
+│   ├── 0007-mcp-transport-binding.md
+│   ├── 0008-a2a-transport-binding.md
+│   ├── 0009-… 0011-…          Extension RFCs
+│   ├── AMENDMENTS-0001.md     Rev 6 amendments
 │   ├── AMENDMENTS-0002.md
-│   └── REVIEW-0001 … REVIEW-0004.md   Architectural review records
-├── architecture/              Research and architecture deliverables
-│   ├── AAFP_Research_Report.md
-│   ├── AAFP_Architecture_Deliverable.md
-│   └── AAFP_Implementation_Prompt.md
+│   └── REVIEW-0001…0004.md    Architectural reviews
 ├── docs/
-│   └── status/
-│       └── PHASE2_STATUS_REPORT.md   Objective status assessment & roadmap
+│   ├── DEPLOYMENT.md          Production deployment guide
+│   ├── OPERATIONS.md          Operational runbook
+│   ├── TROUBLESHOOTING.md     Common issues and solutions
+│   ├── PRODUCTION_READINESS.md  Readiness assessment
+│   ├── THREAT_MODEL.md        Security threat model
+│   ├── WAN_TESTING.md         Two-machine test guide
+│   └── NAT_TRAVERSAL_TESTING.md
 ├── implementations/
 │   ├── rust/   (submodule → github.com/davidnichols-ops/aafp)
 │   └── go/     (submodule → github.com/davidnichols-ops/aafp-go)
-├── research/                  Strategic architecture research (informative)
-│   ├── CONCLUDING-PAPER.md
-│   ├── phase-reports/         16 phase reports
-│   ├── deliverables/          12 architectural deliverables
-│   └── reference/             AAFP architecture reference
-└── examples/                  Usage examples (placeholder)
+├── implementation-plans/      Track plans and status (326/326 complete)
+├── Dockerfile                 Multi-stage container build
+├── docker-compose.yml         3-agent test setup
+├── deploy/                    systemd + Kubernetes manifests
+└── examples/                  Usage examples
 ```
 
 ### Repository responsibilities
 
 | Repository | Owns |
 |------------|------|
-| **Umbrella (this repo)** | RFCs, architecture, roadmaps, cross-implementation docs, conformance criteria |
-| **Rust (`implementations/rust`)** | Rust reference implementation, Rust CI, Rust releases |
-| **Go (`implementations/go`)** | Go independent implementation, Go CI, Go-specific docs |
+| **Umbrella (this repo)** | RFCs, architecture, roadmaps, deployment, cross-implementation docs |
+| **Rust (`implementations/rust`)** | Rust reference implementation (17 crates, 1597 tests) |
+| **Go (`implementations/go`)** | Go wire-format interop validation (664 tests) |
 
 The protocol — not any single implementation — is the primary artifact. RFCs
 define the protocol; implementations are references that prove the RFCs are
 implementable and interoperable.
 
-### Normative vs. informative material
-
-| Material | Status | Location |
-|----------|--------|----------|
-| **RFCs** | **Normative** — define the protocol requirements | `RFCs/` |
-| **Source code** | **Normative** — reference implementations of the RFCs | `implementations/` |
-| **Research papers** | **Informative** — analysis, recommendations, and future proposals | `research/` |
-
-The `research/` directory contains strategic architecture studies, ecosystem
-comparisons, and roadmap proposals. These documents are informational only.
-They do not modify the protocol specification, define protocol requirements,
-or represent the current state of the implementation. Architectural
-recommendations in research documents may become future RFCs through the
-normal RFC process, but until then they are proposals, not requirements.
-
----
-
-## Current Status
-
-**Baseline tag:** `v0.1-mvp-freeze` — frozen MVP snapshot before architectural
-evolution begins. Phase 2/3 development is ongoing.
-
-The full objective status assessment is in
-[`docs/status/PHASE2_STATUS_REPORT.md`](docs/status/PHASE2_STATUS_REPORT.md).
-Summary of readiness:
-
-| Area | Rating |
-|------|--------|
-| CBOR encoding | Stable MVP |
-| Frame format | Stable MVP |
-| Error codes | Stable MVP |
-| Identity (AgentId, AgentRecord) | Stable (v1 RFC-compliant) |
-| Identity (UCAN) | Functional Prototype |
-| Cryptography (ML-DSA-65) | Stable (migrated to `fips204` + `aws-lc-rs`) |
-| Cryptography (AEAD) | Stable MVP |
-| Handshake (v1, RFC-0002 §5) | Implemented — state machine wired into SDK |
-| Transport (QUIC) | Functional Prototype (ALPN `aafp/1` enforced) |
-| Messaging (framing) | Stable MVP |
-| Messaging (RPC) | Functional Prototype (v1 types RFC-compliant) |
-| Messaging (ERROR/CLOSE frames) | Implemented — SDK sends ERROR and CLOSE frames |
-| Messaging (PubSub) | Not Started (in-memory only, Track E3 adds networked) |
-| Discovery (DHT) | Functional Prototype (in-memory only, Track E2 adds QUIC protocol) |
-| NAT traversal | Not Started (stubs, Track E4 implements relay + DCUtR) |
-| SDK | Functional Prototype (authenticated sessions, graceful shutdown, shared `establish_session()`) |
-| CLI | Functional Prototype |
-| MCP Transport | **Implemented** (`aafp-transport-mcp` crate, rmcp integration) |
-| A2A Transport | **Implemented** (`aafp-transport-a2a` crate, RFC 0008) |
-| Python Adapter | **Implemented** (`aafp-py` crate, PyO3, B2) |
-| Conformance testing | Stable MVP (17 golden traces + 8 MCP transport conformance tests) |
-| Interoperability (wire-format) | Stable MVP (Go verifies all Rust traces) |
-| Interoperability (cross-SDK) | **Verified** (Python client ↔ Rust server, Rust client ↔ Python server) |
-| Benchmarks | Stable MVP (crypto, messaging, discovery, MCP transport) |
-| RFCs | Stable MVP (8 RFCs, Rev 6, all ambiguities resolved) |
-| CI/CD | Functional (GitHub Actions: cargo test, cargo clippy, go test) |
-
-**Test suite:** 1011 Rust tests + 13 Go test packages, all passing. 0 failures.
-17 golden wire traces verified by both implementations. Python cross-SDK interop
-tests passing (Rust ↔ Python over AAFP QUIC transport).
-
-**Release criteria:** 9 of 10 met. All Category A protocol amendments implemented
-and verified. Cross-signature verification (ML-DSA-65) confirmed between Rust and Go.
-Remaining: independent third-party interop testing (Track D in progress).
-
 ---
 
 ## RFCs
 
-Six RFCs (Revision 6) define the core protocol, plus two extension RFCs for
-ecosystem transport bindings:
+Eleven RFCs (Revision 6) define the protocol:
 
-| RFC | Title |
-|-----|-------|
-| 0001 | Protocol Overview, Goals, and Layer Architecture |
-| 0002 | Transport, Framing, Stream Multiplexing, and Wire Format |
-| 0003 | Agent Identity, AgentRecord, Capability Descriptors, Authorization, and Session Lifecycle |
-| 0004 | Discovery: Identity, Capability, Service, and Resource |
-| 0005 | Protocol Error Codes, Error Frames, and Error Handling |
-| 0006 | Versioning and Compatibility |
-| 0007 | AAFP Transport Binding for MCP (extension, implemented) |
-| 0008 | AAFP Transport Binding for A2A (extension, implemented) |
+| RFC | Title | Status |
+|-----|-------|--------|
+| 0001 | Protocol Overview, Goals, and Layer Architecture | Frozen |
+| 0002 | Transport, Framing, Stream Multiplexing, and Wire Format | Frozen |
+| 0003 | Agent Identity, AgentRecord, Capability Descriptors, Authorization | Frozen |
+| 0004 | Discovery: Identity, Capability, Service, and Resource | Frozen |
+| 0005 | Protocol Error Codes, Error Frames, and Error Handling | Frozen |
+| 0006 | Versioning and Compatibility | Frozen |
+| 0007 | AAFP Transport Binding for MCP | Implemented |
+| 0008 | AAFP Transport Binding for A2A | Implemented |
+| 0009-0011 | Extension RFCs (NAT, trust model) | Implemented |
 
-RFCs 0007 and 0008 are extension RFCs that define transport bindings for
-external protocols (MCP and A2A) over AAFP. RFC 0007 is implemented in the
-`aafp-transport-mcp` crate; RFC 0008 is implemented in the
-`aafp-transport-a2a` crate.
-
-The RFCs were validated by an independent Go implementation written strictly
-from the specifications, proving they are unambiguous enough to implement from
-without reference to the Rust source.
+The wire protocol is frozen. Future innovation happens in the layers above
+transport (routing, scheduling, discovery semantics, reputation) — not in the
+wire format. See `STRATEGIC_VISION.md` for the immutable boundary.
 
 ---
 
@@ -162,22 +146,25 @@ without reference to the Rust source.
 
 ### Rust reference (`implementations/rust`)
 
-14-crate Cargo workspace (plus 1 standalone `aafp-py` crate) covering the full
-protocol stack: CBOR, crypto, identity, core traits, QUIC transport, discovery,
-NAT (stubs), messaging, SDK, MCP transport, A2A transport, Python PyO3 adapter,
-CLI, conformance tests, benchmarks, and integration tests.
+17-crate Cargo workspace covering the full protocol stack: CBOR, crypto,
+identity, core traits, QUIC transport, Kademlia DHT, NAT traversal (relay,
+AutoNAT, DCuTR), messaging, SDK, MCP transport, A2A transport, Python PyO3
+adapter, CLI, conformance tests, benchmarks, load testing, and integration
+tests.
 
 ```bash
 cd implementations/rust
-cargo test --workspace        # 995 tests
+cargo test --workspace        # 1597 tests, 0 failures, 7 ignored
 cargo run --bin aafp -- init  # generate an agent identity
 ```
 
+See [`implementations/rust/AGENTS.md`](implementations/rust/AGENTS.md) for
+build conventions and architecture notes.
+
 ### Go independent (`implementations/go`)
 
-Wire-format interoperability validation harness (7 packages: cbor, errors,
-frame, frameext, handshake, identity, plus test packages). Written strictly
-from the RFCs to validate specification clarity and canonical encoding.
+Wire-format interoperability validation harness. Written strictly from the
+RFCs to validate specification clarity and canonical encoding.
 
 ```bash
 cd implementations/go
@@ -186,15 +173,22 @@ go test ./...                 # all packages pass
 
 ---
 
-## Development Phase
+## Deployment
 
-The MVP is frozen at `v0.1-mvp-freeze`. The next phase is defined in
-[`ROADMAP.md`](ROADMAP.md) and detailed in
-[`docs/status/PHASE2_STATUS_REPORT.md`](docs/status/PHASE2_STATUS_REPORT.md).
+AAFP is deployable via Docker, Kubernetes, or systemd:
 
-Protocol development is RFC-driven: specification changes precede implementation
-changes. Interoperability is prioritized over convenience. Backward
-compatibility is preserved whenever possible.
+```bash
+# Quick start with Docker
+docker compose up             # starts 3-agent relay + NAT setup
+
+# Or build from source
+cd implementations/rust
+cargo build --release
+./target/release/aafp serve   # start an agent server
+```
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for complete deployment guide.
+See [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for operational runbook.
 
 ---
 
