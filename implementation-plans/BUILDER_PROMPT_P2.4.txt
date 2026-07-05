@@ -1,0 +1,319 @@
+# BUILDER PROMPT — P2.4: Python SDK High-Level API
+
+## Objective
+
+Create a high-level Python API that matches the Rust simple API (P2.1).
+A Python developer should be able to build a working agent in 3 lines
+without reading any Rust docs.
+
+## Target API
+
+### Serving an agent:
+```python
+from aafp import Agent, Request, Response
+
+agent = await Agent.serve(capability="echo")
+
+@agent.handler
+async def echo(request: Request):
+    return Response.text(request.body)
+
+await agent.start()
+```
+
+### Calling an agent:
+```python
+from aafp import Agent, Request
+
+agent = await Agent.connect()
+result = await agent.discover("echo").call(Request.text("hello"))
+print(result.body)
+```
+
+### Direct call (bypass discovery):
+```python
+result = await agent.call_at("quic://127.0.0.1:12345", Request.text("hello"))
+```
+
+## Current Python Adapter State
+
+**Crate:** `crates/aafp-py/` (standalone, NOT in workspace — uses pyo3 extension-module)
+**Files:** `src/lib.rs`, `src/agent.rs`, `src/transport.rs`
+**Existing classes:** `PyAgent` (with `bind`, `from_keyfile`, `shutdown`, `__del__`)
+**Dependencies:** pyo3, pyo3-async-runtimes (tokio), aafp-sdk, aafp-transport-quic
+
+The existing adapter is low-level — it exposes `Agent.bind(addr)` and
+`AafpTransport` but no simple serve/call/discover API.
+
+## Implementation Plan
+
+### File 1: `crates/aafp-py/src/simple.rs` (NEW)
+
+Create Python-facing classes that wrap the Rust `aafp_sdk::simple` module:
+
+```rust
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
+use pyo3_async_runtimes::tokio::future_into_py;
+use aafp_sdk::simple::{Agent as SdkAgent, Request as SdkRequest, Response as SdkResponse};
+
+/// Python-facing Request class
+#[pyclass]
+#[derive(Clone)]
+pub struct PyRequest {
+    inner: SdkRequest,
+}
+
+#[pymethods]
+impl PyRequest {
+    #[new]
+    fn text(body: &str) -> Self {
+        Self { inner: SdkRequest::text(body) }
+    }
+
+    #[staticmethod]
+    fn data(data: Vec<u8>) -> Self {
+        Self { inner: SdkRequest::data(data) }
+    }
+
+    #[getter]
+    fn body(&self) -> &str {
+        self.inner.body()
+    }
+
+    #[getter]
+    fn payload(&self) -> Option<Vec<u8>> {
+        self.inner.payload().map(|s| s.to_vec())
+    }
+}
+
+/// Python-facing Response class
+#[pyclass]
+#[derive(Clone)]
+pub struct PyResponse {
+    inner: SdkResponse,
+}
+
+#[pymethods]
+impl PyResponse {
+    #[new]
+    fn text(body: &str) -> Self {
+        Self { inner: SdkResponse::text(body) }
+    }
+
+    #[staticmethod]
+    fn data(data: Vec<u8>) -> Self {
+        Self { inner: SdkResponse::data(data) }
+    }
+
+    #[getter]
+    fn body(&self) -> &str {
+        self.inner.body()
+    }
+
+    #[getter]
+    fn payload(&self) -> Option<Vec<u8>> {
+        self.inner.payload().map(|s| s.to_vec())
+    }
+}
+
+/// Python-facing Agent class — top-level entry point
+#[pyclass]
+pub struct PySimpleAgent;
+
+#[pymethods]
+impl PySimpleAgent {
+    /// Serve an agent: Agent.serve(capability="echo")
+    /// Returns a PyServeBuilder
+    #[staticmethod]
+    fn serve(capability: String) -> PyServeBuilder {
+        PyServeBuilder {
+            capabilities: vec![capability],
+            handler: None,
+        }
+    }
+
+    /// Connect to the network: await Agent.connect()
+    #[staticmethod]
+    fn connect<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        future_into_py(py, async move {
+            let agent = SdkAgent::connect()
+                .connect()
+                .await
+                .map_err(|e| pyo3::exceptions::PyException::new_err(e.to_string()))?;
+            Ok(PyConnectedAgent { inner: agent })
+        })
+    }
+}
+
+// ... (ServeBuilder, ConnectedAgent, DiscoveryBuilder classes)
+```
+
+### File 2: `crates/aafp-py/src/lib.rs` (MODIFY — add module + register classes)
+
+Add `mod simple;` and register the new classes in the `pymodule` function:
+
+```rust
+#[pymodule]
+fn aafp_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // ... existing registrations ...
+
+    // Simple API (P2.4)
+    m.add_class::<simple::PyRequest>()?;
+    m.add_class::<simple::PyResponse>()?;
+    m.add_class::<simple::PySimpleAgent>()?;
+    m.add_class::<simple::PyServeBuilder>()?;
+    m.add_class::<simple::PyServingAgent>()?;
+    m.add_class::<simple::PyConnectedAgent>()?;
+    m.add_class::<simple::PyDiscoveryBuilder>()?;
+
+    Ok(())
+}
+```
+
+### File 3: `crates/aafp-py/tests/test_simple.py` (NEW)
+
+```python
+import asyncio
+import pytest
+from aafp import Agent, Request, Response
+
+@pytest.mark.asyncio
+async def test_serve_and_call():
+    """Test that a Python agent can serve and be called."""
+    # Serve an echo agent
+    server = await Agent.serve("echo")
+    # ... start serving ...
+
+    # Call it
+    client = await Agent.connect()
+    result = await client.call_at(server.addr, Request.text("hello"))
+    assert result.body == "hello"
+
+@pytest.mark.asyncio
+async def test_request_response():
+    req = Request.text("hello")
+    assert req.body == "hello"
+
+    resp = Response.text("world")
+    assert resp.body == "world"
+```
+
+## Handler Design
+
+The Python handler needs to accept a Python async function. The Rust side
+will call the Python function via PyO3's async support.
+
+```python
+@agent.handler
+async def echo(request):
+    return Response.text(request.body)
+```
+
+In Rust, the handler is stored as a Python callable:
+```rust
+pub struct PyServeBuilder {
+    capabilities: Vec<String>,
+    handler: Option<Py<PyAny>>,  // Python callable
+}
+```
+
+When `start()` is called, the handler is passed to the Rust `ServeBuilder`
+via a closure that calls the Python function.
+
+## Key Design Decisions
+
+1. **Match the Rust simple API.** Same class names, same method names,
+   same behavior. `Agent.serve()`, `Agent.connect()`, `Request.text()`,
+   `Response.text()`, `.body`, `.payload`.
+
+2. **Async/await native.** All I/O methods are async. Use `pyo3-async-runtimes`
+   to bridge Rust tokio and Python asyncio.
+
+3. **Type hints.** Add a `py.typed` marker and type stubs so IDEs can
+   autocomplete. Create `crates/aafp-py/aafp/__init__.pyi` with type hints.
+
+4. **No Rust types exposed.** The Python developer sees `Agent`, `Request`,
+   `Response`. No `AgentId`, `AgentKeypair`, `QuicConfig`, etc.
+
+5. **Error handling.** Rust `SdkError` maps to Python exceptions. Use
+   `PyException::new_err(e.to_string())`.
+
+## P2.1 Rust API Reference (what to wrap)
+
+```rust
+// Serving
+aafp_sdk::simple::Agent::serve()
+    .capability("echo")
+    .handler(|req| async move { Ok(Response::text(req.body())) })
+    .bind(SocketAddr)             // optional
+    .with_keypair(AgentKeypair)   // optional
+    .start().await                // → Result<ServingAgent, SdkError>
+
+// ServingAgent
+serving_agent.id()        // → &AgentId
+serving_agent.addr()      // → &str
+serving_agent.record()    // → &AgentRecord
+serving_agent.stop()
+
+// Connecting
+aafp_sdk::simple::Agent::connect()
+    .with_keypair(AgentKeypair)
+    .with_seeds(Vec<String>)
+    .connect().await              // → Result<ConnectedAgent, SdkError>
+
+// ConnectedAgent
+connected_agent.discover("echo")  // → DiscoveryBuilder
+connected_agent.register(&record)
+connected_agent.call_at(addr, request)  // → Result<Response, SdkError>
+connected_agent.id()
+
+// DiscoveryBuilder
+discovery.call(Request::text("hello")).await  // → Result<Response, SdkError>
+
+// Request
+Request::text("hello")    // body() → &str
+Request::data(vec![...])  // payload() → Option<&[u8]>
+
+// Response
+Response::text("world")   // body() → &str
+Response::data(vec![...]) // payload() → Option<&[u8]>
+```
+
+## Verification
+
+```bash
+cd implementations/rust
+
+# Build the Python extension
+cd crates/aafp-py
+maturin develop --release
+
+# Run tests
+python -m pytest tests/test_simple.py -v
+
+# Manual test
+python -c "
+import asyncio
+from aafp import Agent, Request, Response
+
+async def main():
+    agent = await Agent.serve('echo')
+    # ... start serving ...
+    result = await agent.call_at(agent.addr, Request.text('hello'))
+    print(result.body)
+
+asyncio.run(main())
+"
+
+# Clippy (aafp-py is standalone, check separately)
+cargo clippy -p aafp-py -- -D warnings
+```
+
+## Do NOT
+
+- Do NOT modify `simple.rs` in aafp-sdk — it's done, just wrap it
+- Do NOT expose Rust types (AgentId, AgentKeypair, etc.) to Python
+- Do NOT require Python developers to understand PyO3 or Rust
+- Do NOT forget to handle the async bridge (tokio ↔ asyncio)
+- Do NOT skip type hints — Python developers expect IDE autocomplete

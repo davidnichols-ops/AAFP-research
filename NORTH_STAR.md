@@ -67,7 +67,7 @@ implementation, not the protocol.
 
 | Metric | Value |
 |--------|-------|
-| Rust tests | 1612 passing, 0 failures, 7 ignored |
+| Rust tests | 1613 passing, 0 failures, 7 ignored |
 | Rust crates | 17 (15 workspace + aafp-py + aafp-loadtest) |
 | Rust code | ~75,000 lines |
 | RFCs | 11 (0001-0011) + 3 amendment sets + 4 reviews |
@@ -151,7 +151,7 @@ finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 **Phase 2: Make it deployable and invisible (1-2 weeks) — IN PROGRESS**
 - [x] P2.1: 3-line developer API — `Agent::serve().capability("echo").handler(...).start()`
 - [x] P2.2: CLI polish — `aafp serve`, `aafp call`, `aafp peers`, `aafp metrics`, `aafp health`, `aafp quickstart`
-- [ ] P2.3: Quickstart tutorial (5 minutes, no jargon)
+- [x] P2.3: Quickstart tutorial (5 minutes, no jargon) — docs/QUICKSTART.md
 - [ ] P2.4: Python SDK high-level API
 - [ ] P2.5: 5 working examples
 - [ ] P2.6: Prometheus + Grafana dashboard
