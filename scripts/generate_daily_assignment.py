@@ -20,6 +20,20 @@ TO_EMAIL = "david.nichols.ops@gmail.com"
 FROM_EMAIL = "david.nichols.ops@gmail.com"
 SUBJECT_PREFIX = "AAFP Daily Assignment"
 
+# Gmail SMTP credentials — app password stored in config file
+GMAIL_SMTP_HOST = "smtp.gmail.com"
+GMAIL_SMTP_PORT = 587
+APP_PASSWORD_FILE = os.path.expanduser("~/.config/aafp/gmail_app_password")
+
+
+def load_app_password():
+    """Load Gmail app password from config file."""
+    try:
+        with open(APP_PASSWORD_FILE, "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return None
+
 # Phase 2 roadmap (10 steps, ~10 days)
 PHASE_2_STEPS = [
     {
@@ -380,26 +394,27 @@ CEO: Devin | Operator: David Nichols
 
 
 def send_email(subject, body):
-    """Send email via local sendmail."""
+    """Send email via Gmail SMTP with app password authentication."""
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
     msg["From"] = FROM_EMAIL
     msg["To"] = TO_EMAIL
 
+    app_password = load_app_password()
+    if not app_password:
+        print(f"WARNING: No app password found at {APP_PASSWORD_FILE}", file=sys.stderr)
+        print("Email not sent. Assignment printed above.", file=sys.stderr)
+        return False
+
     try:
-        with smtplib.SMTP("localhost") as server:
+        with smtplib.SMTP(GMAIL_SMTP_HOST, GMAIL_SMTP_PORT, timeout=30) as server:
+            server.starttls()
+            server.login(FROM_EMAIL, app_password)
             server.sendmail(FROM_EMAIL, [TO_EMAIL], msg.as_string())
         return True
     except Exception as e:
-        # Fallback: use mail command
-        try:
-            process = os.popen(f'mail -s "{subject}" {TO_EMAIL}', "w")
-            process.write(body)
-            process.close()
-            return True
-        except Exception as e2:
-            print(f"Email failed: {e}\nFallback failed: {e2}", file=sys.stderr)
-            return False
+        print(f"Email failed: {e}", file=sys.stderr)
+        return False
 
 
 def main():
