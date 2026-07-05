@@ -179,11 +179,16 @@ finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 - Track W: Agent Reputation — performance history becomes part of identity
 - Track X: Economic Layer — resource accounting, priority, compensation
 - Track Y: World Perception Layer — agent-native rendering of web, documents, media
-  - Agent-native content representation schema (web pages → semantic docs, not HTML)
-  - Stateful browsing sessions (navigate, click, scroll, fill forms, execute JS)
+  - Agent-native content representation schema (RFC-0016 candidate)
+  - Stateful browsing sessions with UCAN delegation (RFC-0017 candidate)
   - Multimodal perception (text, images, audio, video → structured representations)
-  - Well-known perception capabilities (web-browse, pdf-read, image-ocr, api-call, search)
+  - Well-known perception capabilities: search, web-browse, document-read, api-call,
+    api-discover, code-execute, image-ocr, audio-transcribe, crawl, stealth-browse,
+    real-time-subscribe
   - Actuation (agents act on the world: submit forms, send emails, execute code)
+  - Protocol augmentations: streaming RPC, content cache, robots.txt, compression,
+    distributed rate limiting (RFC-0015), DHT caching (RFC-0012)
+  - **Full plan:** [`INTERNET_BRIDGE_PLAN.md`](INTERNET_BRIDGE_PLAN.md)
 
 **Milestone:** "The network becomes more intelligent as more agents join. Routing optimizes for speed, cost, trust, and reliability automatically. Agents perceive and act on the real world through shared capability providers."
 
@@ -454,6 +459,7 @@ capability graph.
 |------|---------|
 | `NORTH_STAR.md` (this file) | Strategic direction and gap analysis |
 | `STRATEGIC_VISION.md` | Full strategic vision (the agent operating system) |
+| `INTERNET_BRIDGE_PLAN.md` | World Perception Layer blueprint (Phase 4) |
 | `AAFP_COMPLETE_BRIEFING.md` | Complete briefing for collaborative AI |
 | `implementation-plans/STATUS.md` | Tactical step-by-step tracking |
 | `implementation-plans/WORLD_SCALE_RESEARCH.md` | Research on world-scale gaps |
@@ -477,7 +483,7 @@ capability graph.
 | R | COMPLETE | 8/8 | +76 |
 | S | COMPLETE | 8/8 | +many |
 
-**Tests:** 1597 passing, 0 failures, 7 ignored
+**Tests:** 1613 passing, 0 failures, 7 ignored
 **Completed:** 326/326 steps — **ALL TRACKS COMPLETE**
 **Codebase:** 17 Rust crates, ~75K lines
 
