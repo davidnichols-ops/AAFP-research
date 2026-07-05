@@ -1,0 +1,318 @@
+# Builder Prompt: Track R — WAN Discovery (R1-R8)
+
+Copy everything below the line to a new builder session.
+
+---
+
+You are the Builder. This is the FINAL track. Tracks A-M, N, O, P, Q, and S are ALL COMPLETE (298/326 steps). You are now executing Track R (WAN Discovery) — 8 steps that make the DHT work across multiple networked nodes.
+
+## Current State (2026-07-04)
+
+- **1560 tests passing**, 0 failures, ~7 ignored
+- 17 Rust crates, ~70K lines
+- Track O (WAN Testing) COMPLETE — 26 new tests, WAN simulation, BBR validated
+- Track Q (Security Audit) COMPLETE — fuzz testing, adversarial handshake, DoS, timing analysis, malformed input, hardening. Security fixes: constant-time AgentId comparison, rate limiter memory cap, CBOR OOM depth limit
+- Track S (Load & Ops) COMPLETE — 100-agent load test (399K msgs, 0% error), stability test (2.5% memory growth), AgentMetrics, Dockerfile, docker-compose, K8s, ops runbook, stress tests, production readiness report
+- Track N (NAT Traversal) COMPLETE — relay, AutoNAT, DCuTR
+- Track P (Identity/PKI) COMPLETE — WoT, CA, key rotation, revocation, TrustManager
+
+**R1 is ALREADY WRITTEN (uncommitted):**
+- `crates/aafp-discovery/src/dht_router.rs` (1698 lines, 23 tests, all passing)
+  - RoutingTable with 256 k-buckets, XOR distance, KBucket management
+  - DhtRouter: iterative lookup, announce forwarding, PEX
+  - DhtTransport trait abstracting RPC communication
+  - 5-node iterative lookup test, full 5-node mesh lookup test
+- `crates/aafp-identity/src/key_directory.rs` (755 lines, 16 tests, all passing)
+  - Key directory: AgentId → AgentRecord mapping
+  - In-memory and SQLite backends
+  - Rate limiting (1 publish per AgentId per hour)
+  - Signature verification, monotonic version check
+- Modified: `crates/aafp-discovery/src/lib.rs` (adds dht_router module), `crates/aafp-discovery/Cargo.toml`, `crates/aafp-identity/src/trust_manager.rs`, `Cargo.lock`
+- All compiles, all 39 R1 tests pass
+
+**FIRST TASK:** Review, fmt, clippy, and commit the uncommitted R1 work.
+
+## Track R Goal
+
+The AAFP discovery layer has only been tested in-process. The DHT has never:
+1. Routed a lookup across multiple networked nodes
+2. Handled churn (agents going offline and coming back)
+3. Bootstrapped from seed nodes over a network
+4. Scaled beyond 2-3 nodes
+5. Handled network partitions
+
+This track makes the DHT production-ready with Kademlia-style routing, bootstrap, replication, churn handling, partition recovery, and scale testing.
+
+## Steps
+
+### R1: Commit existing DHT routing protocol (REVIEW + COMMIT)
+
+```bash
+cd /Users/david/Projects/AAFP-research/implementations/rust
+
+# Review the code
+head -80 crates/aafp-discovery/src/dht_router.rs
+head -50 crates/aafp-identity/src/key_directory.rs
+
+# Run tests
+cargo test -p aafp-discovery --lib dht_router
+cargo test -p aafp-identity --lib key_directory
+
+# Format and lint
+cargo fmt -p aafp-discovery -p aafp-identity -- --check
+cargo clippy -p aafp-discovery -p aafp-identity -- -D warnings
+
+# Commit
+git add crates/aafp-discovery/src/dht_router.rs \
+  crates/aafp-discovery/src/lib.rs \
+  crates/aafp-discovery/Cargo.toml \
+  crates/aafp-identity/src/key_directory.rs \
+  crates/aafp-identity/src/trust_manager.rs \
+  crates/aafp-identity/Cargo.toml \
+  Cargo.lock
+git commit -m "feat(r1): multi-node DHT routing — Kademlia k-buckets, iterative lookup, PEX (Track R1)
+
+Implements DhtRouter with:
+- RoutingTable: 256 k-buckets keyed by XOR distance, K=20 bucket size
+- Iterative lookup: check local → query α closest peers → follow referrals
+- Announce forwarding: store locally + forward to k closest peers
+- PEX (Peer Exchange): exchange peer lists on connection
+- DhtTransport trait: abstracts RPC communication with peers
+
+Implements KeyDirectory (RFC 0011 §3):
+- AgentId → AgentRecord mapping with in-memory and SQLite backends
+- Rate limiting: 1 publish per AgentId per hour
+- Signature verification, monotonic version check
+- Directory signs lookup responses
+
+39 new tests (23 dht_router + 16 key_directory), all passing.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>"
+```
+
+### R2: Bootstrap and peer discovery
+
+Make the bootstrap process work over a network.
+
+- Current state: `BootstrapDiscovery` exists but is a stub returning hardcoded seed addresses.
+- Implement real `Bootstrap`:
+  1. Connect to configured seed nodes (quic://seed1, seed2, ...)
+  2. Send PEX request to each seed
+  3. Receive peer lists (agent_id, multiaddr, capabilities)
+  4. Build initial routing table from peer lists
+  5. Connect to k closest peers from the routing table
+  6. Announce own record to closest peers
+
+- Add `BootstrapConfig`:
+  - `seed_nodes: Vec<String>` (multiaddrs)
+  - `min_peers: usize` (default 10)
+  - `bootstrap_timeout: Duration` (default 30s)
+  - `refresh_interval: Duration` (default 15min)
+
+- Add `Agent::bootstrap()`:
+  - Called on agent start
+  - Runs bootstrap process
+  - Returns when min_peers connected or timeout
+  - Background task: periodic refresh
+
+- **VERIFY:** Agent A starts with 3 seed nodes, bootstraps, connects to 10+ peers, can route lookups through them
+
+Key files:
+- `crates/aafp-discovery/src/bootstrap.rs` — replace stub
+- `crates/aafp-sdk/src/builder.rs` — AgentBuilder::with_bootstrap(seeds)
+
+### R3: Record replication and republishing
+
+Make records survive node failures.
+
+- Implement record replication:
+  - When agent announces, record stored on k closest nodes (default k=5)
+  - `announce()` forwards record to k closest peers
+  - Each receiving peer stores record locally
+
+- Implement republishing:
+  - Agents re-announce before TTL expires
+  - Default TTL: 1 hour, republish interval: 30 minutes
+  - Background task: republish all own records every 30 minutes
+
+- Implement record refresh:
+  - When node joins, request records from peers
+  - `aafp.discovery.refresh` RPC: "send me all records you have"
+  - New node populates store from refresh responses
+
+- Implement active expiration:
+  - Every 5 minutes, evict expired records
+  - Log when records expire
+
+- **VERIFY:** Agent A announces to node N1. N1 replicates to N2-N5. N1 goes down. Agent B can still look up A's record from N2-N5.
+
+Key files:
+- `crates/aafp-discovery/src/discovery_v1.rs` — add replication logic
+- `crates/aafp-discovery/src/rpc_handler.rs` — add refresh RPC
+
+### R4: Churn handling
+
+Handle agents going offline and coming back.
+
+- Implement peer liveness tracking:
+  - Ping each peer every 60 seconds (use PING/PONG from E1)
+  - 3 consecutive missed pings → mark as dead
+  - Remove dead peers from routing table
+  - Trigger bucket refresh for dead peer's bucket
+
+- Implement re-announcement on rejoin:
+  - When agent comes back online, re-announces to k closest peers
+  - Peers update timestamp, store if new
+
+- Implement graceful departure:
+  - `Agent::leave()` — announce departure to k closest peers
+  - Peers remove agent's record immediately
+  - `aafp.discovery.depart` RPC method
+
+- Implement routing table repair:
+  - When bucket has fewer than k entries, query known peers for more
+  - Background task: every 15 minutes, check all buckets, repair underfilled
+
+- **VERIFY:** Agent A goes offline (3 missed pings), peers detect within 3 minutes, remove A's records. A comes back, re-announces, records visible within 1 minute.
+
+Key files:
+- `crates/aafp-messaging/src/keepalive.rs` — PingTracker (E1)
+- `crates/aafp-discovery/src/discovery_v1.rs` — add churn handling
+
+### R5: DHT query optimization
+
+Optimize DHT routing for production scale.
+
+- Implement parallel lookups:
+  - Send lookup requests to α (alpha=3) peers simultaneously
+  - As responses arrive, send more requests to closer peers
+  - Terminate when no closer peers found for 2 rounds
+
+- Implement cached lookups:
+  - Cache recent lookup results (TTL: 5 minutes)
+  - Return cached result if valid without network lookup
+  - Invalidate cache on announce/depart
+
+- Implement iterative vs. recursive lookup:
+  - Iterative (default): caller queries peers, follows referrals
+  - Recursive (optional): first peer does full lookup, returns result
+  - Configurable via `LookupParams::recursive`
+
+- Benchmark DHT routing:
+  - 10 nodes, 50 nodes, 100 nodes: lookup time, hops, messages sent
+  - Compare iterative vs. recursive
+
+- **VERIFY:** Lookup with 50 nodes completes in <100ms with <5 hops
+
+Key files:
+- `crates/aafp-discovery/src/discovery_v1.rs`
+- `crates/aafp-benchmark/benches/discovery.rs`
+
+### R6: Network partition handling
+
+Handle network splits and reconciliation.
+
+- Implement partition detection:
+  - Single peer unreachable = peer failure (R4)
+  - Many peers unreachable simultaneously = partition
+  - Log partition events
+
+- Implement record reconciliation:
+  - When partition heals, peers exchange records via refresh (R3)
+  - Conflicting records (same agent_id, different public_key): latest timestamp wins, log warning
+  - Missing records: request from peers
+
+- Implement split-brain prevention:
+  - During partition, both sides accept announces independently
+  - On heal: merge records (union, latest timestamp wins)
+  - No rollback — both sides' records are valid
+
+- **VERIFY:** 10 nodes split into 2 groups of 5. Each group accepts announces. Partition heals. All 10 nodes have all records.
+
+Key files:
+- `crates/aafp-discovery/src/discovery_v1.rs`
+- `crates/aafp-discovery/src/rpc_handler.rs`
+
+### R7: Multi-node integration test
+
+End-to-end test with multiple nodes.
+
+- Create `crates/aafp-tests/tests/multi_node_dht.rs`:
+  - Start 10 agents on ports 4433-4442
+  - Agent 1 bootstraps from seed (agent 0)
+  - Agents 2-9 bootstrap from agent 0
+  - Each agent announces a unique capability
+  - Each agent looks up all other capabilities
+  - Verify all lookups succeed
+  - Kill agent 5, verify its records expire
+  - Restart agent 5, verify records reappear
+  - Partition: kill agents 5-9, verify agents 0-4 still work
+  - Heal: restart agents 5-9, verify all records reconcile
+
+- Create `scripts/test-multi-node-dht.sh`:
+  - Starts 10 agents in separate processes
+  - Runs test scenarios
+  - Outputs JSON results
+
+- Write results to `test-results/interop/multi-node-dht.json`
+- **VERIFY:** 10-node DHT test passes all scenarios
+
+Key files:
+- `crates/aafp-tests/tests/multi_node_dht.rs` (NEW)
+- `scripts/test-multi-node-dht.sh` (NEW)
+
+### R8: DHT performance and scale report
+
+Benchmark and document DHT performance at scale.
+
+- Benchmark scenarios:
+  - 10, 50, 100, 500 nodes (localhost simulation)
+  - Metrics: lookup latency, announce latency, routing table size, messages per lookup, hops per lookup, memory per node
+  - Churn: 10% nodes going offline per minute — effect on lookup success rate and latency
+
+- Create `test-results/performance/dht-scale-report.md`:
+  - Performance at each scale
+  - Bottleneck analysis (network? CPU? memory?)
+  - Recommended max nodes per DHT (before sharding needed)
+  - Churn tolerance graph
+
+- Update `PERFORMANCE_STATUS.md` with DHT scale results
+- **VERIFY:** DHT scales to 100 nodes with <100ms lookup latency
+
+## Research Insights
+
+- **Kademlia DHT churn:** Kademlia is robust to churn but requires active bucket refresh. Without refresh, stale entries accumulate and lookups fail. R4's bucket repair is critical.
+- **GossipSub v1.1 peer scoring:** If AAFP later adds gossip-based pub/sub, peer scoring (mesh delivery, app-specific, IP colocation, behavioral) becomes important. For now, the DHT's k-bucket approach is sufficient.
+- **DHT keyspace:** AAFP's DHT is keyed by capability string (hashed to 256-bit), not by agent_id. There may be only 10-100 distinct capabilities, so the keyspace is small. Consider a simpler gossip-based approach if Kademlia is overkill. The risk is noted in the track plan.
+
+## Verification Commands
+
+```bash
+cd /Users/david/Projects/AAFP-research/implementations/rust
+cargo fmt --all -- --check
+cargo build --workspace
+cargo clippy --workspace -- -D warnings
+cargo test --workspace
+```
+
+## Submodule Workflow
+
+```bash
+# Commit in Rust submodule:
+cd implementations/rust && git add -A && git commit -m "feat(r2): ..."
+# Update umbrella:
+cd /Users/david/Projects/AAFP-research && git add implementations/rust && git commit -m "chore: update rust submodule — Track R2"
+```
+
+## Golden Rules
+
+1. NEVER skip verification. A step is not done until VERIFY passes.
+2. ALWAYS run `cargo fmt --all -- --check` and `cargo clippy --workspace -- -D warnings` before committing.
+3. ALWAYS update `STATUS.md` in the same commit as the work.
+4. Commit after EACH step.
+5. R1 is already written — your first task is to review and commit it, then continue with R2-R8.
+6. If 100+ node tests are slow, use localhost simulation with different ports. Document real-world setup.
+7. If Kademlia routing seems overkill for 10-100 capabilities, implement a simpler gossip fallback. Document the tradeoff.
+8. This is the FINAL track. When R8 is done, ALL 326 steps are complete and AAFP is internet-ready.
