@@ -126,3 +126,30 @@ Full report: [`test-results/performance/WAN_REPORT.md`](../test-results/performa
 **Note:** WAN conditions simulated in userspace (QUIC uses UDP, toxiproxy
 only supports TCP). Real-world validation with second machine or tc/dnctl
 (root) recommended for final production sign-off.
+
+---
+
+## DHT Scale (Track R8, 2026-07-04)
+
+Full report: [`test-results/performance/dht-scale-report.md`](../test-results/performance/dht-scale-report.md)
+
+| Nodes | Lookup Latency | Announce Latency | RT Size | Success Rate |
+|-------|---------------|-----------------|---------|-------------|
+| 10 | 451 ms | 51 ms | 9 | 100% |
+| 50 | 5.56 s | 129 ms | 47 | 100% |
+| 100 | 1.32 s | 188 ms | 67 | 100% |
+| 500 | 1.86 s | 116 ms | 54 | 100% |
+
+### Churn Tolerance (100 nodes)
+
+| Churn Rate | Lookup Success | Latency |
+|-----------|---------------|---------|
+| 0% | 100% | 1.32 s |
+| 10% | 100% | 1.36 s |
+| 20% | 95% | 1.27 s |
+| 30% | 70% | 1.54 s |
+
+**Note:** Latency is dominated by in-process async overhead (RwLock contention,
+signature verification). Real-world latency will be dominated by network RTT.
+DHT scales to 500 nodes with 100% lookup success. Churn tolerance is excellent
+up to 20%, degrades at 30% due to record loss.

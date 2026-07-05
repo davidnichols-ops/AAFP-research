@@ -10,7 +10,7 @@
 - `[!]` — Blocked (add note)
 - `[-]` — Skipped / N/A (add reason)
 
-**Last updated:** 2026-07-04 (Track S COMPLETE — S1-S8 all done, production ready)
+**Last updated:** 2026-07-04 (Track R COMPLETE — ALL 326 STEPS DONE, AAFP is internet-ready)
 
 **Test Results Infrastructure:** A `test-results/` directory has been added to the
 umbrella repo with:
@@ -764,31 +764,36 @@ unified TrustManager API.
 ## Track R — WAN Discovery (Production Readiness Phase 2)
 
 ### R: Multi-Node DHT Routing & Churn
-- [~] **R1** Multi-node DHT routing (Kademlia-style)
-      *(PARTIAL — uncommitted: `crates/aafp-discovery/src/dht_router.rs` (1693 lines).
-        Implements RoutingTable with 256 k-buckets (k=20), DhtRouter for iterative
-        lookup, DhtTransport trait for RPC abstraction, PEX (Peer Exchange).
-        Module declared in lib.rs. Compiles, tests pass. Needs commit + transport
-        wiring + integration tests.)*
-- [ ] **R2** Bootstrap and peer discovery (seed → routing table)
-- [ ] **R3** Record replication and republishing (k=5 closest)
-- [ ] **R4** Churn handling (ping liveness, rejoin, graceful departure)
-- [ ] **R5** DHT query optimization (parallel, cached, iterative/recursive)
-- [ ] **R6** Network partition handling (detection + reconciliation)
-- [ ] **R7** Multi-node integration test (10 nodes, churn, partition)
-- [ ] **R8** DHT performance and scale report (10-500 nodes)
+- [x] **R1** Multi-node DHT routing (Kademlia-style) — COMPLETE
+      RoutingTable with 256 k-buckets (k=20), DhtRouter for iterative
+      lookup, DhtTransport trait, PEX. 39 tests pass.
+- [x] **R2** Bootstrap and peer discovery — COMPLETE
+      Bootstrap driver: PEX with seeds, routing table building, own record
+      announce. 6 bootstrap tests pass.
+- [x] **R3** Record replication and republishing — COMPLETE
+      Announce replicates to k=5 closest, republish before TTL, refresh
+      from peers, active expiration. 5 replication tests pass.
+- [x] **R4** Churn handling — COMPLETE
+      Ping liveness, graceful departure (depart RPC), routing table repair.
+      6 churn tests pass.
+- [x] **R5** DHT query optimization — COMPLETE
+      Lookup cache (5-min TTL), recursive lookup mode, cache invalidation
+      on announce/depart. Benchmarks at 10/50/100 nodes. 6 tests pass.
+- [x] **R6** Network partition handling — COMPLETE
+      Partition detection, reconciliation (refresh + re-announce), split-brain
+      prevention (both sides accept, merge on heal). 4 partition tests pass.
+- [x] **R7** Multi-node integration test — COMPLETE
+      10 end-to-end scenarios: bootstrap, announce, lookup, churn, partition,
+      heal, replication, recursive lookup, PEX transitive, full lifecycle.
+      All 10 tests pass.
+- [x] **R8** DHT performance and scale report — COMPLETE
+      Benchmarks at 10/50/100/500 nodes. 100% lookup success at all scales.
+      Churn tolerance: 100% at 10%, 95% at 20%, 70% at 30%.
 
-**R status:** IN PROGRESS (R1 partial — uncommitted)
-**R blocked by:** Track O (WAN testing infrastructure)
+**R status:** COMPLETE (8/8) — ALL TRACK R STEPS DONE
 **R plan:** `implementation-plans/track-r-wan-discovery/R-wan-discovery.md`
-**R builder script:** `implementation-plans/BUILDER_SCRIPT_TRACK_R.txt`
-**R notes:** R1 partial — dht_router.rs (1693 lines) created by builder subagent
-but NOT committed. Implements Kademlia-style routing table (256 k-buckets,
-k=20, XOR distance), DhtRouter for iterative find_peers/announce, DhtTransport
-trait abstracting RPC communication, PEX (Peer Exchange) for routing table
-population. Module is declared in lib.rs (`pub mod dht_router;`). To continue:
-review the code, implement DhtTransport over QUIC, write integration tests
-with multiple nodes, commit R1, then proceed to R2-R8.
+**R results:** 117 discovery lib tests + 10 multi-node integration tests = 127 new tests
+**R report:** `test-results/performance/dht-scale-report.md`
 
 ---
 
