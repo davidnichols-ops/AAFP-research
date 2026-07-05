@@ -1,0 +1,278 @@
+# BUILDER PROMPT — P2.2: CLI Polish
+
+## Objective
+
+Make the AAFP CLI feel like a natural developer tool. Add `serve` and `call`
+commands that use the new simple API (P2.1), plus `peers`, `metrics`, and
+`health` commands. Add colored output and a `quickstart` wizard.
+
+## Current CLI State
+
+**File:** `crates/aafp-cli/src/main.rs`
+**Commands dir:** `crates/aafp-cli/src/commands/`
+**Existing commands:** `init`, `start`, `discover`, `connect`, `send`, `status`, `relay`
+**Dependencies:** `clap` (workspace), `tokio` (workspace)
+
+## New Commands to Add
+
+### 1. `aafp serve` — Start serving in one command
+
+```bash
+aafp serve --capability echo
+aafp serve --capability translation --bind 0.0.0.0:4433
+aafp serve --capability ocr --identity my-key.bin
+```
+
+This wraps the P2.1 simple API:
+```rust
+use aafp_sdk::simple::{Agent, Request, Response};
+
+Agent::serve()
+    .capability("echo")
+    .handler(|req: Request| async move {
+        Ok(Response::text(req.body().to_string()))  // echo
+    })
+    .start()
+    .await?;
+```
+
+**Implementation:**
+- Create `crates/aafp-cli/src/commands/serve.rs`
+- Use `Agent::serve()` from `aafp_sdk::simple`
+- `--capability` can be repeated (multiple capabilities)
+- `--bind` optional (default: `0.0.0.0:0`)
+- `--identity` optional (path to keypair file, auto-generates if not provided)
+- Default handler: echo (returns the request body as response)
+- Print agent ID, bind address, and capabilities on startup
+- Keep running until Ctrl+C
+- Print connection logs as they happen
+
+### 2. `aafp call` — Discover and call in one command
+
+```bash
+aafp call echo "hello"
+aafp call translation "translate this" --identity my-key.bin
+aafp call echo "hello" --json
+```
+
+This wraps the P2.1 simple API:
+```rust
+use aafp_sdk::simple::{Agent, Request};
+
+let mut agent = Agent::connect().connect().await?;
+let result = agent.discover("echo")
+    .call(Request::text("hello"))
+    .await?;
+println!("{}", result.body());
+```
+
+**Implementation:**
+- Create `crates/aafp-cli/src/commands/call.rs`
+- Use `Agent::connect()` from `aafp_sdk::simple`
+- First arg: capability name
+- Second arg: message text
+- `--identity` optional
+- `--json` flag: output as JSON `{"capability": "echo", "request": "hello", "response": "echo: hello"}`
+- Print the response body to stdout
+- If no agents found, print helpful error: "No agents with capability 'echo' found. Is an agent serving on this network?"
+
+### 3. `aafp peers` — List connected peers
+
+```bash
+aafp peers
+aafp peers --identity my-key.bin
+```
+
+**Implementation:**
+- Create `crates/aafp-cli/src/commands/peers.rs`
+- Start an agent, check `agent.discovered_agents()` and `agent.find_by_capability("")`
+- Print table: Agent ID | Capabilities | Multiaddr | NAT Status
+- If no peers, print "No peers discovered. Try running `aafp serve` on another node."
+
+### 4. `aafp metrics` — Show agent metrics
+
+```bash
+aafp metrics
+aafp metrics --identity my-key.bin
+```
+
+**Implementation:**
+- Create `crates/aafp-cli/src/commands/metrics.rs`
+- Start an agent, call `agent.metrics()` and `agent.health_check()`
+- Print:
+  ```
+  AAFP Agent Metrics
+  ==================
+  Agent ID:     a3f4...
+  Status:       Healthy
+  Uptime:       0s
+  Connections:  0 active
+  Messages:     0 sent, 0 received
+  Handshakes:   0 completed
+  DHT Records:  0
+  ```
+
+### 5. `aafp health` — Show health status
+
+```bash
+aafp health
+```
+
+**Implementation:**
+- Create `crates/aafp-cli/src/commands/health.rs`
+- Print `agent.health_check()` as a simple status line
+- Exit code 0 if Healthy, 1 if Degraded, 2 if Unhealthy
+
+### 6. `aafp quickstart` — Interactive setup wizard
+
+```bash
+aafp quickstart
+```
+
+**Implementation:**
+- Create `crates/aafp-cli/src/commands/quickstart.rs`
+- Interactive prompts:
+  1. "Welcome to AAFP! Let's set up your first agent."
+  2. "Generating identity..." (auto-generate keypair)
+  3. "What capability would you like to serve? (default: echo)"
+  4. "Starting agent..." (start serving)
+  5. "In another terminal, run: aafp call echo "hello""
+  6. Keep running, show incoming requests
+
+## Colored Output
+
+Add `colored` crate to `crates/aafp-cli/Cargo.toml`:
+```toml
+colored = "2"
+```
+
+Use colors for:
+- Green: success messages, "Serving", "Connected"
+- Yellow: warnings, "No peers found"
+- Red: errors
+- Cyan: agent IDs, capabilities
+- Dim: debug info, timestamps
+
+## Implementation Plan
+
+### File 1: `crates/aafp-cli/Cargo.toml` (MODIFY)
+Add `colored = "2"` to dependencies.
+
+### File 2: `crates/aafp-cli/src/main.rs` (MODIFY)
+Add new commands to the `Commands` enum:
+```rust
+/// Serve an agent with a capability (one-command startup)
+Serve {
+    #[arg(long)]
+    capability: Vec<String>,
+    #[arg(long, default_value = "0.0.0.0:0")]
+    bind: String,
+    #[arg(long, default_value = "aafp-identity.bin")]
+    identity: String,
+},
+/// Call an agent by capability
+Call {
+    capability: String,
+    message: String,
+    #[arg(long, default_value = "aafp-identity.bin")]
+    identity: String,
+    #[arg(long)]
+    json: bool,
+},
+/// List discovered peers
+Peers {
+    #[arg(long, default_value = "aafp-identity.bin")]
+    identity: String,
+},
+/// Show agent metrics
+Metrics {
+    #[arg(long, default_value = "aafp-identity.bin")]
+    identity: String,
+},
+/// Show health status
+Health {
+    #[arg(long, default_value = "aafp-identity.bin")]
+    identity: String,
+},
+/// Interactive quickstart wizard
+Quickstart,
+```
+
+Add match arms for each new command.
+
+### File 3: `crates/aafp-cli/src/commands/serve.rs` (NEW)
+### File 4: `crates/aafp-cli/src/commands/call.rs` (NEW)
+### File 5: `crates/aafp-cli/src/commands/peers.rs` (NEW)
+### File 6: `crates/aafp-cli/src/commands/metrics.rs` (NEW)
+### File 7: `crates/aafp-cli/src/commands/health.rs` (NEW)
+### File 8: `crates/aafp-cli/src/commands/quickstart.rs` (NEW)
+### File 9: `crates/aafp-cli/src/commands/mod.rs` (MODIFY — add new modules)
+
+## P2.1 API Reference (from simple.rs)
+
+```rust
+// Serving
+aafp_sdk::simple::Agent::serve()
+    .capability("echo")           // can be called multiple times
+    .handler(|req| async move { Ok(Response::text(req.body())) })
+    .bind(SocketAddr)             // optional, default 0.0.0.0:0
+    .with_keypair(AgentKeypair)   // optional, auto-generates
+    .start().await                // → Result<ServingAgent, SdkError>
+
+// ServingAgent
+serving_agent.id()        // → &AgentId
+serving_agent.addr()      // → &str (bind address)
+serving_agent.record()    // → &AgentRecord
+serving_agent.stop()
+
+// Connecting
+aafp_sdk::simple::Agent::connect()
+    .with_keypair(AgentKeypair)   // optional
+    .with_seeds(Vec<String>)      // optional
+    .connect().await              // → Result<ConnectedAgent, SdkError>
+
+// ConnectedAgent
+connected_agent.discover("echo")  // → DiscoveryBuilder
+connected_agent.register(&record) // populate DHT
+connected_agent.id()              // → &AgentId
+
+// DiscoveryBuilder
+discovery.call(Request::text("hello")).await  // → Result<Response, SdkError>
+
+// Request
+Request::text("hello")    // → Request
+Request::data(vec![...])  // → Request
+req.body()                // → &str
+req.payload()             // → Option<&[u8]>
+
+// Response
+Response::text("world")   // → Response
+Response::data(vec![...]) // → Response
+resp.body()               // → &str
+resp.payload()            // → Option<&[u8]>
+```
+
+## Verification
+
+```bash
+cd implementations/rust
+cargo fmt --all -- --check
+cargo clippy -p aafp-cli -- -D warnings
+cargo test -p aafp-cli
+
+# Manual verification (should work):
+cargo run --bin aafp -- serve --capability echo &
+sleep 2
+cargo run --bin aafp -- call echo "hello"
+# Should print: hello (or echo: hello)
+kill %1
+```
+
+All must pass with 0 warnings and 0 failures.
+
+## Do NOT
+
+- Do NOT modify `simple.rs` — it's done, just use it
+- Do NOT add protocol jargon to CLI output — keep it developer-friendly
+- Do NOT require users to know multiaddrs, AgentIds, or port numbers
+- Do NOT forget to handle Ctrl+C gracefully in `serve` mode

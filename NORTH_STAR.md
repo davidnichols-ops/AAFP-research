@@ -67,7 +67,7 @@ implementation, not the protocol.
 
 | Metric | Value |
 |--------|-------|
-| Rust tests | 1597 passing, 0 failures, 7 ignored |
+| Rust tests | 1612 passing, 0 failures, 7 ignored |
 | Rust crates | 17 (15 workspace + aafp-py + aafp-loadtest) |
 | Rust code | ~75,000 lines |
 | RFCs | 11 (0001-0011) + 3 amendment sets + 4 reviews |
@@ -148,11 +148,17 @@ performance, security, and reliability.**
 **Milestone ACHIEVED:** "100 agents run for 4 hours without crashes. Fuzzing
 finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 
-**Phase 2: Make it deployable and invisible (1-2 weeks) — NEXT**
-- 3-line developer API: `Agent::new().discover("python").execute(code)`
-- CLI tool: `aafp discover`, `aafp connect`, `aafp serve`
-- Prometheus metrics endpoint + Grafana dashboard
-- Tutorials that don't mention QUIC, UCAN, or DHT
+**Phase 2: Make it deployable and invisible (1-2 weeks) — IN PROGRESS**
+- [x] P2.1: 3-line developer API — `Agent::serve().capability("echo").handler(...).start()`
+- [ ] P2.2: CLI polish — `aafp serve`, `aafp call`, `aafp peers`, `aafp metrics`
+- [ ] P2.3: Quickstart tutorial (5 minutes, no jargon)
+- [ ] P2.4: Python SDK high-level API
+- [ ] P2.5: 5 working examples
+- [ ] P2.6: Prometheus + Grafana dashboard
+- [ ] P2.7: Documentation site (mdbook)
+- [ ] P2.8: Install script + Homebrew
+- [ ] P2.9: Developer experience integration tests
+- [ ] P2.10: Phase 2 completion report
 
 **Milestone:** "Anyone can `docker compose up` and have a working AAFP relay + agent. Developers can build agents without understanding the protocol."
 
@@ -411,7 +417,7 @@ capability graph.
 - [x] Dockerfile + docker-compose for relay and agent (Track S5)
 - [x] Deployment runbook published (Track S6)
 - [x] Multi-node DHT: 500 nodes, churn, partition recovery (Track R7)
-- [ ] Developer can build an agent in 3 lines of code (Phase 2 — ecosystem)
+- [x] Developer can build an agent in 3 lines of code (P2.1 — DONE)
 - [ ] SDK available in at least 2 languages (Phase 2 — Rust done, Python partial)
 
 ### "Ecosystem Forming" (v2 — Phase 3)
