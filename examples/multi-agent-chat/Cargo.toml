@@ -1,0 +1,8 @@
+[package]
+name = "multi-agent-chat"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aafp-sdk = { path = "../../implementations/rust/crates/aafp-sdk" }
+tokio = { version = "1", features = ["full"] }

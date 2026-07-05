@@ -1,0 +1,5 @@
+# Build the AAFP Python package from the Rust source
+# (run from the repo root)
+#   cd implementations/rust/crates/aafp-py
+#   maturin develop --release
+aafp

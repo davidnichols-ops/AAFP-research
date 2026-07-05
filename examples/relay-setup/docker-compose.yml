@@ -1,0 +1,37 @@
+# AAFP Relay — Docker Compose
+#
+# A relay helps agents behind different networks find each other.
+# Deploy this on a public VM so your agents can connect from anywhere.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose logs -f relay
+#   docker compose down
+
+services:
+  relay:
+    build:
+      context: ../../implementations/rust
+      dockerfile: Dockerfile
+    container_name: aafp-relay
+    ports:
+      - "4434:4434/udp"
+    environment:
+      AAFP_BIND: "0.0.0.0:4434"
+      AAFP_RELAY_MODE: "true"
+      AAFP_CAPABILITIES: "relay"
+      RUST_LOG: "info"
+    volumes:
+      - relay-keys:/data/keys
+      - relay-dht:/data/dht
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/aafp-agent", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  relay-keys:
+  relay-dht:
