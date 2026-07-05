@@ -41,6 +41,8 @@ internet**. Transport is the kernel. The full stack:
 ```
 Applications (MCP, A2A, custom agents)
     ↓
+World Perception Layer (web, APIs, documents, media, real-world sensing)
+    ↓
 Execution Fabric (scheduling, routing, checkpointing, migration)
     ↓
 Adaptive Routing Plane (capability graphs, reputation, learning)
@@ -53,6 +55,63 @@ Transport (QUIC + PQ-TLS + CBOR framing + NAT traversal)
     ↓
 UDP → IP → the same internet everyone uses
 ```
+
+### The World Perception Layer
+
+Agents that can only talk to each other are an intranet. The value is in
+agents that can **perceive and act on the real world**.
+
+The World Perception Layer is how agents interact with everything that is
+not an AAFP agent — web pages, APIs, databases, documents, images, audio,
+files, shells, browsers, physical sensors. It sits between applications and
+the execution fabric because it is the bridge to reality.
+
+**Design principles:**
+
+1. **Agent-native representation, not human-native.** A web page is not
+   HTML to an agent. It is a structured semantic document — sections,
+   entities, actions, relationships. A PDF is not pixels. It is text,
+   tables, figures, metadata. The perception layer renders the world into
+   representations agents can reason about.
+
+2. **Capabilities, not hardcoded integrations.** "Browse the web" is a
+   capability. "Read a PDF" is a capability. "Call the OpenAI API" is a
+   capability. "Search Google" is a capability. Each is served by an agent
+   that specializes in it. Other agents discover and call them through the
+   normal AAFP discovery mechanism.
+
+3. **Stateful interaction, not just fetch.** An agent doesn't just download
+   a URL. It can navigate — click, scroll, fill forms, wait for dynamic
+   content, execute JavaScript, take screenshots. The browsing agent
+   maintains a session state that other agents can drive.
+
+4. **Multimodal perception.** Text, images, audio, video, structured data.
+   The perception layer normalizes all of these into agent-native
+   representations. An agent that receives an image doesn't get raw pixels
+   — it gets a description, detected objects, OCR text, relevant metadata.
+
+5. **Actuation, not just perception.** Agents don't just read the world.
+   They act on it. Fill out forms. Submit data. Execute code. Send emails.
+   Make API calls. Write files. The perception layer is bidirectional.
+
+**What this means architecturally:**
+
+The perception layer is NOT a special protocol extension. It is a set of
+**capability providers** — agents that serve "web-browse", "pdf-read",
+"image-ocr", "api-call", "code-execute", "form-fill", "search" capabilities.
+They are discovered and called through the normal AAFP mechanism.
+
+The only thing AAFP needs to provide is:
+- A standard for **agent-native content representation** (a schema for
+  how web pages, documents, images, etc. are encoded in AAFP responses)
+- A standard for **stateful sessions** (so a browsing agent can maintain
+  page state across multiple calls from different agents)
+- A registry of **well-known perception capabilities** (so agents know
+  what to discover)
+
+This is a Phase 3-4 deliverable. It requires the ecosystem to exist first
+(Phase 3) and the semantic capability graph (Phase 4, Track U) to express
+perception needs like "I need to read a PDF in English with <40ms latency."
 
 ---
 

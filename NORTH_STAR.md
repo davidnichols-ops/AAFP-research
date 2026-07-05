@@ -172,14 +172,20 @@ finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 
 **Milestone:** "Developers are building agents on AAFP without us asking them to."
 
-**Phase 4: Adaptive Routing Plane (future, after ecosystem forms)**
+**Phase 4: Adaptive Routing Plane + World Perception (future, after ecosystem forms)**
 - Track T: Nodes share resource metrics (CPU, GPU, queue depth, latency, trust)
 - Track U: Semantic capability graphs replace string lookups
 - Track V: Execution Fabric — work scheduling, pipeline assembly, checkpointing
 - Track W: Agent Reputation — performance history becomes part of identity
 - Track X: Economic Layer — resource accounting, priority, compensation
+- Track Y: World Perception Layer — agent-native rendering of web, documents, media
+  - Agent-native content representation schema (web pages → semantic docs, not HTML)
+  - Stateful browsing sessions (navigate, click, scroll, fill forms, execute JS)
+  - Multimodal perception (text, images, audio, video → structured representations)
+  - Well-known perception capabilities (web-browse, pdf-read, image-ocr, api-call, search)
+  - Actuation (agents act on the world: submit forms, send emails, execute code)
 
-**Milestone:** "The network becomes more intelligent as more agents join. Routing optimizes for speed, cost, trust, and reliability automatically."
+**Milestone:** "The network becomes more intelligent as more agents join. Routing optimizes for speed, cost, trust, and reliability automatically. Agents perceive and act on the real world through shared capability providers."
 
 **Total to internet-ready: ~6-8 weeks (Phases 1-2).**
 **Total to ecosystem: ~3-6 months (Phase 3).**

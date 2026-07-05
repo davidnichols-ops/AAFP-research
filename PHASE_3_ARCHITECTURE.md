@@ -33,6 +33,10 @@ richness of the capability graph.
 │                     ECOSYSTEM LAYER                           │
 │  SDKs (Rust/Python/TS) · CLI · Examples · Tutorials · Plugins│
 ├─────────────────────────────────────────────────────────────┤
+│              WORLD PERCEPTION LAYER (Phase 3-4)               │
+│  Web Browse · PDF Read · OCR · API Call · Search · Code Exec  │
+│  Agent-native content schema · Stateful sessions · Multimodal│
+├─────────────────────────────────────────────────────────────┤
 │                   INTELLIGENCE LAYER (Phase 4)                │
 │  Adaptive Routing · Capability Graphs · Execution Fabric     │
 │  Agent Reputation · Economic Layer                            │
@@ -50,7 +54,11 @@ richness of the capability graph.
 ├─────────────────────────────────────────────────────────────┤
 │                    UDP → IP → INTERNET                        │
 └─────────────────────────────────────────────────────────────┘
-```
+
+**The World Perception Layer** is how agents interact with everything that
+is not an AAFP agent — web pages, APIs, databases, documents, images, audio.
+It renders the real world into agent-native representations (structured
+semantic documents, not raw HTML). See STRATEGIC_VISION.md for full design.
 
 **The immutable boundary:** Transport layer is frozen (Rev 6). Everything
 above it evolves. Never bake algorithms into the protocol. Bake interfaces.
@@ -203,6 +211,26 @@ Service A → calls Service B → B dies → A discovers Service C → continues
 - Demonstrates: churn handling, automatic failover, resilience
 - 5 services, kill one, watch the network heal
 - Shows: the network is more reliable than any single agent
+
+#### 6. Web-Browsing Agent (World Perception)
+```
+Agent → "web-browse" capability → fetches URL → returns agent-native content
+```
+- Demonstrates: World Perception Layer, agent-native content representation
+- Browsing agent fetches a URL, renders the page into a structured semantic
+  document (sections, entities, actions, links — not raw HTML)
+- Other agents can call it: `agent.discover("web-browse").call(Request::text("https://example.com"))`
+- Stateful sessions: agent can navigate, click, scroll, fill forms
+- Shows: agents perceive the real world through shared capability providers
+
+#### 7. Document Understanding Agent (World Perception)
+```
+Agent → "pdf-read" capability → parses PDF → returns structured content
+```
+- Demonstrates: multimodal perception, document understanding
+- Agent reads PDFs and returns structured content (text, tables, figures, metadata)
+- Other agents can discover and call it without knowing how PDFs work
+- Shows: the perception layer normalizes real-world formats into agent-native representations
 
 ### 3.4: Developer Tooling (Month 3)
 
