@@ -849,24 +849,41 @@ export class Agent {
 }
 ```
 
-### 5.3 ServeBuilder + ServingAgent
+### 5.3 ServeBuilder + ServingAgent (v2)
+
+The v2 `ServeBuilder` adds `onCapability()` for per-capability routing,
+`onStreaming()` for server-streaming handlers, `onBidirectional()` for bidi
+streaming, and `withConnectionPool()` for outgoing call reuse. The v1
+`handler()` method is preserved as deprecated.
 
 ```typescript
 // src/serve.ts
 
 export interface ServeOptions {
   capabilities: string[];
-  handler: Handler | null;
+  /** Per-capability handlers (v2). */
+  capabilityHandlers: Map<string, CapabilityHandler>;
+  /** Streaming handlers (v2). */
+  streamingHandlers: Map<string, StreamingHandler>;
+  /** Bidirectional handlers (v2). */
+  bidiHandlers: Map<string, BidirectionalHandler>;
+  /** Fallback handler (v1 compat). */
+  fallbackHandler: LegacyHandler | null;
   bindAddr?: string;
   keypair?: AgentKeypair;
   metricsAddr?: string;
   transport?: TransportFactory;
+  /** Connection pool for outgoing calls (v2). */
+  poolConfig?: PoolConfig;
 }
 
 export class ServeBuilder {
   private opts: ServeOptions = {
     capabilities: [],
-    handler: null,
+    capabilityHandlers: new Map(),
+    streamingHandlers: new Map(),
+    bidiHandlers: new Map(),
+    fallbackHandler: null,
   };
 
   /** Add a capability this agent provides. */
@@ -875,9 +892,52 @@ export class ServeBuilder {
     return this;
   }
 
-  /** Set the request handler. */
-  handler(fn: Handler): this {
-    this.opts.handler = fn;
+  /**
+   * Register a handler for a specific capability (v2).
+   * The handler receives the Request and a HandlerContext with cancellation
+   * and capability info. Multiple capabilities can have different handlers.
+   */
+  onCapability(cap: string, handler: CapabilityHandler): this {
+    this.opts.capabilityHandlers.set(cap, handler);
+    if (!this.opts.capabilities.includes(cap)) {
+      this.opts.capabilities.push(cap);
+    }
+    return this;
+  }
+
+  /**
+   * Register a server-streaming handler (v2).
+   * The handler receives a Request and a StreamingHandlerContext with a
+   * `send()` method for streaming responses to the client.
+   */
+  onStreaming(cap: string, handler: StreamingHandler): this {
+    this.opts.streamingHandlers.set(cap, handler);
+    if (!this.opts.capabilities.includes(cap)) {
+      this.opts.capabilities.push(cap);
+    }
+    return this;
+  }
+
+  /**
+   * Register a bidirectional streaming handler (v2).
+   * The handler receives an AsyncIterable<Request> and a StreamingHandlerContext.
+   * The client can send multiple requests; the server streams responses.
+   */
+  onBidirectional(cap: string, handler: BidirectionalHandler): this {
+    this.opts.bidiHandlers.set(cap, handler);
+    if (!this.opts.capabilities.includes(cap)) {
+      this.opts.capabilities.push(cap);
+    }
+    return this;
+  }
+
+  /**
+   * Set a fallback handler for all capabilities (v1 compat mode).
+   * @deprecated Use onCapability() for per-capability routing.
+   */
+  @deprecated("Use onCapability() instead")
+  handler(fn: LegacyHandler): this {
+    this.opts.fallbackHandler = fn;
     return this;
   }
 
@@ -905,6 +965,12 @@ export class ServeBuilder {
     return this;
   }
 
+  /** Configure connection pooling for outgoing calls (v2). */
+  withConnectionPool(config: PoolConfig): this {
+    this.opts.poolConfig = config;
+    return this;
+  }
+
   /** Build and start the agent. Resolves when serving. */
   async start(): Promise<ServingAgent> {
     const keypair = this.opts.keypair ?? await generateKeypair();
@@ -919,7 +985,11 @@ export class ServeBuilder {
       transport,
       keypair,
       capabilities: this.opts.capabilities,
-      handler: this.opts.handler,
+      capabilityHandlers: this.opts.capabilityHandlers,
+      streamingHandlers: this.opts.streamingHandlers,
+      bidiHandlers: this.opts.bidiHandlers,
+      fallbackHandler: this.opts.fallbackHandler,
+      poolConfig: this.opts.poolConfig,
     });
 
     const { agentId, addr } = await server.start();
@@ -977,7 +1047,12 @@ export class ServingAgent {
 }
 ```
 
-### 5.4 ConnectBuilder + ConnectedAgent
+### 5.4 ConnectBuilder + ConnectedAgent (v2)
+
+The v2 `ConnectBuilder` enables connection pooling by default. The
+`ConnectedAgent` adds `discoverById()` for direct agent lookup and the
+`DiscoveryBuilder` adds `callStreaming()` for server-streaming calls with
+automatic failover across all candidates.
 
 ```typescript
 // src/connect.ts
@@ -986,6 +1061,8 @@ export interface ConnectOptions {
   keypair?: AgentKeypair;
   seeds?: string[];
   transport?: TransportFactory;
+  /** Connection pool configuration (v2, defaults to PoolConfig.default). */
+  poolConfig?: PoolConfig;
 }
 
 export class ConnectBuilder {
@@ -1006,15 +1083,27 @@ export class ConnectBuilder {
     return this;
   }
 
+  /** Configure connection pooling (v2). Enabled by default. */
+  withPoolConfig(config: PoolConfig): this {
+    this.opts.poolConfig = config;
+    return this;
+  }
+
   /** Build the agent and connect to the network. */
   async connect(): Promise<ConnectedAgent> {
     const keypair = this.opts.keypair ?? await generateKeypair();
     const transport = await (this.opts.transport ?? defaultTransportFactory)
       .create({ role: "client", keypair });
 
-    const client = new AafpClient({ transport, keypair, seeds: this.opts.seeds ?? [] });
+    const pool = new ConnectionPool(this.opts.poolConfig ?? PoolConfig.default());
+    const client = new AafpClient({
+      transport,
+      keypair,
+      seeds: this.opts.seeds ?? [],
+      pool,
+    });
     await client.bootstrap();
-    return new ConnectedAgent({ client, agentId: keypair.agentId() });
+    return new ConnectedAgent({ client, agentId: keypair.agentId(), pool });
   }
 }
 
@@ -1024,6 +1113,7 @@ export class ConnectedAgent {
     private readonly ctx: {
       client: AafpClient;
       agentId: AgentId;
+      pool: ConnectionPool;
     },
   ) {}
 
@@ -1031,9 +1121,14 @@ export class ConnectedAgent {
     return this.ctx.agentId;
   }
 
-  /** Discover agents by capability. Returns a DiscoveryBuilder. */
+  /** Discover agents by capability. Returns a DiscoveryBuilder (v2). */
   discover(capability: string): DiscoveryBuilder {
-    return new DiscoveryBuilder(this.ctx.client, capability);
+    return new DiscoveryBuilder(this.ctx.client, this.ctx.pool, capability);
+  }
+
+  /** Discover a specific agent by ID (v2). */
+  discoverById(agentId: AgentId): DirectCallBuilder {
+    return new DirectCallBuilder(this.ctx.client, this.ctx.pool, agentId);
   }
 
   /** Call an agent at a specific address, bypassing discovery. */
@@ -1048,7 +1143,11 @@ export class ConnectedAgent {
 }
 ```
 
-### 5.5 DiscoveryBuilder
+### 5.5 DiscoveryBuilder + DirectCallBuilder (v2)
+
+The v2 `DiscoveryBuilder` loops through all candidates with failover (not just
+the first), uses the connection pool for reuse, and adds `callStreaming()` for
+server-streaming RPC. `DirectCallBuilder` calls a specific agent by ID.
 
 ```typescript
 // src/discovery.ts
@@ -1056,11 +1155,16 @@ export class ConnectedAgent {
 export class DiscoveryBuilder {
   constructor(
     private readonly client: AafpClient,
+    private readonly pool: ConnectionPool,
     private readonly capability: string,
   ) {}
 
-  /** Discover an agent with the given capability and call it. */
-  async call(request: Request): Promise<Response> {
+  /**
+   * Discover an agent with the given capability and call it (v2).
+   * Loops through all candidates with failover — if the first candidate
+   * fails, tries the next, until one succeeds or all fail.
+   */
+  async call(request: Request, opts?: CallOptions): Promise<Response> {
     const candidates = await this.client.findByCapability(this.capability);
     if (candidates.length === 0) {
       throw new AafpError(
@@ -1068,41 +1172,346 @@ export class DiscoveryBuilder {
         `no agents found for capability '${this.capability}'`,
       );
     }
-    const addr = candidates[0].endpoints[0];
-    return this.client.callAt(addr, request);
+
+    let lastError: Error | null = null;
+    for (const peer of candidates) {
+      const addr = peer.endpoints[0];
+      if (!addr) continue;
+      try {
+        const conn = await this.pool.getOrConnect(addr);
+        return await this.client.callOnConnection(conn, request, opts);
+      } catch (e) {
+        lastError = e as Error;
+        continue; // Failover to next candidate
+      }
+    }
+    throw lastError ?? new AafpError(
+      AafpErrorCode.DiscoveryFailed,
+      "all candidates failed",
+    );
   }
+
+  /**
+   * Discover an agent and start a server-streaming call (v2).
+   * Returns an AsyncIterable<Response> that yields chunks as they arrive.
+   */
+  async callStreaming(
+    request: Request,
+    opts?: CallOptions,
+  ): Promise<AsyncIterable<Response>> {
+    const candidates = await this.client.findByCapability(this.capability);
+    if (candidates.length === 0) {
+      throw new AafpError(
+        AafpErrorCode.NoAgentsFound,
+        `no agents found for capability '${this.capability}'`,
+      );
+    }
+
+    // For streaming, we don't failover mid-stream — pick the first reachable
+    const addr = candidates[0].endpoints[0];
+    const conn = await this.pool.getOrConnect(addr);
+    return this.client.callStreamingOnConnection(conn, request, opts);
+  }
+}
+
+/** Builder for calling a specific agent by ID (v2). */
+export class DirectCallBuilder {
+  constructor(
+    private readonly client: AafpClient,
+    private readonly pool: ConnectionPool,
+    private readonly agentId: AgentId,
+  ) {}
+
+  async call(request: Request, opts?: CallOptions): Promise<Response> {
+    const record = await this.client.findByAgentId(this.agentId);
+    if (!record) {
+      throw new AafpError(
+        AafpErrorCode.NoAgentsFound,
+        `agent ${this.agentId} not found`,
+      );
+    }
+    const addr = record.endpoints[0];
+    const conn = await this.pool.getOrConnect(addr);
+    return this.client.callOnConnection(conn, request, opts);
+  }
+}
+
+/** Options for a call (v2: cancellation + deadline). */
+export interface CallOptions {
+  /** Abort signal for cancelling the in-flight RPC. */
+  signal?: AbortSignal;
+  /** Request deadline (ISO 8601). */
+  deadline?: string;
+  /** Trace ID for distributed tracing. */
+  traceId?: string;
 }
 ```
 
-### 5.6 Complete usage example
+### 5.6 ConnectionPool (v2)
+
+The `ConnectionPool` reuses QUIC connections across calls, avoiding repeated
+ML-DSA-65 handshakes. The Rust implementation shows a 17x speedup for repeated
+RPCs (709µs → 14µs). The TS pool mirrors this with session-based routing.
 
 ```typescript
-// examples/echo.ts
-import { Agent, Request, Response } from "@aafp/sdk";
+// src/pool.ts
+
+export interface PoolConfig {
+  /** Maximum number of cached connections per peer. */
+  maxSize: number;
+  /** Idle timeout before a connection is evicted (ms). */
+  idleTimeoutMs: number;
+  /** Health check interval (ms). 0 = disabled. */
+  healthCheckIntervalMs: number;
+
+  static default(): PoolConfig {
+    return { maxSize: 32, idleTimeoutMs: 120_000, healthCheckIntervalMs: 5_000 };
+  }
+}
+
+/**
+ * Connection pool for reusing QUIC connections across RPC calls.
+ * Session-based routing: same session → same connection.
+ */
+export class ConnectionPool {
+  private readonly connections: Map<string, PooledConnection> = new Map();
+  private readonly config: PoolConfig;
+
+  constructor(config: PoolConfig) {
+    this.config = config;
+  }
+
+  /** Get an existing connection or establish a new one. */
+  async getOrConnect(addr: Multiaddr): Promise<Connection> {
+    const existing = this.connections.get(addr);
+    if (existing && existing.healthy) {
+      existing.lastUsed = Date.now();
+      return existing.conn;
+    }
+    // Dial and handshake new connection
+    const conn = await this.dialAndHandshake(addr);
+    const pooled = new PooledConnection(conn, Date.now());
+    this.connections.set(addr, pooled);
+    return conn;
+  }
+
+  /** Close all pooled connections. */
+  async closeAll(): Promise<void> {
+    for (const [, pc] of this.connections) {
+      await pc.conn.close();
+    }
+    this.connections.clear();
+  }
+
+  /** Pool statistics for monitoring. */
+  get stats(): PoolStats {
+    let active = 0;
+    let idle = 0;
+    for (const [, pc] of this.connections) {
+      if (Date.now() - pc.lastUsed < this.config.idleTimeoutMs) active++;
+      else idle++;
+    }
+    return { active, idle, total: this.connections.size };
+  }
+
+  private async dialAndHandshake(addr: Multiaddr): Promise<Connection> {
+    // Implementation: dial via transport, run v1 handshake, return connection
+    // ...
+    throw new Error("not implemented");
+  }
+}
+
+interface PooledConnection {
+  conn: Connection;
+  lastUsed: number;
+  get healthy(): boolean;
+}
+
+interface PoolStats {
+  active: number;
+  idle: number;
+  total: number;
+}
+```
+
+### 5.7 Complete usage examples (v2)
+
+```typescript
+// examples/echo-v2.ts
+import { Agent, Request, Response, Params } from "@aafp/sdk";
 
 async function main() {
-  // Serve an echo agent
+  // ─── Server: per-capability handlers with structured params ───
+
   const server = await Agent.serve()
     .capability("echo")
-    .handler(async (req) => Response.text(req.body))
+    .onCapability("echo", async (req, ctx) => {
+      // ctx.capability === "echo"
+      // ctx.signal is an AbortSignal — fires on client disconnect
+      return Response.text(req.body);
+    })
+    .capability("sum")
+    .onCapability("sum", async (req, ctx) => {
+      const a = req.params.getU64(1);
+      const b = req.params.getU64(2);
+      if (a === undefined || b === undefined) {
+        throw new HandlerError(
+          HandlerErrorCategory.Messaging,
+          "missing params: expected keys 1 and 2",
+        );
+      }
+      return Response.withResult(Params.create().putU64(1, a + b));
+    })
+    .capability("uppercase")
+    .onCapability("uppercase", async (req, ctx) => {
+      return Response.text(req.body.toUpperCase());
+    })
     .start();
 
   console.log(`Serving on ${server.addr} (id: ${server.id})`);
+  console.log(`Capabilities: ${server.capabilities.join(", ")}`);
 
-  // Connect and call it
+  // ─── Client: connection-pooled discovery with failover ───────
+
   const client = await Agent.connect();
-  const result = await client.discover("echo").call(Request.text("hello"));
-  console.log(`Response: ${result.body}`); // "hello"
 
-  // Direct call (bypass discovery)
-  const direct = await client.callAt(server.addr, Request.text("world"));
-  console.log(`Direct: ${direct.body}`); // "world"
+  // Unary call with text
+  const echoResult = await client.discover("echo").call(Request.text("hello"));
+  console.log(`Echo: ${echoResult.body}`); // "hello"
+
+  // Unary call with structured params
+  const sumResult = await client.discover("sum").call(
+    Request.withParams(Params.create().putU64(1, 5).putU64(2, 7)),
+  );
+  console.log(`Sum: ${sumResult.result.getU64(1)}`); // 12
+
+  // Direct call by agent ID (bypass discovery)
+  const directResult = await client
+    .discoverById(server.id)
+    .call(Request.text("world"));
+  console.log(`Direct: ${directResult.body}`); // "world"
+
+  // Call with metadata (tracing, deadline)
+  const tracedResult = await client.discover("echo").call(
+    Request.text("traced").withMetadata((m) => {
+      m.traceId = "trace-abc-123";
+      m.deadline = new Date(Date.now() + 5000).toISOString();
+    }),
+  );
+
+  // Cancellation via AbortController
+  const ctrl = new AbortController();
+  const callPromise = client.discover("echo").call(
+    Request.text("slow"),
+    { signal: ctrl.signal },
+  );
+  ctrl.abort(); // Cancels the in-flight RPC
+  try {
+    await callPromise;
+  } catch (e) {
+    console.log("Call cancelled:", e instanceof Error ? e.message : e);
+  }
 
   await server.stop();
 }
 
 main().catch(console.error);
 ```
+
+### 5.8 Streaming usage examples (v2)
+
+```typescript
+// examples/streaming-v2.ts
+import { Agent, Request, Response, HandlerError, HandlerErrorCategory } from "@aafp/sdk";
+
+async function main() {
+  // ─── Server: token streaming via onStreaming ────────────────
+
+  const server = await Agent.serve()
+    .capability("token_stream")
+    .onStreaming("token_stream", async (req, ctx) => {
+      // Stream 10 tokens to the client, checking for cancellation
+      for (let i = 0; i < 10; i++) {
+        if (ctx.cancelled) {
+          console.log("Streaming cancelled by client");
+          return;
+        }
+        await ctx.send(Response.text(`token_${i}`));
+        await sleep(100); // Simulate LLM token generation
+      }
+    })
+    .capability("chat")
+    .onBidirectional("chat", async (requests, ctx) => {
+      // Bidirectional: receive multiple requests, stream responses
+      for await (const req of requests) {
+        if (ctx.cancelled) return;
+        const reply = `You said: ${req.body}`;
+        await ctx.send(Response.text(reply));
+      }
+    })
+    .start();
+
+  // ─── Client: consume server-streaming via async iterable ────
+
+  const client = await Agent.connect();
+
+  const stream = await client.discover("token_stream")
+    .callStreaming(Request.text("start"));
+
+  for await (const chunk of stream) {
+    process.stdout.write(chunk.body + " ");
+    // Output: token_0 token_1 token_2 ... token_9
+  }
+  console.log();
+
+  // ─── Client: bidirectional streaming ────────────────────────
+
+  const bidiStream = await client.discover("chat")
+    .callBidirectional();
+
+  // Send requests
+  bidiStream.send(Request.text("hello"));
+  bidiStream.send(Request.text("how are you?"));
+  bidiStream.finish(); // Half-close send side
+
+  // Receive responses
+  for await (const resp of bidiStream) {
+    console.log(resp.body);
+    // "You said: hello"
+    // "You said: how are you?"
+  }
+
+  await server.stop();
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+main().catch(console.error);
+```
+
+### 5.9 v1 backward compatibility
+
+The v1 API is preserved as a deprecated layer. Existing code continues to work
+without changes:
+
+```typescript
+// v1 code (deprecated but functional)
+import { Agent, Request, Response } from "@aafp/sdk";
+
+const server = await Agent.serve()
+  .capability("echo")
+  .handler(async (req) => Response.text(req.body)) // v1 handler, no ctx
+  .start();
+
+const client = await Agent.connect();
+const result = await client.discover("echo").call(Request.text("hello"));
+```
+
+The v1 `handler()` method wraps the legacy handler as a v2 fallback handler,
+ignoring the `HandlerContext`. The v1 `Request.text()` / `Response.text()`
+constructors work identically — the v2 `Request` class is a superset.
 
 ---
 
@@ -1691,6 +2100,28 @@ const result = await client.discover("echo").call(Request.text("hello"), { signa
 // ctrl.abort() cancels the in-flight RPC
 ```
 
+For v2 streaming, `AsyncIterable<T>` is the natural TS equivalent of Rust's
+`impl Stream<Item>`. Server-streaming responses are consumed via `for await`:
+
+```typescript
+// Server-streaming: AsyncIterable<Response>
+const stream = await client.discover("token_stream").callStreaming(Request.text("start"));
+for await (const chunk of stream) {
+  console.log(chunk.body); // "token_0", "token_1", ...
+}
+
+// Bidirectional: send + receive on the same stream
+const bidi = await client.discover("chat").callBidirectional();
+bidi.send(Request.text("hello"));
+bidi.finish();
+for await (const resp of bidi) {
+  console.log(resp.body);
+}
+```
+
+The `AbortSignal` also fires on client disconnect for server-side handlers,
+providing cancellation in both directions without additional plumbing.
+
 ---
 
 ## 11. Deno and Bun Support
@@ -1810,83 +2241,142 @@ Rust reference. Strategy:
 
 ## 14. Implementation Roadmap
 
+The roadmap is organized to deliver a working v1-compatible SDK first, then
+layer in v2 features (streaming, pooling, typed errors) in subsequent phases.
+This matches the Rust implementation's Phase A sub-phases (A1-A5).
+
 ### Phase 1: Core protocol (Week 1-2)
 
 - [ ] CBOR encoder/decoder (canonical, integer-keyed maps) + golden trace tests
 - [ ] Frame encode/decode (28-byte header) + golden trace tests
-- [ ] RPC request/response encode/decode
+- [ ] RPC request/response encode/decode (integer-keyed CBOR, A-1/A-2 rules)
 - [ ] ML-DSA-65 keygen/sign/verify via `@noble/post-quantum` + cross-verify
-      with Rust test vectors
+      with Rust test vectors (A-10 cross-language vectors)
 - [ ] Agent ID derivation (SHA-256 of public key)
 - [ ] v1 handshake state machine (transport-agnostic, CBOR in/out)
+- [ ] `Params` class (CBOR IntMap wrapper with putStr/putU64/getStr/getU64)
+- [ ] `RequestMetadata` / `ResponseMetadata` interfaces
+- [ ] `HandlerError` enum with RFC-0005 error categories
 
 **Deliverable:** `@aafp/sdk` can encode/decode all wire formats, verified
-against Rust golden traces. No transport yet.
+against Rust golden traces. No transport yet. v2 type system in place.
 
-### Phase 2: Transport + simple API (Week 2-3)
+### Phase 2: Transport + simple API v1 compat (Week 2-3)
 
 - [ ] `Transport` / `Connection` / `BidiStream` interfaces
 - [ ] `NodeQuicTransport` (Node 25+ `node:quic`)
 - [ ] `ServeBuilder` / `ServingAgent` / `ConnectBuilder` / `ConnectedAgent` /
-      `DiscoveryBuilder`
+      `DiscoveryBuilder` (v1 surface first)
+- [ ] v1 `handler()` method (deprecated, wraps as v2 fallback)
 - [ ] End-to-end echo test: TS server ↔ TS client over localhost QUIC
 - [ ] `WsGatewayTransport` fallback
 
 **Deliverable:** `npm install @aafp/sdk` gives a working echo agent on Node 25+.
+v1 API works; v2 types available but not yet wired to transport.
 
-### Phase 3: Cross-language interop (Week 3-4)
+### Phase 3: v2 server-side — per-capability handlers + cancellation (Week 3-4)
+
+- [ ] `onCapability()` on `ServeBuilder` — HashMap-based per-capability routing
+- [ ] `HandlerContext` with `AbortSignal` for cancellation
+- [ ] Capability name forwarded to handler via `Request.metadata.capability`
+- [ ] Client disconnect detection → `AbortController.abort()` on handler
+- [ ] `HandlerError` thrown by handlers → typed error codes on wire (RFC-0005)
+- [ ] v1 `handler()` → v2 fallback wrapper (deprecated but functional)
+- [ ] Integration test: multi-capability agent with per-capability dispatch
+
+**Deliverable:** v2 server-side API complete. Handlers receive capability
+name, can be cancelled, and return typed errors.
+
+### Phase 4: v2 client-side — connection pooling + failover (Week 4-5)
+
+- [ ] `ConnectionPool` class with `getOrConnect()`, idle timeout, health check
+- [ ] `ConnectedAgent` integrates pool (enabled by default)
+- [ ] `DiscoveryBuilder` loops all candidates with failover
+- [ ] `DirectCallBuilder` / `discoverById()` for direct agent lookup
+- [ ] `CallOptions` with `AbortSignal` for client-side cancellation
+- [ ] Pool stats API for monitoring
+- [ ] Benchmark: pooled vs unpooled repeated RPCs (target: 17x improvement
+      matching Rust's 709µs → 14µs)
+
+**Deliverable:** v2 client-side API complete. Connection pooling gives 17x
+speedup for repeated calls. Discovery fails over across candidates.
+
+### Phase 5: v2 streaming (Week 5-6)
+
+- [ ] `onStreaming()` on `ServeBuilder` — server-streaming handlers
+- [ ] `onBidirectional()` on `ServeBuilder` — bidi streaming handlers
+- [ ] `StreamingHandlerContext` with `send()` method
+- [ ] `callStreaming()` on `DiscoveryBuilder` — returns `AsyncIterable<Response>`
+- [ ] `callBidirectional()` on `DiscoveryBuilder` — returns `BidiStream`
+- [ ] Stream cancellation via `AbortSignal` (client disconnect → handler cancel)
+- [ ] Backpressure: respect QUIC flow control (stream window)
+- [ ] Integration test: token streaming (server → client), chat (bidi)
+
+**Deliverable:** v2 streaming API complete. LLM token streaming works via
+`for await`. Bidirectional chat works.
+
+### Phase 6: Cross-language interop (Week 6-7)
 
 - [ ] TS client ↔ Rust server interop test (CI)
 - [ ] TS server ↔ Rust client interop test (CI)
 - [ ] Golden trace conformance suite integrated into CI
 - [ ] ML-DSA-65 cross-verification (19 Rust vectors verify in TS, etc.)
+- [ ] v2 Params interop: TS `Params` ↔ Rust `Params` (CBOR IntMap round-trip)
+- [ ] v2 streaming interop: TS streaming client ↔ Rust streaming server
 
 **Deliverable:** TS SDK is wire-compatible with the Rust reference, proven in CI.
+v2 features interoperate across languages.
 
-### Phase 4: MCP integration + browser (Week 4-5)
+### Phase 7: MCP integration + browser (Week 7-8)
 
 - [ ] `AafpMcpTransport` implementing the MCP TS SDK `Transport` interface
 - [ ] MCP TS client ↔ AAFP server interop test
 - [ ] `WebTransportTransport` for browsers
 - [ ] Browser echo example (client-only)
 - [ ] `aafp gateway --webtransport` server-side bridge (Rust side)
+- [ ] Deno + Bun smoke tests (WebTransport / WS fallback)
 
 **Deliverable:** Browser agents work; MCP TS SDK runs over AAFP.
 
-### Phase 5: Discovery + ecosystem adapters (Week 5-6)
+### Phase 8: Discovery + ecosystem adapters (Week 8-9)
 
 - [ ] Basic discovery (direct address + relay directory; full Kademlia DHT
       deferred to v2)
 - [ ] `@aafp/langchain` adapter (AafpToolkit)
-- [ ] `@aafp/vercel-ai` adapter (aafpProvider)
-- [ ] Deno + Bun smoke tests
-- [ ] Documentation: quickstart, API reference, examples
+- [ ] `@aafp/vercel-ai` adapter (aafpProvider with streaming support)
+- [ ] Documentation: quickstart, API reference, v2 migration guide, examples
+- [ ] v1 → v2 migration guide (deprecation warnings, automated codemods)
 
 **Deliverable:** Ecosystem-ready SDK with adapters for the major TS agent
-frameworks.
+frameworks. v2 migration path documented.
 
-### Phase 6 (optional, follow-on): Native addon
+### Phase 9 (optional, follow-on): Native addon
 
 - [ ] `@aafp/sdk-native` via napi-rs, wrapping `aafp-sdk` Rust crate
-- [ ] Prebuilt binaries for 4 platforms
+- [ ] Prebuilt binaries for 4 platforms (linux-x64, linux-arm64, darwin-arm64,
+      win32-x64)
 - [ ] Same TypeScript type definitions as `@aafp/sdk`
 - [ ] Benchmark: native vs pure-TS, document the perf delta
+- [ ] v2 API parity: `onCapability`, streaming, pooling all work via native
 
 **Deliverable:** Optional performance package for Node.js users.
 
 ### Time estimates
 
-| Phase | Effort | Cumulative |
-|-------|--------|------------|
-| 1: Core protocol | 1.5 weeks | 1.5 |
-| 2: Transport + API | 1.5 weeks | 3 |
-| 3: Cross-language interop | 1 week | 4 |
-| 4: MCP + browser | 1 week | 5 |
-| 5: Discovery + adapters | 1 week | 6 |
-| 6: Native addon (optional) | 1.5 weeks | 7.5 |
+| Phase | Effort | Cumulative | v2 Features |
+|-------|--------|------------|-------------|
+| 1: Core protocol + v2 types | 1.5 weeks | 1.5 | Params, metadata, HandlerError |
+| 2: Transport + v1 API | 1.5 weeks | 3 | v1 compat layer |
+| 3: v2 server-side | 1 week | 4 | onCapability, cancellation, typed errors |
+| 4: v2 client-side | 1 week | 5 | ConnectionPool, failover, discoverById |
+| 5: v2 streaming | 1 week | 6 | onStreaming, onBidirectional, AsyncIterable |
+| 6: Cross-language interop | 0.5 weeks | 6.5 | v2 interop verified |
+| 7: MCP + browser | 1 week | 7.5 | WebTransport, MCP TS SDK |
+| 8: Discovery + adapters | 0.5 weeks | 8 | LangChain, Vercel AI, migration guide |
+| 9: Native addon (optional) | 1.5 weeks | 9.5 | Native v2 parity |
 
-**Total to feature-complete pure-TS v1: ~5-6 weeks.**
-**With native addon: ~7 weeks.**
+**Total to feature-complete pure-TS v2: ~8 weeks.**
+**With native addon: ~10 weeks.**
 
 ---
 
@@ -1901,6 +2391,11 @@ frameworks.
 | DHT reimplementation too costly for v1 | High | Medium | Defer full Kademlia to v2; use relay directory for v1 |
 | Browser serving not supported | High | Low | Browser = client only for v1; serving via relay/gateway |
 | napi-rs build complexity | Medium | Low | Make it optional; pure-TS is the default |
+| v2 API too complex, hurts adoption | Medium | High | Keep v1 working; gradual migration; deprecation warnings |
+| Streaming MORE flag ambiguity | Low | Medium | Capability-based mode negotiation (unary vs streaming) |
+| ConnectionPool health check overhead | Low | Low | 5s threshold, skip for recent connections |
+| AsyncIterable streaming backpressure | Medium | Medium | Respect QUIC flow control; buffer with bounded queue |
+| HandlerError category mapping drift | Low | Medium | Generate error code table from RFC-0005; CI test |
 
 ---
 
@@ -1910,29 +2405,44 @@ frameworks.
 |----------|--------|
 | Primary approach? | **B: Pure TypeScript** (`@aafp/sdk`) |
 | Performance option? | **D: napi-rs** (`@aafp/sdk-native`, optional) |
+| API target? | **Simple API v2** (Params, onCapability, streaming, pooling, typed errors) |
+| v1 compatibility? | Preserved as deprecated layer (`handler()` wraps as v2 fallback) |
 | Browser strategy? | WebTransport (HTTP/3), client-only for v1 |
 | Node.js < 25 strategy? | WebSocket gateway fallback or native addon |
 | Crypto library? | `@noble/post-quantum` (ML-DSA-65, FIPS 204) |
 | Transport abstraction? | `Transport` / `Connection` / `BidiStream` interfaces |
+| Structured data? | `Params` class wrapping CBOR IntMap (integer keys) |
+| Per-capability routing? | `onCapability(cap, handler)` — HashMap-based dispatch |
+| Cancellation? | `AbortSignal` / `AbortController` (web standard) |
+| Streaming? | `AsyncIterable<Response>` via `for await` (server-streaming + bidi) |
+| Connection reuse? | `ConnectionPool` integrated into `ConnectedAgent` (17x speedup) |
+| Typed errors? | `HandlerError` enum with RFC-0005 categories (8 categories) |
+| Discovery failover? | Loop all candidates; `discoverById()` for direct lookup |
 | MCP integration? | `AafpMcpTransport` implements MCP TS SDK `Transport` interface |
 | Deno / Bun? | Supported via universal ESM + WebTransport/WS fallback |
 | Distribution? | npm + JSR + CDN (browser) |
 | Conformance? | Golden traces from Rust + cross-language CI interop |
 | DHT in v1? | Deferred (relay directory for v1, full Kademlia in v2) |
-| Effort? | 5-6 weeks to feature-complete pure-TS v1 |
+| Effort? | ~8 weeks to feature-complete pure-TS v2 |
 
 ---
 
 ## 17. References
 
 - [NORTH_STAR.md](NORTH_STAR.md) §3 Phase 3 — SDK in 3 languages
+- [SIMPLE_API_V2_DESIGN.md](SIMPLE_API_V2_DESIGN.md) — v2 API design (all 10 gaps)
+- [ADAPTATION_ROADMAP.md](ADAPTATION_ROADMAP.md) — Phase E (TypeScript SDK) dependency
+- [STREAMING_RPC_DESIGN.md](STREAMING_RPC_DESIGN.md) — Streaming RPC over QUIC
+- [SESSION_AFFINITY_DESIGN.md](SESSION_AFFINITY_DESIGN.md) — Connection pooling (50x perf)
 - [PHASE_3_ARCHITECTURE.md](PHASE_3_ARCHITECTURE.md) §3.1 — TypeScript SDK architecture options
 - [INTEROPERABILITY_PLAN.md](INTEROPERABILITY_PLAN.md) — MCP cross-SDK interop plan
 - [RFC-0002](RFCs/0002-transport-framing.md) — Transport, framing, wire format (Rev 6)
 - [RFC-0003](RFCs/0003-identity-authentication.md) — Identity & authentication (ML-DSA-65)
+- [RFC-0005](RFCs/0005-error-model.md) — Error model (typed error codes)
 - [RFC-0007](RFCs/0007-mcp-transport-binding.md) — MCP transport binding
-- `aafp-sdk/src/simple.rs` — Rust simple API (reference)
+- `aafp-sdk/src/simple.rs` — Rust simple API (reference, v1)
 - `aafp-py/src/simple.rs` — Python simple API (PyO3 bridge reference)
+- `aafp-messaging/src/rpc_v1.rs` — RPC v1 (integer-keyed CBOR, A-1/A-2 rules)
 - `@noble/post-quantum` — https://github.com/paulmillr/noble-post-quantum (ML-DSA-65)
 - MCP TypeScript SDK Transport interface — https://ts.sdk.modelcontextprotocol.io
 - Node.js QUIC — https://github.com/nodejs/node/pull/62876 (Node 25+, experimental)
