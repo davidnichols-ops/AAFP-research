@@ -1,8 +1,9 @@
 # AAFP Adaptation Roadmap
 
 **Status:** Living Document
-**Date:** 2025-01-15
-**Synthesizes:** 8 sandbox gap analyses + 5 completed research tracks
+**Date:** 2026-07-05 (updated)
+**Synthesizes:** 8 sandbox gap analyses + 8 completed research documents
+**Strategic frame:** See `INTELLIGENCE_PLANE.md` — the 85% above transport
 
 ---
 
@@ -207,13 +208,43 @@ Phase B (Streaming RPC)
 
 ---
 
-## 8. Next Actions
+## 8. Implementation Status (2026-07-05)
 
-1. **COMPLETE**: P2.7 (Phase A1+C1: Foundation types + Connection pooling) — done
-2. **IN PROGRESS**: P2.8 (Phase B1+B2: Server-streaming + Cancellation) — building
-3. **After P2.8**: Build remaining v2 phases (A4 streaming types, A5 migration)
-4. **After v2 stable**: Build TypeScript SDK (Phase E, 8 weeks per `TYPESCRIPT_SDK_DESIGN.md`)
-5. **Future**: Semantic Capability Graphs (Phase D), Adaptive Routing (Track T), PubSub (Phase E)
+### COMPLETE
+
+1. **P2.7** — Simple API v2 Foundation (Params, metadata, typed errors, per-capability handlers, connection pool, failover) — ✅
+2. **P2.8** — Server-Streaming + Cancellation (streaming handlers, CancellationToken, QUIC stream reset) — ✅
+3. **TypeScript SDK** — ALL 9 PHASES COMPLETE (151 tests, 7 packages, 0 errors) — ✅
+   - CBOR + Crypto, Transport, Server+Client, Streaming+Metrics+Session, Browser+MCP, Packaging
+
+### READY TO BUILD (15 builder prompts)
+
+4. **Semantic Capability Graphs** (Track U) — 3 prompts: SCG_D1-D6
+   - SemanticCapability descriptor, CapabilityQuery, CapabilityIndex, CapabilityGraph, PipelineAssembler, CapabilityPlanner
+5. **Adaptive Routing Plane** (Track T) — 3 prompts: AR_T1-T7
+   - PeerMetricsRegistry, EWMA, 4 selection strategies, CircuitBreaker, Bulkhead, RequestHedging, integration
+6. **PubSub + Back-Channeling** — 3 prompts: PS_P1-P6
+   - Simple API, Event, SubscriptionStream, back-channel topics, MQTT wildcards, GossipSub v1.1, UCAN ACLs
+7. **AgentRecord Extensions** (Track W) — 3 prompts: ARE_E1-E6
+   - Extension trait, GeoExtension, PerformanceExtension, Cost, Semantic, Reputation, DHT integration
+
+### FUTURE (not yet designed)
+
+8. **Fluid Execution** (Track V) — network decides spawning, merging, recovery
+9. **Economic Layer** (Track X) — resource accounting, priority, compensation
+10. **World Perception Layer** (Track Y) — agent-native rendering of web, documents, media
+
+### Strategic Frame
+
+The adaptation roadmap has been reframed. Transport is 15% of the system. The
+other 85% is the **Intelligence Plane** — where network effects happen. Every
+new agent should make every other agent more useful. See
+[`INTELLIGENCE_PLANE.md`](INTELLIGENCE_PLANE.md) for the full design.
+
+**The weekly question:** "If an engineer started an autonomous agent company
+tomorrow, what would make them choose AAFP over simply exposing an HTTPS
+endpoint?" If the answer is "because it's a technically superior transport
+protocol," we're optimizing for the wrong victory condition.
 
 ---
 
@@ -221,6 +252,9 @@ Phase B (Streaming RPC)
 
 | Document | Description |
 |----------|-------------|
+| `INTELLIGENCE_PLANE.md` | The 85% above transport — predictive routing, intent routing, fluid execution |
+| `NORTH_STAR.md` | Strategic direction and current state (updated 2026-07-05) |
+| `STRATEGIC_VISION.md` | Full strategic vision (the agent operating system) |
 | `SIMPLE_API_V2_DESIGN.md` | Complete v2 API design (all 10 gaps) |
 | `STREAMING_RPC_DESIGN.md` | Streaming RPC over QUIC (no wire changes) |
 | `SESSION_AFFINITY_DESIGN.md` | Connection pooling + session affinity (50x perf) |
@@ -229,9 +263,8 @@ Phase B (Streaming RPC)
 | `PUBSUB_BACKCHANNEL_DESIGN.md` | PubSub Simple API, back-channeling, MQTT wildcards |
 | `TYPESCRIPT_SDK_DESIGN.md` | TS SDK architecture (hybrid pure-TS + native) |
 | `ADAPTIVE_ROUTING_PLANE.md` | Dynamic routing, circuit breaker, request hedging |
-| `BUILDER_PROMPT_P2.7.md` | v2 Foundation + Pooling build prompt (P0) |
-| `BUILDER_PROMPT_P2.8.md` | Streaming + Cancellation build prompt (P1) |
-| `NORTH_STAR.md` | Project north star and strategic vision |
+| `OVERNIGHT_BUILDER_HANDOFF.md` | Handoff for builder session (15 prompts) |
+| `builder-prompts/INDEX.md` | Build order and cross-track dependencies |
 | `INTERNET_BRIDGE_PLAN.md` | World Perception Layer blueprint |
 | `PERFORMANCE_REPORT.md` | Performance benchmarks |
 | `ROADMAP.md` | Original project roadmap |

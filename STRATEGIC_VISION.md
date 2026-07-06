@@ -1,22 +1,30 @@
 # AAFP Strategic Vision — The Agent Operating System
 
-**Author:** ChatGPT 5.5 (strategic recommendations)
-**Date:** 2026-07-04
+**Authors:** ChatGPT 5.5 (strategic recommendations), Devin (synthesis + update)
+**Date:** 2026-07-05 (updated from 2026-07-04)
 **Status:** Adopted as guiding vision
 
 ---
 
 ## The Shift
 
-AAFP's objective is not to replace HTTP. Its objective is to become the
-**decentralized execution substrate for autonomous software**. Transport is
-only the foundation. The long-term value lies in creating an adaptive,
-capability-aware, self-optimizing network where agents discover, trust,
-schedule, migrate, and coordinate work without dependence on centralized
-orchestration.
+**Build the operating system that every autonomous AI naturally runs on.**
 
-Every feature should move the protocol toward a network that becomes more
-efficient, resilient, and intelligent as more agents join.
+Protocols don't win because they're technically better. They win because they
+become the easiest way to build things. TCP wasn't fastest. HTTP wasn't most
+efficient. JSON wasn't smallest. Linux wasn't prettiest. Git wasn't simplest.
+They became ecosystems.
+
+AAFP should disappear. Nobody thinks about Linux because Linux disappears.
+When a developer starts an autonomous agent company tomorrow, they should
+choose AAFP not because it's a "technically superior transport protocol" but
+because it's the **easiest, most capable, and most adaptive way to build
+distributed AI systems**.
+
+Transport is 15% of the system. The other 85% is the Intelligence Plane —
+where network effects happen. Every new agent should make every other agent
+more useful. That is the exponential network effect that makes AAFP
+impossible to replace.
 
 ---
 
@@ -31,6 +39,13 @@ the network. If AAFP can achieve the same effect for AI agents — where every
 new agent improves discovery, resilience, execution options, and overall
 capability — it has the foundation for long-term relevance.
 
+**The weekly question:** "If an engineer started an autonomous agent company
+tomorrow, what would make them choose AAFP over simply exposing an HTTPS
+endpoint?" If the answer is "because it's a technically superior transport
+protocol," we're optimizing for the wrong victory condition. If the answer is
+"because it's the easiest, most capable, and most adaptive way to build
+distributed AI systems," we're on track.
+
 ---
 
 ## What AAFP Is (Revised)
@@ -39,22 +54,27 @@ AAFP is not a transport protocol. It is the **operating system of the agent
 internet**. Transport is the kernel. The full stack:
 
 ```
-Applications (MCP, A2A, custom agents)
-    ↓
-World Perception Layer (web, APIs, documents, media, real-world sensing)
-    ↓
-Execution Fabric (scheduling, routing, checkpointing, migration)
-    ↓
-Adaptive Routing Plane (capability graphs, reputation, learning)
-    ↓
-Discovery (semantic capability graphs, not string lookups)
-    ↓
-Trust & Identity (cryptographic + reputation + performance)
-    ↓
-Transport (QUIC + PQ-TLS + CBOR framing + NAT traversal)
-    ↓
-UDP → IP → the same internet everyone uses
+Applications
+────────────────────────────────────────────
+Agent Runtime                          ← SDK (Rust, Python, TypeScript) — COMPLETE
+────────────────────────────────────────────
+Execution Fabric                       ← Phase 4 (fluid execution)
+────────────────────────────────────────────
+Global Memory                          ← Phase 4 (shared state, checkpoints)
+────────────────────────────────────────────
+Adaptive Routing (predictive)          ← Phase 4 (temporal routing engine)
+────────────────────────────────────────────
+Semantic Discovery (planning)          ← Phase 4 (intent routing, marketplace)
+────────────────────────────────────────────
+Trust / Identity (cryptographic)       ← COMPLETE (Track P)
+────────────────────────────────────────────
+AAFP Transport (QUIC + PQ-TLS + CBOR)  ← COMPLETE (Tracks A-S)
+────────────────────────────────────────────
+QUIC
 ```
+
+**Transport is 15% of the system.** The Intelligence Plane is the other 85%.
+See [`INTELLIGENCE_PLANE.md`](INTELLIGENCE_PLANE.md) for the detailed design.
 
 ### The World Perception Layer
 
