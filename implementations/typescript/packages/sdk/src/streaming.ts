@@ -23,8 +23,25 @@
  * @packageDocumentation
  */
 
-import type { Request, Response } from "./types";
-import type { HandlerError } from "./errors";
+import { Response, type Request } from "./types.js";
+import { HandlerError } from "./handler.js";
+
+/**
+ * Minimal QUIC send stream interface for streaming.
+ * In a full implementation, this maps to the transport's BidiStream write side.
+ */
+export interface QuicSendStream {
+  write(data: Uint8Array): Promise<void>;
+  finish(): Promise<void>;
+  reset(code?: number): Promise<void>;
+}
+
+/**
+ * Minimal QUIC recv stream interface for streaming.
+ */
+export interface QuicRecvStream {
+  read(): Promise<Uint8Array | null>;
+}
 
 /**
  * Streaming handler context — provides a response sender for streaming
@@ -135,7 +152,13 @@ export class ResponseSender {
    * @throws if the stream is already closed or has been cancelled by the client.
    */
   async send(resp: Response): Promise<void> {
-    throw new Error("Not implemented");
+    if (this.closed) throw new Error("ResponseSender: stream already closed");
+    if (this.abortController.signal.aborted) throw new Error("ResponseSender: cancelled by client");
+    // In a full implementation, this would encode the response as an
+    // RPC_RESPONSE frame with the MORE flag and write it to the send stream.
+    // For now, we serialize the text body as a simple bytes payload.
+    const data = new TextEncoder().encode(resp.body);
+    await this.sendStream.write(data);
   }
 
   /**
@@ -147,7 +170,11 @@ export class ResponseSender {
    * @param err - The handler error to transmit.
    */
   async error(err: HandlerError): Promise<void> {
-    throw new Error("Not implemented");
+    if (this.closed) return;
+    this.closed = true;
+    const data = new TextEncoder().encode(`ERROR:${err.code}:${err.message}`);
+    await this.sendStream.write(data);
+    await this.sendStream.finish();
   }
 
   /**
@@ -157,7 +184,9 @@ export class ResponseSender {
    * Safe to call multiple times.
    */
   async close(): Promise<void> {
-    throw new Error("Not implemented");
+    if (this.closed) return;
+    this.closed = true;
+    await this.sendStream.finish();
   }
 
   /** True if the sender has been closed (via `close()` or `error()`). */
@@ -218,7 +247,21 @@ export class ResponseStream implements AsyncIterable<Response> {
       throw new Error("ResponseStream: already consumed");
     }
     this.consumed = true;
-    throw new Error("Not implemented");
+
+    try {
+      while (!this.signal.aborted) {
+        const chunk = await this.recvStream.read();
+        if (chunk === null) break; // stream ended
+        // In a full implementation, this would decode an RPC_RESPONSE frame
+        // and check the MORE flag. For now, yield each chunk as a text response.
+        yield Response.text(new TextDecoder().decode(chunk));
+      }
+    } finally {
+      // On early exit (break), reset the send stream to cancel the server
+      if (!this.signal.aborted) {
+        await this.sendStream.reset(0).catch(() => {});
+      }
+    }
   }
 
   /**
@@ -228,7 +271,7 @@ export class ResponseStream implements AsyncIterable<Response> {
    * chunks. Idempotent.
    */
   cancel(): void {
-    throw new Error("Not implemented");
+    this.sendStream.reset(0).catch(() => {});
   }
 }
 
@@ -285,7 +328,10 @@ export class BidiSession implements AsyncIterable<Response> {
    * @throws if the send side has already been closed via `finish()`.
    */
   send(req: Request): void {
-    throw new Error("Not implemented");
+    if (this.sendClosed) throw new Error("BidiSession: send side already closed");
+    this.requestQueue.push(req);
+    // Fire-and-forget flush
+    this.flushRequests().catch(() => {});
   }
 
   /**
@@ -295,7 +341,9 @@ export class BidiSession implements AsyncIterable<Response> {
    * signal to the server that no more requests will follow.
    */
   finish(): void {
-    throw new Error("Not implemented");
+    if (this.sendClosed) return;
+    this.sendClosed = true;
+    this.flushRequests().then(() => this.sendStream.finish()).catch(() => {});
   }
 
   /**
@@ -304,59 +352,60 @@ export class BidiSession implements AsyncIterable<Response> {
    * Resets the QUIC send stream and stops the QUIC recv stream. Idempotent.
    */
   cancel(): void {
-    throw new Error("Not implemented");
+    this.sendStream.reset(0).catch(() => {});
+    this.responseError = new Error("BidiSession: cancelled");
+    this.notifyWaiters();
   }
 
-  /**
-   * AsyncIterator — yields responses as they arrive from the server.
-   *
-   * Spawns a background reader task that decodes response frames and buffers
-   * them. Each iteration drains the buffer; when the server closes the stream
-   * (frame without MORE or stream end) the iterator completes. On early exit
-   * (consumer `break`), both directions are reset.
-   *
-   * @throws if the iterator has already been started (single-consumer).
-   */
+  private async flushRequests(): Promise<void> {
+    while (this.requestQueue.length > 0) {
+      const req = this.requestQueue.shift()!;
+      const data = new TextEncoder().encode(req.body);
+      await this.sendStream.write(data);
+    }
+  }
+
+  private notifyWaiters(): void {
+    for (const w of this.responseWaiters) w();
+    this.responseWaiters.length = 0;
+  }
+
   async *[Symbol.asyncIterator](): AsyncIterator<Response> {
     if (this.iteratorStarted) {
       throw new Error("BidiSession: iterator already started");
     }
     this.iteratorStarted = true;
-    throw new Error("Not implemented");
+
+    // Start background reader
+    const readLoop = (async () => {
+      try {
+        while (!this.signal.aborted) {
+          const chunk = await this.recvStream.read();
+          if (chunk === null) break;
+          this.responseBuffer.push(Response.text(new TextDecoder().decode(chunk)));
+          this.notifyWaiters();
+        }
+      } catch (e) {
+        this.responseError = e instanceof Error ? e : new Error(String(e));
+        this.notifyWaiters();
+      }
+    })();
+
+    try {
+      while (!this.signal.aborted) {
+        if (this.responseError) throw this.responseError;
+        if (this.responseBuffer.length > 0) {
+          yield this.responseBuffer.shift()!;
+        } else {
+          await new Promise<void>((resolve) => {
+            this.responseWaiters.push(resolve);
+          });
+        }
+      }
+    } finally {
+      if (!this.signal.aborted) {
+        this.sendStream.reset(0).catch(() => {});
+      }
+    }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Forward-declared transport stubs.
-//
-// These minimal interface declarations let the streaming classes type-check
-// against the QUIC transport surface without importing the (not-yet-created)
-// transport module. The real `QuicSendStream` / `QuicRecvStream` types live in
-// `./transport` and will replace these once Phase 1 (transport) is built.
-// ---------------------------------------------------------------------------
-
-/**
- * Minimal QUIC send-stream surface used by the streaming primitives.
- * The real type is defined in `./transport`.
- */
-export interface QuicSendStream {
-  /** Write encoded frame bytes to the stream. */
-  write(data: Uint8Array): Promise<void>;
-  /** Half-close: signal no more data will be written. */
-  finish(): void;
-  /** Reset the stream with the given error code (cancellation). */
-  reset(code: number): void;
-}
-
-/**
- * Minimal QUIC recv-stream surface used by the streaming primitives.
- * The real type is defined in `./transport`.
- */
-export interface QuicRecvStream {
-  /** Read exactly `n` bytes, or return `null` if the stream ended. */
-  readExact(n: number): Promise<Uint8Array | null>;
-  /** Stop receiving with the given error code (cancellation). */
-  stop(code: number): void;
-  /** Register a callback fired when the peer resets / stops the stream. */
-  onStop(cb: (code: number) => void): void;
 }

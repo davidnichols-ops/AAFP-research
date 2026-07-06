@@ -16,7 +16,6 @@
     "src/mcp-accept.ts",
     "src/identity-browser.ts",
     "src/browser.ts",
-    "src/streaming.ts",
     "dist",
     "node_modules"
   ]
