@@ -184,7 +184,21 @@ reset, and CBOR Maps all exist but aren't exposed through the Simple API.
 - **Phase B:** Streaming RPC (W3-8) — Server-streaming, client-streaming, bidirectional, cancellation
 - **Phase C:** Session Affinity (W1-7) — ConnectionPool integration, session state, UCAN delegation
 - **Phase D:** Semantic Capability Graphs (W1-12) — Multi-dimensional discovery, pipeline assembly
-- **Phase E:** TypeScript SDK + Adaptive Routing + PubSub (TBD, research in progress)
+- **Phase E:** TypeScript SDK + Adaptive Routing + PubSub + AgentRecord Extensions (research complete)
+
+**All 8 research documents complete** (~11,000 lines total):
+- `SIMPLE_API_V2_DESIGN.md` (1,528 lines) — v2 API addressing all 10 gaps
+- `STREAMING_RPC_DESIGN.md` (1,511 lines) — Streaming RPC over QUIC, no wire changes
+- `SESSION_AFFINITY_DESIGN.md` (1,018 lines) — Connection pooling, 50x perf
+- `TYPESCRIPT_SDK_DESIGN.md` (2,449 lines) — Hybrid pure-TS + native addon, v2-targeted
+- `SEMANTIC_CAPABILITY_GRAPHS.md` (520 lines) — Track U semantic discovery
+- `AGENT_RECORD_EXTENSIONS.md` (1,382 lines) — Extension map, attested metrics
+- `PUBSUB_BACKCHANNEL_DESIGN.md` (1,004 lines) — PubSub API, back-channeling, MQTT wildcards
+- `ADAPTIVE_ROUTING_PLANE.md` (1,647 lines) — Dynamic routing, circuit breaker, hedging
+
+**Builder prompts ready:**
+- `BUILDER_PROMPT_P2.7.md` — v2 Foundation + Connection Pooling (P0)
+- `BUILDER_PROMPT_P2.8.md` — Server-Streaming + Cancellation (P1, after P2.7)
 
 **Phase 3: Build the ecosystem (ongoing)**
 - SDK in Rust, Python, TypeScript (3 languages minimum)
@@ -511,7 +525,8 @@ capability graph.
 **Completed:** 326/326 steps — **ALL TRACKS COMPLETE**
 **Codebase:** 17 Rust crates, ~76K lines
 **Phase 2 progress:** P2.1-P2.6 complete (6/10)
-**Adaptation research:** 5 design documents complete, 4 in progress
+**Adaptation research:** ALL 8 design documents complete (~11,000 lines)
+**Builder prompts:** P2.7 (P0) + P2.8 (P1) ready for implementation
 
 ### v1 "Internet-Ready" — ACHIEVED
 

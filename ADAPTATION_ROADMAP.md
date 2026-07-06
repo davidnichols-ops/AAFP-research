@@ -45,14 +45,14 @@ Eight parallel sandbox tests exercised the AAFP Simple API against mainstream ag
 | `SESSION_AFFINITY_DESIGN.md` | Connection Reuse | Complete | 50x perf improvement by integrating existing ConnectionPool |
 | `SEMANTIC_CAPABILITY_GRAPHS.md` | Track U | Complete (summary) | Lightweight ontology + CBOR, no full OWL/RDF needed |
 
-### 2.1 Pending Research (rate-limited, need retry)
+### 2.1 Additional Research (all complete)
 
 | Document | Track | Status |
 |----------|-------|--------|
-| AgentRecord Extensions | Identity | Pending retry |
-| PubSub + Back-Channeling | Messaging | Pending retry |
-| TypeScript SDK Architecture | SDK | Pending retry |
-| Adaptive Routing Plane | Track T | Pending retry |
+| AgentRecord Extensions | Identity | Complete (1,382 lines) |
+| PubSub + Back-Channeling | Messaging | Complete (1,004 lines) |
+| TypeScript SDK Architecture | SDK | Complete (2,449 lines, v2-targeted) |
+| Adaptive Routing Plane | Track T | Complete (1,647 lines) |
 
 ---
 
@@ -130,14 +130,14 @@ Eight parallel sandbox tests exercised the AAFP Simple API against mainstream ag
 
 **Key Insight**: Use lightweight ontology (not full OWL/RDF). Leverage existing `CapabilityDescriptor.metadata` field. Queries evaluated locally after DHT retrieval.
 
-### Phase E: Pending Research (TBD)
+### Phase E: Additional Research (all complete)
 
-| Track | Research Needed | Dependency |
-|-------|----------------|------------|
-| AgentRecord Extensions | How to extend AgentRecord with reputation, performance history, geo-location | Phase D |
-| PubSub + Back-Channeling | How to expose RFC-0009 PubSub through Simple API | Phase B |
-| TypeScript SDK | WASM vs native vs bridge vs napi-rs approach | Phase A (API surface) |
-| Adaptive Routing (Track T) | Dynamic metrics overlay on static capability graph | Phase D |
+| Track | Document | Lines | Key Finding |
+|-------|----------|-------|-------------|
+| AgentRecord Extensions | `AGENT_RECORD_EXTENSIONS.md` | 1,382 | Extension map at CBOR key 11, versioned namespaces, attested metrics |
+| PubSub + Back-Channeling | `PUBSUB_BACKCHANNEL_DESIGN.md` | 1,004 | Simple API for PubSub, back-channel via progress topic, MQTT wildcards |
+| TypeScript SDK | `TYPESCRIPT_SDK_DESIGN.md` | 2,449 | Hybrid pure-TS + native addon, targets v2 API, 9-phase roadmap |
+| Adaptive Routing (Track T) | `ADAPTIVE_ROUTING_PLANE.md` | 1,647 | Composite scoring, P2C selection, circuit breaker, request hedging |
 
 ---
 
@@ -209,11 +209,11 @@ Phase B (Streaming RPC)
 
 ## 8. Next Actions
 
-1. **Immediately**: Begin Phase A1 (Foundation types) + Phase C1 (Basic pooling) — these are independent and can proceed in parallel
-2. **Retry pending research**: Re-dispatch 4 rate-limited research agents (AgentRecord, PubSub, TypeScript SDK, Adaptive Routing)
-3. **After A1+C1**: Begin A2 (Server-side) + B1 (Server-streaming) in parallel
-4. **After A2**: Begin A3 (Client-side) — completes the v2 API surface
-5. **After A3**: Begin E (TypeScript SDK) — needs stable API surface first
+1. **Immediately**: Build P2.7 (Phase A1+C1: Foundation types + Connection pooling) — builder prompt ready at `BUILDER_PROMPT_P2.7.md`
+2. **After P2.7**: Build P2.8 (Phase B1+B2: Server-streaming + Cancellation) — builder prompt ready at `BUILDER_PROMPT_P2.8.md`
+3. **After P2.8**: Build remaining v2 phases (A4 streaming types, A5 migration)
+4. **After v2 stable**: Build TypeScript SDK (Phase E, 8 weeks per `TYPESCRIPT_SDK_DESIGN.md`)
+5. **Future**: Semantic Capability Graphs (Phase D), Adaptive Routing (Track T), PubSub (Phase E)
 
 ---
 
@@ -225,6 +225,12 @@ Phase B (Streaming RPC)
 | `STREAMING_RPC_DESIGN.md` | Streaming RPC over QUIC (no wire changes) |
 | `SESSION_AFFINITY_DESIGN.md` | Connection pooling + session affinity (50x perf) |
 | `SEMANTIC_CAPABILITY_GRAPHS.md` | Semantic capability discovery (Track U) |
+| `AGENT_RECORD_EXTENSIONS.md` | AgentRecord extension map, attested metrics |
+| `PUBSUB_BACKCHANNEL_DESIGN.md` | PubSub Simple API, back-channeling, MQTT wildcards |
+| `TYPESCRIPT_SDK_DESIGN.md` | TS SDK architecture (hybrid pure-TS + native) |
+| `ADAPTIVE_ROUTING_PLANE.md` | Dynamic routing, circuit breaker, request hedging |
+| `BUILDER_PROMPT_P2.7.md` | v2 Foundation + Pooling build prompt (P0) |
+| `BUILDER_PROMPT_P2.8.md` | Streaming + Cancellation build prompt (P1) |
 | `NORTH_STAR.md` | Project north star and strategic vision |
 | `INTERNET_BRIDGE_PLAN.md` | World Perception Layer blueprint |
 | `PERFORMANCE_REPORT.md` | Performance benchmarks |
