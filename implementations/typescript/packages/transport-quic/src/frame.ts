@@ -183,7 +183,44 @@ export function frameTypeFromU8(val: number): FrameType {
  * @throws {FrameError} If the payload or extensions exceed their maximum sizes.
  */
 export function encodeFrame(frame: Frame): Uint8Array {
-  throw new Error("Not implemented");
+  if (frame.payload.length > MAX_PAYLOAD_SIZE) {
+    throw new FrameError(
+      "PayloadTooLarge",
+      `payload too large: ${frame.payload.length} > ${MAX_PAYLOAD_SIZE}`,
+    );
+  }
+  if (frame.extensions.length > MAX_EXTENSION_SIZE) {
+    throw new FrameError(
+      "ExtensionTooLarge",
+      `extension too large: ${frame.extensions.length} > ${MAX_EXTENSION_SIZE}`,
+    );
+  }
+
+  const totalLen = FRAME_HEADER_SIZE + frame.extensions.length + frame.payload.length;
+  const buf = new ArrayBuffer(totalLen);
+  const view = new DataView(buf);
+  const bytes = new Uint8Array(buf);
+
+  // Header (28 bytes, big-endian)
+  let off = 0;
+  bytes[off] = frame.version; off += 1;
+  bytes[off] = frame.type; off += 1;
+  bytes[off] = frame.flags; off += 1;
+  bytes[off] = 0; off += 1; // reserved
+
+  // Stream ID (8 bytes, big-endian)
+  view.setBigUint64(off, frame.streamId, false); off += 8;
+  // Payload length (8 bytes, big-endian)
+  view.setBigUint64(off, BigInt(frame.payload.length), false); off += 8;
+  // Extension length (8 bytes, big-endian)
+  view.setBigUint64(off, BigInt(frame.extensions.length), false); off += 8;
+
+  // Body: extensions then payload
+  bytes.set(frame.extensions, off);
+  off += frame.extensions.length;
+  bytes.set(frame.payload, off);
+
+  return bytes;
 }
 
 /**
@@ -199,7 +236,71 @@ export function encodeFrame(frame: Frame): Uint8Array {
  *   sections, or unknown frame type with critical bit set.
  */
 export function decodeFrame(data: Uint8Array): { frame: Frame; consumed: number } {
-  throw new Error("Not implemented");
+  if (data.length < FRAME_HEADER_SIZE) {
+    throw new FrameError(
+      "Incomplete",
+      `need ${FRAME_HEADER_SIZE} header bytes, have ${data.length}`,
+      FRAME_HEADER_SIZE,
+      data.length,
+    );
+  }
+
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let off = 0;
+
+  const version = data[off]!;
+  off += 1;
+  const type = frameTypeFromU8(data[off]!);
+  off += 1;
+  const flags = data[off]!;
+  off += 1;
+  off += 1; // reserved
+
+  const streamId = view.getBigUint64(off, false);
+  off += 8;
+  const payloadLen = Number(view.getBigUint64(off, false));
+  off += 8;
+  const extLen = Number(view.getBigUint64(off, false));
+  off += 8;
+
+  if (version !== AAFP_VERSION) {
+    throw new FrameError(
+      "InvalidVersion",
+      `invalid AAFP version: expected ${AAFP_VERSION}, got ${version}`,
+    );
+  }
+  if (payloadLen > MAX_PAYLOAD_SIZE) {
+    throw new FrameError(
+      "PayloadTooLarge",
+      `payload too large: ${payloadLen} > ${MAX_PAYLOAD_SIZE}`,
+    );
+  }
+  if (extLen > MAX_EXTENSION_SIZE) {
+    throw new FrameError(
+      "ExtensionTooLarge",
+      `extension too large: ${extLen} > ${MAX_EXTENSION_SIZE}`,
+    );
+  }
+
+  const bodyLen = extLen + payloadLen;
+  if (off + bodyLen > data.length) {
+    throw new FrameError(
+      "Incomplete",
+      `need ${off + bodyLen} bytes, have ${data.length}`,
+      off + bodyLen,
+      data.length,
+    );
+  }
+
+  const extensions = data.slice(off, off + extLen);
+  off += extLen;
+  const payload = data.slice(off, off + payloadLen);
+  off += payloadLen;
+
+  return {
+    frame: { version, type, flags, streamId, payload, extensions },
+    consumed: off,
+  };
 }
 
 /**
@@ -210,7 +311,14 @@ export function decodeFrame(data: Uint8Array): { frame: Frame; consumed: number 
  * @returns A `Frame` with type `Data`.
  */
 export function dataFrame(streamId: bigint, payload: Uint8Array): Frame {
-  throw new Error("Not implemented");
+  return {
+    version: AAFP_VERSION,
+    type: FrameType.Data,
+    flags: 0,
+    streamId,
+    payload,
+    extensions: new Uint8Array(0),
+  };
 }
 
 /**
@@ -220,7 +328,14 @@ export function dataFrame(streamId: bigint, payload: Uint8Array): Frame {
  * @returns A `Frame` with type `Handshake` and stream ID 0.
  */
 export function handshakeFrame(payload: Uint8Array): Frame {
-  throw new Error("Not implemented");
+  return {
+    version: AAFP_VERSION,
+    type: FrameType.Handshake,
+    flags: 0,
+    streamId: 0n,
+    payload,
+    extensions: new Uint8Array(0),
+  };
 }
 
 /**
@@ -230,7 +345,14 @@ export function handshakeFrame(payload: Uint8Array): Frame {
  * @returns A `Frame` with type `Ping` and empty payload.
  */
 export function pingFrame(streamId: bigint): Frame {
-  throw new Error("Not implemented");
+  return {
+    version: AAFP_VERSION,
+    type: FrameType.Ping,
+    flags: 0,
+    streamId,
+    payload: new Uint8Array(0),
+    extensions: new Uint8Array(0),
+  };
 }
 
 /**
@@ -240,7 +362,14 @@ export function pingFrame(streamId: bigint): Frame {
  * @returns A `Frame` with type `Pong` and empty payload.
  */
 export function pongFrame(streamId: bigint): Frame {
-  throw new Error("Not implemented");
+  return {
+    version: AAFP_VERSION,
+    type: FrameType.Pong,
+    flags: 0,
+    streamId,
+    payload: new Uint8Array(0),
+    extensions: new Uint8Array(0),
+  };
 }
 
 /**
@@ -250,7 +379,7 @@ export function pongFrame(streamId: bigint): Frame {
  * @returns A new frame with the MORE flag set.
  */
 export function withMore(frame: Frame): Frame {
-  throw new Error("Not implemented");
+  return { ...frame, flags: frame.flags | FrameFlags.MORE };
 }
 
 /**
@@ -260,7 +389,7 @@ export function withMore(frame: Frame): Frame {
  * @returns `true` if the MORE flag is set.
  */
 export function hasMore(frame: Frame): boolean {
-  throw new Error("Not implemented");
+  return (frame.flags & FrameFlags.MORE) !== 0;
 }
 
 /**
@@ -270,5 +399,5 @@ export function hasMore(frame: Frame): boolean {
  * @returns The total number of bytes the frame occupies on the wire.
  */
 export function wireSize(frame: Frame): number {
-  throw new Error("Not implemented");
+  return FRAME_HEADER_SIZE + frame.extensions.length + frame.payload.length;
 }

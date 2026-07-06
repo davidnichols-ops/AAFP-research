@@ -132,7 +132,15 @@ export const DEFAULT_CONFIG: TransportConfig = {
  * @returns A `TransportConfig` tuned for low-latency RPC.
  */
 export function lowLatencyConfig(): TransportConfig {
-  throw new Error("Not implemented");
+  return {
+    ...DEFAULT_CONFIG,
+    congestion: CongestionController.Bbr,
+    initialRttMs: 10,
+    maxAckDelayMs: 5,
+    streamInitialMaxData: 1024 * 1024,
+    keepAliveIntervalMs: 10_000,
+    maxIdleTimeoutMs: 10_000,
+  };
 }
 
 /**
@@ -144,5 +152,13 @@ export function lowLatencyConfig(): TransportConfig {
  * @returns A `TransportConfig` tuned for bulk data transfer.
  */
 export function bulkTransferConfig(): TransportConfig {
-  throw new Error("Not implemented");
+  return {
+    ...DEFAULT_CONFIG,
+    congestion: CongestionController.Cubic,
+    initialRttMs: 100,
+    maxAckDelayMs: 25,
+    streamInitialMaxData: 10 * 1024 * 1024,
+    keepAliveIntervalMs: 60_000,
+    maxIdleTimeoutMs: 300_000,
+  };
 }

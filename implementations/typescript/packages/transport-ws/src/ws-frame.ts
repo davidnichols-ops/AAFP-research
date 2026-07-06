@@ -62,7 +62,17 @@ export interface WsFrame {
  * @returns The encoded bytes (13-byte header + payload).
  */
 export function encodeWsFrame(frame: WsFrame): Uint8Array {
-  throw new Error("Not implemented");
+  const total = WS_FRAME_HEADER_SIZE + frame.payload.length;
+  const buf = new ArrayBuffer(total);
+  const view = new DataView(buf);
+  const bytes = new Uint8Array(buf);
+
+  bytes[0] = frame.op;
+  view.setBigUint64(1, frame.streamId, false);
+  view.setUint32(9, frame.payload.length, false);
+  bytes.set(frame.payload, WS_FRAME_HEADER_SIZE);
+
+  return bytes;
 }
 
 /**
@@ -73,7 +83,19 @@ export function encodeWsFrame(frame: WsFrame): Uint8Array {
  * @throws {Error} If the buffer is too short for a complete frame.
  */
 export function decodeWsFrame(data: Uint8Array): { frame: WsFrame; consumed: number } {
-  throw new Error("Not implemented");
+  if (data.length < WS_FRAME_HEADER_SIZE) {
+    throw new Error(`incomplete WS frame: need ${WS_FRAME_HEADER_SIZE} bytes, have ${data.length}`);
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const op = data[0]! as WsStreamOp;
+  const streamId = view.getBigUint64(1, false);
+  const payloadLen = view.getUint32(9, false);
+
+  if (data.length < WS_FRAME_HEADER_SIZE + payloadLen) {
+    throw new Error(`incomplete WS frame: need ${WS_FRAME_HEADER_SIZE + payloadLen} bytes, have ${data.length}`);
+  }
+  const payload = data.slice(WS_FRAME_HEADER_SIZE, WS_FRAME_HEADER_SIZE + payloadLen);
+  return { frame: { op, streamId, payload }, consumed: WS_FRAME_HEADER_SIZE + payloadLen };
 }
 
 /**
@@ -84,7 +106,7 @@ export function decodeWsFrame(data: Uint8Array): { frame: WsFrame; consumed: num
  * @returns A `WsFrame` with op `DATA`.
  */
 export function wsDataFrame(streamId: bigint, payload: Uint8Array): WsFrame {
-  throw new Error("Not implemented");
+  return { op: WsStreamOp.DATA, streamId, payload };
 }
 
 /**
@@ -94,7 +116,7 @@ export function wsDataFrame(streamId: bigint, payload: Uint8Array): WsFrame {
  * @returns A `WsFrame` with op `FIN` and empty payload.
  */
 export function wsFinFrame(streamId: bigint): WsFrame {
-  throw new Error("Not implemented");
+  return { op: WsStreamOp.FIN, streamId, payload: new Uint8Array(0) };
 }
 
 /**
@@ -104,7 +126,7 @@ export function wsFinFrame(streamId: bigint): WsFrame {
  * @returns A `WsFrame` with op `RESET` and empty payload.
  */
 export function wsResetFrame(streamId: bigint): WsFrame {
-  throw new Error("Not implemented");
+  return { op: WsStreamOp.RESET, streamId, payload: new Uint8Array(0) };
 }
 
 /**
@@ -114,7 +136,7 @@ export function wsResetFrame(streamId: bigint): WsFrame {
  * @returns A `WsFrame` with op `PING` and empty payload.
  */
 export function wsPingFrame(streamId: bigint): WsFrame {
-  throw new Error("Not implemented");
+  return { op: WsStreamOp.PING, streamId, payload: new Uint8Array(0) };
 }
 
 /**
@@ -124,7 +146,7 @@ export function wsPingFrame(streamId: bigint): WsFrame {
  * @returns A `WsFrame` with op `PONG` and empty payload.
  */
 export function wsPongFrame(streamId: bigint): WsFrame {
-  throw new Error("Not implemented");
+  return { op: WsStreamOp.PONG, streamId, payload: new Uint8Array(0) };
 }
 
 /**
@@ -134,5 +156,5 @@ export function wsPongFrame(streamId: bigint): WsFrame {
  * @returns A `WsFrame` with op `OPEN_BIDI` and empty payload.
  */
 export function wsOpenBidiFrame(streamId: bigint): WsFrame {
-  throw new Error("Not implemented");
+  return { op: WsStreamOp.OPEN_BIDI, streamId, payload: new Uint8Array(0) };
 }
