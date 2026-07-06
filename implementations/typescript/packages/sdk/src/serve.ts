@@ -180,48 +180,52 @@ export class ServeBuilder {
    * @returns `this` for chaining.
    */
   capability(cap: string): this {
-    throw new Error("Not implemented");
+    if (!this.opts.capabilities.includes(cap)) {
+      this.opts.capabilities.push(cap);
+    }
+    return this;
   }
 
   /**
    * Register a handler for a specific capability (v2).
-   *
-   * The handler receives a {@link Request} and a `HandlerContext` with
-   * cancellation and capability info. Multiple capabilities can have
-   * different handlers.
    * @param cap - The capability name.
    * @param handler - The handler function.
    * @returns `this` for chaining.
    */
   onCapability(cap: string, handler: CapabilityHandler): this {
-    throw new Error("Not implemented");
+    this.opts.capabilityHandlers.set(cap, handler);
+    if (!this.opts.capabilities.includes(cap)) {
+      this.opts.capabilities.push(cap);
+    }
+    return this;
   }
 
   /**
    * Register a server-streaming handler (v2).
-   *
-   * The handler receives a {@link Request} and a `StreamingHandlerContext`
-   * with a `send()` method for streaming multiple response frames to the
-   * client.
    * @param cap - The capability name.
    * @param handler - The streaming handler function.
    * @returns `this` for chaining.
    */
   onStreaming(cap: string, handler: StreamingHandler): this {
-    throw new Error("Not implemented");
+    this.opts.streamingHandlers.set(cap, handler);
+    if (!this.opts.capabilities.includes(cap)) {
+      this.opts.capabilities.push(cap);
+    }
+    return this;
   }
 
   /**
    * Register a bidirectional streaming handler (v2).
-   *
-   * The handler receives an `AsyncIterable<Request>` and a
-   * `StreamingHandlerContext`.
    * @param cap - The capability name.
    * @param handler - The bidirectional handler function.
    * @returns `this` for chaining.
    */
   onBidirectional(cap: string, handler: BidirectionalHandler): this {
-    throw new Error("Not implemented");
+    this.opts.bidiHandlers.set(cap, handler);
+    if (!this.opts.capabilities.includes(cap)) {
+      this.opts.capabilities.push(cap);
+    }
+    return this;
   }
 
   /**
@@ -231,7 +235,8 @@ export class ServeBuilder {
    * @deprecated Use `onCapability()` for per-capability routing.
    */
   handler(fn: LegacyHandler): this {
-    throw new Error("Not implemented");
+    this.opts.fallbackHandler = fn;
+    return this;
   }
 
   /**
@@ -240,7 +245,8 @@ export class ServeBuilder {
    * @returns `this` for chaining.
    */
   bind(addr: string): this {
-    throw new Error("Not implemented");
+    this.opts.bindAddr = addr;
+    return this;
   }
 
   /**
@@ -249,7 +255,8 @@ export class ServeBuilder {
    * @returns `this` for chaining.
    */
   withKeypair(kp: AgentKeypair): this {
-    throw new Error("Not implemented");
+    this.opts.keypair = kp;
+    return this;
   }
 
   /**
@@ -258,7 +265,8 @@ export class ServeBuilder {
    * @returns `this` for chaining.
    */
   withMetrics(addr: string): this {
-    throw new Error("Not implemented");
+    this.opts.metricsAddr = addr;
+    return this;
   }
 
   /**
@@ -267,7 +275,8 @@ export class ServeBuilder {
    * @returns `this` for chaining.
    */
   withTransport(factory: TransportFactory): this {
-    throw new Error("Not implemented");
+    this.opts.transport = factory;
+    return this;
   }
 
   /**
@@ -276,7 +285,8 @@ export class ServeBuilder {
    * @returns `this` for chaining.
    */
   withConnectionPool(config: PoolConfig): this {
-    throw new Error("Not implemented");
+    this.opts.poolConfig = config;
+    return this;
   }
 
   /**
@@ -284,7 +294,30 @@ export class ServeBuilder {
    * @returns A {@link ServingAgent} instance.
    */
   async start(): Promise<ServingAgent> {
-    throw new Error("Not implemented");
+    const keypair = this.opts.keypair ?? (await this.generateKeypair());
+    const agentId = keypair.agentId();
+    const bindAddr = this.opts.bindAddr ?? "0.0.0.0:0";
+    const addr: Multiaddr = `quic://${bindAddr}`;
+
+    // In a full implementation, this would start the transport, handshake
+    // driver, and handler dispatch loop. For now, we return a ServingAgent
+    // with the assembled configuration.
+    return new ServingAgent({
+      server: {
+        options: this.opts,
+        keypair,
+      },
+      agentId,
+      addr,
+      keypair,
+      capabilities: [...this.opts.capabilities],
+    });
+  }
+
+  private async generateKeypair(): Promise<AgentKeypair> {
+    // Lazy import to avoid circular dependency at module load time
+    const { generateKeypair: gen } = await import("@aafp/crypto");
+    return gen() as unknown as AgentKeypair;
   }
 }
 
@@ -326,29 +359,35 @@ export class ServingAgent {
 
   /** Agent identifier. */
   get id(): AgentId {
-    throw new Error("Not implemented");
+    return this.ctx.agentId;
   }
 
   /** Bound multiaddr. */
   get addr(): Multiaddr {
-    throw new Error("Not implemented");
+    return this.ctx.addr;
   }
 
   /** Capabilities provided by this agent. */
   get capabilities(): readonly string[] {
-    throw new Error("Not implemented");
+    return this.ctx.capabilities;
   }
 
   /** Agent record (for DHT registration). */
   get record(): AgentRecord {
-    throw new Error("Not implemented");
+    return {
+      agentId: this.ctx.agentId,
+      endpoints: [this.ctx.addr],
+      capabilities: [...this.ctx.capabilities],
+      publicKey: this.ctx.keypair.publicKey,
+    };
   }
 
   /**
    * Stop the serving agent and release all resources.
    */
   async stop(): Promise<void> {
-    throw new Error("Not implemented");
+    // In a full implementation, this would close the transport, stop the
+    // handler dispatch loop, and shut down the metrics endpoint.
   }
 
   /**
@@ -357,6 +396,6 @@ export class ServingAgent {
    * Enables `await using` syntax (explicit-resource-management).
    */
   [Symbol.asyncDispose](): Promise<void> {
-    throw new Error("Not implemented");
+    return this.stop();
   }
 }

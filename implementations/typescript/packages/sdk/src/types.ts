@@ -7,6 +7,48 @@
  * @module types
  */
 
+// ─── Core identity types ────────────────────────────────────────
+
+/**
+ * Agent identifier (hex string of SHA-256(publicKey)).
+ */
+export type AgentId = string;
+
+/**
+ * Multiaddr string identifying a transport endpoint.
+ */
+export type Multiaddr = string;
+
+/**
+ * Agent keypair interface — mirrors `AgentKeypair` from `@aafp/crypto`.
+ */
+export interface AgentKeypair {
+  /** The 1952-byte public key. */
+  readonly publicKey: Uint8Array;
+  /** The 4032-byte secret key. */
+  readonly secretKey: Uint8Array;
+  /** Derive the agent's ID (hex of SHA-256(publicKey)). */
+  agentId(): AgentId;
+  /** Sign a message. */
+  sign(msg: Uint8Array): Uint8Array;
+  /** Verify a signature. */
+  verify(msg: Uint8Array, sig: Uint8Array): boolean;
+}
+
+/**
+ * Agent record for DHT registration.
+ */
+export interface AgentRecord {
+  /** Agent identifier. */
+  agentId: AgentId;
+  /** List of endpoint addresses. */
+  endpoints: Multiaddr[];
+  /** Capabilities provided by this agent. */
+  capabilities: string[];
+  /** Agent public key. */
+  publicKey: Uint8Array;
+}
+
 // ─── CborValue (discriminated union for CBOR items) ─────────────
 
 /**
@@ -58,7 +100,7 @@ export class Params {
    * @returns A new empty Params instance.
    */
   static create(): Params {
-    throw new Error("Not implemented");
+    return new Params();
   }
 
   /**
@@ -68,7 +110,8 @@ export class Params {
    * @returns `this` for chaining.
    */
   putStr(key: number, value: string): this {
-    throw new Error("Not implemented");
+    this.entries.set(key, { type: "text", value });
+    return this;
   }
 
   /**
@@ -78,7 +121,8 @@ export class Params {
    * @returns `this` for chaining.
    */
   putBytes(key: number, value: Uint8Array): this {
-    throw new Error("Not implemented");
+    this.entries.set(key, { type: "bytes", value });
+    return this;
   }
 
   /**
@@ -88,7 +132,8 @@ export class Params {
    * @returns `this` for chaining.
    */
   putU64(key: number, value: number): this {
-    throw new Error("Not implemented");
+    this.entries.set(key, { type: "unsigned", value });
+    return this;
   }
 
   /**
@@ -98,7 +143,8 @@ export class Params {
    * @returns `this` for chaining.
    */
   putBool(key: number, value: boolean): this {
-    throw new Error("Not implemented");
+    this.entries.set(key, { type: "bool", value });
+    return this;
   }
 
   /**
@@ -107,7 +153,8 @@ export class Params {
    * @returns The string value, or `undefined` if not present or not a string.
    */
   getStr(key: number): string | undefined {
-    throw new Error("Not implemented");
+    const v = this.entries.get(key);
+    return v?.type === "text" ? v.value : undefined;
   }
 
   /**
@@ -116,7 +163,8 @@ export class Params {
    * @returns The byte array, or `undefined` if not present or not bytes.
    */
   getBytes(key: number): Uint8Array | undefined {
-    throw new Error("Not implemented");
+    const v = this.entries.get(key);
+    return v?.type === "bytes" ? v.value : undefined;
   }
 
   /**
@@ -125,7 +173,8 @@ export class Params {
    * @returns The unsigned integer, or `undefined` if not present or not unsigned.
    */
   getU64(key: number): number | undefined {
-    throw new Error("Not implemented");
+    const v = this.entries.get(key);
+    return v?.type === "unsigned" ? v.value : undefined;
   }
 
   /**
@@ -134,17 +183,18 @@ export class Params {
    * @returns The boolean value, or `undefined` if not present or not a bool.
    */
   getBool(key: number): boolean | undefined {
-    throw new Error("Not implemented");
+    const v = this.entries.get(key);
+    return v?.type === "bool" ? v.value : undefined;
   }
 
   /** Whether the params container has no entries. */
   get isEmpty(): boolean {
-    throw new Error("Not implemented");
+    return this.entries.size === 0;
   }
 
   /** Number of entries in the params container. */
   get length(): number {
-    throw new Error("Not implemented");
+    return this.entries.size;
   }
 
   /**
@@ -152,7 +202,8 @@ export class Params {
    * @returns A CBOR int-map value.
    */
   toCbor(): CborValue {
-    throw new Error("Not implemented");
+    const sorted = [...this.entries.entries()].sort((a, b) => a[0] - b[0]);
+    return { type: "int-map", entries: sorted };
   }
 
   /**
@@ -161,7 +212,13 @@ export class Params {
    * @returns A Params populated from the int-map entries.
    */
   static fromCbor(val: CborValue): Params {
-    throw new Error("Not implemented");
+    const p = new Params();
+    if (val.type === "int-map") {
+      for (const [key, v] of val.entries) {
+        p.entries.set(key, v);
+      }
+    }
+    return p;
   }
 }
 
@@ -225,13 +282,6 @@ export class Request {
   /** Request metadata (v2). */
   readonly metadata: RequestMetadata;
 
-  /**
-   * Private constructor — use static factory methods instead.
-   * @param params - Structured parameters.
-   * @param text - Text body.
-   * @param data - Binary payload or null.
-   * @param metadata - Request metadata.
-   */
   private constructor(
     params: Params,
     text: string,
@@ -250,7 +300,7 @@ export class Request {
    * @returns A new Request.
    */
   static withParams(params: Params): Request {
-    throw new Error("Not implemented");
+    return new Request(params, "", null, { capability: "" });
   }
 
   /**
@@ -259,7 +309,7 @@ export class Request {
    * @returns A new Request with the given text.
    */
   static text(body: string): Request {
-    throw new Error("Not implemented");
+    return new Request(Params.create(), body, null, { capability: "" });
   }
 
   /**
@@ -268,17 +318,17 @@ export class Request {
    * @returns A new Request with the given data.
    */
   static data(payload: Uint8Array): Request {
-    throw new Error("Not implemented");
+    return new Request(Params.create(), "", payload, { capability: "" });
   }
 
   /** Get the text body of the request (v1 compat). */
   get body(): string {
-    throw new Error("Not implemented");
+    return this.text;
   }
 
   /** Get the binary payload, if any. */
   get payload(): Uint8Array | null {
-    throw new Error("Not implemented");
+    return this.data;
   }
 
   /**
@@ -287,7 +337,9 @@ export class Request {
    * @returns A new Request with updated metadata.
    */
   withMetadata(fn: (m: RequestMetadata) => void): Request {
-    throw new Error("Not implemented");
+    const m = { ...this.metadata };
+    fn(m);
+    return new Request(this.params, this.text, this.data, m);
   }
 }
 
@@ -318,13 +370,6 @@ export class Response {
   /** Response metadata (v2). */
   readonly metadata: ResponseMetadata;
 
-  /**
-   * Private constructor — use static factory methods instead.
-   * @param result - Structured result params.
-   * @param text - Text body.
-   * @param data - Binary payload or null.
-   * @param metadata - Response metadata.
-   */
   private constructor(
     result: Params,
     text: string,
@@ -343,7 +388,7 @@ export class Response {
    * @returns A new Response.
    */
   static withResult(result: Params): Response {
-    throw new Error("Not implemented");
+    return new Response(result, "", null, { extra: {} });
   }
 
   /**
@@ -352,7 +397,7 @@ export class Response {
    * @returns A new Response with the given text.
    */
   static text(body: string): Response {
-    throw new Error("Not implemented");
+    return new Response(Params.create(), body, null, { extra: {} });
   }
 
   /**
@@ -361,17 +406,17 @@ export class Response {
    * @returns A new Response with the given data.
    */
   static data(payload: Uint8Array): Response {
-    throw new Error("Not implemented");
+    return new Response(Params.create(), "", payload, { extra: {} });
   }
 
   /** Get the text body of the response (v1 compat). */
   get body(): string {
-    throw new Error("Not implemented");
+    return this.text;
   }
 
   /** Get the binary payload, if any. */
   get payload(): Uint8Array | null {
-    throw new Error("Not implemented");
+    return this.data;
   }
 
   /**
@@ -380,6 +425,8 @@ export class Response {
    * @returns A new Response with updated metadata.
    */
   withMetadata(fn: (m: ResponseMetadata) => void): Response {
-    throw new Error("Not implemented");
+    const m = { ...this.metadata, extra: { ...this.metadata.extra } };
+    fn(m);
+    return new Response(this.result, this.text, this.data, m);
   }
 }

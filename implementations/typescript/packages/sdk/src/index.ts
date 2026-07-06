@@ -8,7 +8,7 @@
  */
 
 // ─── types.ts ───────────────────────────────────────────────────
-export type { CborValue, RequestMetadata, ResponseMetadata } from "./types.js";
+export type { CborValue, RequestMetadata, ResponseMetadata, AgentId, Multiaddr, AgentKeypair, AgentRecord } from "./types.js";
 export { Params, Request, Response } from "./types.js";
 
 // ─── handler.ts ─────────────────────────────────────────────────
@@ -29,21 +29,16 @@ export type {
 export { ServeBuilder, ServingAgent } from "./serve.js";
 export type {
   ServeOptions,
-  AgentId,
-  Multiaddr,
-  AgentRecord,
   TransportFactory,
   Transport,
   Connection,
   BidiStream,
-  PoolConfig,
 } from "./serve.js";
 
 // ─── handshake.ts ───────────────────────────────────────────────
 export { HandshakeDriver } from "./handshake.js";
 export type {
   ServerHandshakeState,
-  AgentKeypair,
   BidiStream as HandshakeBidiStream,
   Frame,
 } from "./handshake.js";
@@ -57,9 +52,8 @@ export { AgentMetrics, PrometheusExporter, HealthStatus } from "./metrics.js";
 export type { MetricsSnapshot } from "./metrics.js";
 
 // ─── pool.ts (Phase 4 — client-side connection pool) ───────────
-export { ConnectionPool, PoolStatsBuilder } from "./pool.js";
+export { ConnectionPool, PoolConfig } from "./pool.js";
 export type {
-  PooledConnection,
   PoolPeerInfo,
   PoolStats,
 } from "./pool.js";
@@ -84,10 +78,9 @@ export type {
 // avoid the name conflict. The two will be unified in a future cleanup.
 
 // ─── discovery.ts (Phase 4 — discovery + direct call) ───────────
-export { DiscoveryBuilder, DirectCallBuilder, failoverLoop } from "./discovery.js";
+export { DiscoveryBuilderImpl as DiscoveryBuilder, DirectCallBuilderImpl as DirectCallBuilder, failoverLoop } from "./discovery.js";
 export type {
   CallOptions,
-  FailoverStep,
   FailoverLoopConfig,
 } from "./discovery.js";
 

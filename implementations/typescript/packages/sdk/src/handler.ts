@@ -93,7 +93,7 @@ export class HandlerError extends Error {
    * @returns A new HandlerError with the inferred category.
    */
   static fromCode(code: number, message: string): HandlerError {
-    throw new Error("Not implemented");
+    return new HandlerError(categoryFromCode(code), message, code);
   }
 }
 
@@ -181,7 +181,7 @@ export class HandlerContext {
 
   /** Whether the handler has been cancelled (client disconnected). */
   get cancelled(): boolean {
-    throw new Error("Not implemented");
+    return this.signal.aborted;
   }
 
   /**
@@ -190,7 +190,13 @@ export class HandlerContext {
    * @throws {HandlerError} If the signal has been aborted.
    */
   throwIfCancelled(): void {
-    throw new Error("Not implemented");
+    if (this.signal.aborted) {
+      throw new HandlerError(
+        HandlerErrorCategory.Transport,
+        "handler cancelled: client disconnected",
+        1001,
+      );
+    }
   }
 }
 
@@ -230,7 +236,7 @@ export class StreamingHandlerContext {
    * @param resp - The response to send.
    */
   async send(resp: Response): Promise<void> {
-    throw new Error("Not implemented");
+    await this.sender(resp);
   }
 
   /**
@@ -238,12 +244,12 @@ export class StreamingHandlerContext {
    * @param err - The error to send.
    */
   async error(err: HandlerError): Promise<void> {
-    throw new Error("Not implemented");
+    await this.sender(err);
   }
 
   /** Whether the handler has been cancelled (client disconnected). */
   get cancelled(): boolean {
-    throw new Error("Not implemented");
+    return this.signal.aborted;
   }
 }
 

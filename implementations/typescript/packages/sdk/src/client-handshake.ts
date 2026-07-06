@@ -26,8 +26,8 @@
 // `aafp-sdk/src/handshake_driver.rs` and
 // `aafp-crypto/src/handshake_v1.rs:343-362` (session ID derivation).
 
-import type { AgentId, AgentKeypair } from "./types.ts";
-import type { BidiStream } from "./transport/interface.ts";
+import type { AgentId, AgentKeypair } from "./types.js";
+import type { BidiStream } from "./serve.js";
 
 // ─── Constants ────────────────────────────────────────────────────
 

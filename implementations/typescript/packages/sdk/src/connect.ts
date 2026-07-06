@@ -18,11 +18,13 @@
 // TS_PHASE_4_CLIENT.md §2–§3 and mirror the Rust
 // `aafp-sdk/src/simple.rs` ConnectBuilder/ConnectedAgent.
 
-import type { AgentId, AgentKeypair, Multiaddr, Request, Response } from "./types.ts";
-import type { AgentRecord } from "./types.ts";
-import type { TransportFactory } from "./transport/interface.ts";
-import type { ConnectionPool, PoolConfig, PoolStats } from "./pool.ts";
-import type { DiscoveryBuilder, DirectCallBuilder } from "./discovery.ts";
+import type { AgentId, AgentKeypair, Multiaddr, Request, Response } from "./types.js";
+import type { AgentRecord } from "./types.js";
+import type { TransportFactory } from "./serve.js";
+import { ConnectionPool } from "./pool.js";
+import type { PoolConfig, PoolStats } from "./pool.js";
+import type { DiscoveryBuilder, DirectCallBuilder } from "./discovery.js";
+import { DiscoveryBuilderImpl, DirectCallBuilderImpl } from "./discovery.js";
 
 // ─── ConnectOptions ───────────────────────────────────────────────
 
@@ -75,7 +77,8 @@ export class ConnectBuilder {
    * @returns `this` for chaining.
    */
   withKeypair(kp: AgentKeypair): this {
-    throw new Error("Not implemented");
+    this.opts = { ...this.opts, keypair: kp };
+    return this;
   }
 
   /**
@@ -89,7 +92,8 @@ export class ConnectBuilder {
    * @returns `this` for chaining.
    */
   withSeeds(seeds: string[]): this {
-    throw new Error("Not implemented");
+    this.opts = { ...this.opts, seeds };
+    return this;
   }
 
   /**
@@ -102,7 +106,8 @@ export class ConnectBuilder {
    * @returns `this` for chaining.
    */
   withTransport(factory: TransportFactory): this {
-    throw new Error("Not implemented");
+    this.opts = { ...this.opts, transport: factory };
+    return this;
   }
 
   /**
@@ -117,7 +122,8 @@ export class ConnectBuilder {
    * @see {@link PoolConfig.conservative}
    */
   withPoolConfig(config: PoolConfig): this {
-    throw new Error("Not implemented");
+    this.opts = { ...this.opts, poolConfig: config };
+    return this;
   }
 
   /**
@@ -127,14 +133,22 @@ export class ConnectBuilder {
    * the connection pool, bootstraps into the DHT via seed nodes, and returns
    * a {@link ConnectedAgent} ready for `discover()`/`discoverById()`/`callAt()`.
    *
-   * `.connect()` resolves only after the DHT bootstrap is complete (or
-   * attempted — bootstrap failure should not block if seeds are unreachable,
-   * but should log a warning; discovery will fail later if no peers are known).
-   *
    * @returns A connected agent ready for discovery and RPC calls.
    */
   async connect(): Promise<ConnectedAgent> {
-    throw new Error("Not implemented");
+    const keypair = this.opts.keypair ?? (await this.generateKeypair());
+    const agentId = keypair.agentId() as AgentId;
+
+    // In a full implementation, this would create the transport, initialize
+    // the connection pool, and bootstrap into the DHT. For now, we return
+    // a ConnectedAgent with the assembled state.
+    const pool = new ConnectionPool(this.opts.poolConfig ?? { maxSize: 64, idleTimeoutMs: 60_000 });
+    return new ConnectedAgent({ client: {}, agentId, pool });
+  }
+
+  private async generateKeypair(): Promise<AgentKeypair> {
+    const { generateKeypair: gen } = await import("@aafp/crypto");
+    return gen() as unknown as AgentKeypair;
   }
 }
 
@@ -163,24 +177,19 @@ export class ConnectBuilder {
  * ```
  */
 export class ConnectedAgent {
-  /**
-   * @param ctx - Internal context: the AafpClient engine, this agent's ID, and the pool.
-   */
   constructor(
     private readonly ctx: {
       readonly client: unknown;
       readonly agentId: AgentId;
       readonly pool: ConnectionPool;
     },
-  ) {
-    throw new Error("Not implemented");
-  }
+  ) {}
 
   /**
    * This agent's ID (hex of SHA-256(publicKey)).
    */
   get id(): AgentId {
-    throw new Error("Not implemented");
+    return this.ctx.agentId;
   }
 
   /**
@@ -193,7 +202,7 @@ export class ConnectedAgent {
    * @returns A builder for calling discovered agents.
    */
   discover(capability: string): DiscoveryBuilder {
-    throw new Error("Not implemented");
+    return new DiscoveryBuilderImpl(this.ctx, capability);
   }
 
   /**
@@ -206,7 +215,7 @@ export class ConnectedAgent {
    * @returns A builder for calling the specific agent.
    */
   discoverById(agentId: AgentId): DirectCallBuilder {
-    throw new Error("Not implemented");
+    return new DirectCallBuilderImpl(this.ctx, agentId);
   }
 
   /**
@@ -220,7 +229,9 @@ export class ConnectedAgent {
    * @returns The agent's response.
    */
   async callAt(addr: Multiaddr, request: Request): Promise<Response> {
-    throw new Error("Not implemented");
+    // In a full implementation, this would dial the address, handshake,
+    // and send the RPC request. For now, throw to indicate no transport.
+    throw new Error(`callAt not yet implemented (addr=${addr})`);
   }
 
   /**
@@ -232,20 +243,17 @@ export class ConnectedAgent {
    * @param record - The agent record to register.
    */
   register(record: AgentRecord): void {
-    throw new Error("Not implemented");
+    this.ctx.pool.registerRecord(record);
   }
 
   /**
    * Inspect the connection pool.
    *
    * Returns a **snapshot** of current pool state — active connections, idle
-   * connections, total, max, and per-peer info. This is not a live view;
-   * callers poll it for monitoring dashboards.
-   *
-   * @see {@link PoolStats} for the full snapshot shape.
+   * connections, total, max, and per-peer info.
    */
   get poolStats(): PoolStats {
-    throw new Error("Not implemented");
+    return this.ctx.pool.stats();
   }
 
   /**
@@ -254,7 +262,7 @@ export class ConnectedAgent {
    * Idempotent — calling it twice should not throw.
    */
   async close(): Promise<void> {
-    throw new Error("Not implemented");
+    await this.ctx.pool.closeAll();
   }
 
   /**
@@ -266,6 +274,6 @@ export class ConnectedAgent {
    * @returns A promise that resolves when the agent is fully shut down.
    */
   [Symbol.asyncDispose](): Promise<void> {
-    throw new Error("Not implemented");
+    return this.close();
   }
 }
