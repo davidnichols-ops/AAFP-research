@@ -261,11 +261,27 @@ Simple API. Research is complete; implementation is pending.
 |-------|---------------|----------|--------|
 | A1+C1: v2 Foundation + Pooling | `BUILDER_PROMPT_P2.7.md` | P0 | **COMPLETE** |
 | B1+B2: Streaming + Cancellation | `BUILDER_PROMPT_P2.8.md` | P1 | **IN PROGRESS** |
-| A4: Streaming types completion | TBD | P1 | Pending |
-| A5: Migration + v1 deprecation | TBD | P1 | Pending |
-| C3-C4: Session state + UCAN | TBD | P2 | Pending |
-| D: Semantic Capability Graphs | TBD | P3 | Future |
-| E: TypeScript SDK + Routing + PubSub | TBD | P2-P3 | Research complete |
+| TS-1: CBOR + Crypto | `builder-prompts/TS_PHASE_1_CBOR_CRYPTO.md` | P2 | Ready to build |
+| TS-2: Transport | `builder-prompts/TS_PHASE_2_TRANSPORT.md` | P2 | Ready (after TS-1) |
+| TS-3: Server API | `builder-prompts/TS_PHASE_3_SERVER.md` | P2 | Ready (after TS-2) |
+| TS-4: Client API + Pool | `builder-prompts/TS_PHASE_4_CLIENT.md` | P2 | Ready (after TS-2) |
+| TS-5: Streaming | `builder-prompts/TS_PHASE_5_STREAMING.md` | P2 | Ready (after TS-3,4) |
+| TS-6: Browser | `builder-prompts/TS_PHASE_6_BROWSER.md` | P2 | Ready (after TS-5) |
+| TS-7: MCP Integration | `builder-prompts/TS_PHASE_7_MCP.md` | P2 | Ready (after TS-5) |
+| TS-8: Testing | `builder-prompts/TS_PHASE_8_TESTING.md` | P2 | Ready (after TS-7) |
+| TS-9: Packaging | `builder-prompts/TS_PHASE_9_PACKAGING.md` | P2 | Ready (after TS-8) |
+| SCG D1-D2: Descriptor + Query | `builder-prompts/SCG_D1_D2_DESCRIPTOR_QUERY.md` | P3 | Ready to build |
+| SCG D3-D4: Index + Compose | `builder-prompts/SCG_D3_D4_INDEX_COMPOSE.md` | P3 | Ready (after D1-D2) |
+| SCG D5-D6: Planning + Bridge | `builder-prompts/SCG_D5_D6_PLAN_BRIDGE.md` | P3 | Ready (after D3-D4) |
+| AR T1-T2: Metrics + Routing | `builder-prompts/AR_T1_T2_METRICS_ROUTING.md` | P3 | Ready to build |
+| AR T3-T4: Breaker + Hedging | `builder-prompts/AR_T3_T4_BREAKER_HEDGING.md` | P3 | Ready (after T1-T2) |
+| AR T5-T7: Integration + API | `builder-prompts/AR_T5_T7_INTEGRATION_API.md` | P3 | Ready (after T3-T4, D1-D2) |
+| PS P1-P2: API + Propagation | `builder-prompts/PS_P1_P2_API_PROPAGATION.md` | P3 | Ready to build |
+| PS P3-P4: BackChannel + Routing | `builder-prompts/PS_P3_P4_BACKCHANNEL_ROUTING.md` | P3 | Ready (after P1-P2) |
+| PS P5-P6: Security + GossipSub | `builder-prompts/PS_P5_P6_SECURITY_GOSSIPSUB.md` | P3 | Ready (after P3-P4) |
+| ARE E1-E2: Map + Geo/Perf | `builder-prompts/ARE_E1_E2_MAP_GEO_PERF.md` | P3 | Ready to build |
+| ARE E3-E4: Cost/Semantic/Reputation | `builder-prompts/ARE_E3_E4_COST_SEMANTIC_REPUTATION.md` | P3 | Ready (after E1-E2) |
+| ARE E5-E6: DHT + Testing | `builder-prompts/ARE_E5_E6_DHT_TESTING.md` | P3 | Ready (after E3-E4) |
 
 **Key finding:** The gap is in the SDK, not the protocol. No wire protocol
 changes required. All gaps can be addressed by exposing existing QUIC/CBOR

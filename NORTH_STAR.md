@@ -200,6 +200,7 @@ reset, and CBOR Maps all exist but aren't exposed through the Simple API.
 **Builder prompts:**
 - `BUILDER_PROMPT_P2.7.md` — v2 Foundation + Connection Pooling (P0) — **COMPLETE**
 - `BUILDER_PROMPT_P2.8.md` — Server-Streaming + Cancellation (P1) — **IN PROGRESS**
+- `builder-prompts/` — 21 detailed prompts for TS SDK (9) + SCG (3) + AR (3) + PS (3) + ARE (3), ~26K lines total
 
 **Phase 3: Build the ecosystem (ongoing)**
 - SDK in Rust, Python, TypeScript (3 languages minimum)
