@@ -1,0 +1,30 @@
+{
+  "name": "@aafp/examples",
+  "version": "0.1.0",
+  "description": "AAFP — example apps (echo, streaming, MCP server, LangChain)",
+  "type": "module",
+  "license": "Apache-2.0",
+  "private": true,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aafp/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsx": "^4.0.0",
+    "@types/node": "^22.0.0"
+  }
+}

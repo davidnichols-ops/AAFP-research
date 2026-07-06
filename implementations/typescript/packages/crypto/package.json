@@ -1,0 +1,31 @@
+{
+  "name": "@aafp/crypto",
+  "version": "0.1.0",
+  "description": "AAFP — ML-DSA-65 signatures, HKDF, AEAD, and AgentId derivation",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "^0.2.0",
+    "@noble/hashes": "^1.5.0",
+    "@aafp/cbor": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}

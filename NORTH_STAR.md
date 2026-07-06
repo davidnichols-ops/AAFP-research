@@ -182,10 +182,10 @@ reset, and CBOR Maps all exist but aren't exposed through the Simple API.
 
 **Adaptation phases (from ADAPTATION_ROADMAP.md):**
 - **Phase A:** Simple API v2 (W1-10) — Params, per-capability handlers, streaming, pooling, typed errors — **A1+C1 COMPLETE (P2.7)**
-- **Phase B:** Streaming RPC (W3-8) — Server-streaming, client-streaming, bidirectional, cancellation — **B1+B2 IN PROGRESS (P2.8)**
+- **Phase B:** Streaming RPC (W3-8) — Server-streaming, client-streaming, bidirectional, cancellation — **B1+B2 COMPLETE (P2.8)**
 - **Phase C:** Session Affinity (W1-7) — ConnectionPool integration, session state, UCAN delegation — **C1 COMPLETE (P2.7)**
-- **Phase D:** Semantic Capability Graphs (W1-12) — Multi-dimensional discovery, pipeline assembly
-- **Phase E:** TypeScript SDK + Adaptive Routing + PubSub + AgentRecord Extensions (research complete)
+- **Phase D:** Semantic Capability Graphs (W1-12) — Multi-dimensional discovery, pipeline assembly — scaffolding ready
+- **Phase E:** TypeScript SDK + Adaptive Routing + PubSub + AgentRecord Extensions — scaffolding ready
 
 **All 8 research documents complete** (~11,000 lines total):
 - `SIMPLE_API_V2_DESIGN.md` (1,528 lines) — v2 API addressing all 10 gaps
@@ -199,8 +199,9 @@ reset, and CBOR Maps all exist but aren't exposed through the Simple API.
 
 **Builder prompts:**
 - `BUILDER_PROMPT_P2.7.md` — v2 Foundation + Connection Pooling (P0) — **COMPLETE**
-- `BUILDER_PROMPT_P2.8.md` — Server-Streaming + Cancellation (P1) — **IN PROGRESS**
+- `BUILDER_PROMPT_P2.8.md` — Server-Streaming + Cancellation (P1) — **COMPLETE**
 - `builder-prompts/` — 21 detailed prompts for TS SDK (9) + SCG (3) + AR (3) + PS (3) + ARE (3), ~26K lines total
+- Pre-build scaffolding created for all tracks (TS monorepo + Rust stubs)
 
 **Phase 3: Build the ecosystem (ongoing)**
 - SDK in Rust, Python, TypeScript (3 languages minimum)
@@ -526,9 +527,9 @@ capability graph.
 **Tests:** 1718 passing, 0 failures, 7 ignored
 **Completed:** 326/326 steps — **ALL TRACKS COMPLETE**
 **Codebase:** 17 Rust crates, ~76K lines
-**Phase 2 progress:** P2.1-P2.6 complete (6/10), P2.7 complete (v2 Foundation)
+**Phase 2 progress:** P2.1-P2.6 complete (6/10), P2.7+P2.8 complete (v2 API done)
 **Adaptation research:** ALL 8 design documents complete (~11,000 lines)
-**Adaptation implementation:** P2.7 complete, P2.8 (streaming) in progress
+**Adaptation implementation:** P2.7+P2.8 complete — all 10 gaps closed (1755 tests)
 
 ### v1 "Internet-Ready" — ACHIEVED
 

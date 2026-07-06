@@ -1,0 +1,68 @@
+{
+  "name": "@aafp/sdk",
+  "version": "0.1.0",
+  "description": "AAFP — post-quantum agent-to-agent protocol SDK for TypeScript (Node, Deno, Bun, browser)",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "AAFP Project",
+  "homepage": "https://aafp.dev/docs/ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aafp/aafp",
+    "directory": "implementations/typescript/packages/sdk"
+  },
+  "keywords": ["aafp", "agent", "post-quantum", "quic", "webtransport", "mcp", "p2p"],
+  "engines": { "node": ">=18.0.0" },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "browser": "./dist/browser/aafp-sdk.min.js",
+      "default": "./dist/esm/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist/esm",
+    "dist/cjs",
+    "dist/browser",
+    "dist/types",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aafp/cbor": "workspace:*",
+    "@aafp/crypto": "workspace:*",
+    "@aafp/transport-quic": "workspace:*",
+    "@aafp/transport-ws": "workspace:*",
+    "@noble/post-quantum": "^0.2.0",
+    "@noble/hashes": "^1.5.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": { "optional": true }
+  },
+  "optionalDependencies": {
+    "@aafp/sdk-native": "0.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}

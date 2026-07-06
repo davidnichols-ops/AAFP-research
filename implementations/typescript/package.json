@@ -1,0 +1,26 @@
+{
+  "name": "aafp-typescript",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AAFP TypeScript SDK monorepo — post-quantum agent-to-agent protocol",
+  "type": "module",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "tsx": "^4.0.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
