@@ -1,0 +1,17 @@
+{
+  "name": "aafp-echo-agent-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@aafp/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "name": "@aafp/crypto",
   "version": "0.1.0",
-  "description": "AAFP — ML-DSA-65 signatures, HKDF, AEAD, and AgentId derivation",
+  "description": "AAFP \u2014 ML-DSA-65 signatures, HKDF, AEAD, and AgentId derivation",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/cjs/index.js",

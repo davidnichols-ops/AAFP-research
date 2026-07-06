@@ -1,7 +1,7 @@
 {
   "name": "@aafp/cbor",
   "version": "0.1.0",
-  "description": "AAFP — deterministic CBOR codec (RFC 8949 §4.2.3)",
+  "description": "AAFP \u2014 deterministic CBOR codec (RFC 8949 \u00a74.2.3)",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/cjs/index.js",
@@ -14,7 +14,11 @@
       "require": "./dist/cjs/index.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
