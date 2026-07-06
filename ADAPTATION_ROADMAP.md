@@ -209,8 +209,8 @@ Phase B (Streaming RPC)
 
 ## 8. Next Actions
 
-1. **Immediately**: Build P2.7 (Phase A1+C1: Foundation types + Connection pooling) — builder prompt ready at `BUILDER_PROMPT_P2.7.md`
-2. **After P2.7**: Build P2.8 (Phase B1+B2: Server-streaming + Cancellation) — builder prompt ready at `BUILDER_PROMPT_P2.8.md`
+1. **COMPLETE**: P2.7 (Phase A1+C1: Foundation types + Connection pooling) — done
+2. **IN PROGRESS**: P2.8 (Phase B1+B2: Server-streaming + Cancellation) — building
 3. **After P2.8**: Build remaining v2 phases (A4 streaming types, A5 migration)
 4. **After v2 stable**: Build TypeScript SDK (Phase E, 8 weeks per `TYPESCRIPT_SDK_DESIGN.md`)
 5. **Future**: Semantic Capability Graphs (Phase D), Adaptive Routing (Track T), PubSub (Phase E)

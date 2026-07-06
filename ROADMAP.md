@@ -259,13 +259,13 @@ Simple API. Research is complete; implementation is pending.
 
 | Phase | Builder Prompt | Priority | Status |
 |-------|---------------|----------|--------|
-| A1+C1: v2 Foundation + Pooling | `BUILDER_PROMPT_P2.7.md` | P0 | Pending |
-| B1+B2: Streaming + Cancellation | `BUILDER_PROMPT_P2.8.md` | P1 | Pending (after P2.7) |
+| A1+C1: v2 Foundation + Pooling | `BUILDER_PROMPT_P2.7.md` | P0 | **COMPLETE** |
+| B1+B2: Streaming + Cancellation | `BUILDER_PROMPT_P2.8.md` | P1 | **IN PROGRESS** |
 | A4: Streaming types completion | TBD | P1 | Pending |
 | A5: Migration + v1 deprecation | TBD | P1 | Pending |
 | C3-C4: Session state + UCAN | TBD | P2 | Pending |
 | D: Semantic Capability Graphs | TBD | P3 | Future |
-| E: TypeScript SDK + Routing + PubSub | TBD | P2-P3 | Research in progress |
+| E: TypeScript SDK + Routing + PubSub | TBD | P2-P3 | Research complete |
 
 **Key finding:** The gap is in the SDK, not the protocol. No wire protocol
 changes required. All gaps can be addressed by exposing existing QUIC/CBOR

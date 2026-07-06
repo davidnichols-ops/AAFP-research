@@ -155,7 +155,8 @@ finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 - [x] P2.4: Python SDK high-level API — `from aafp import Agent, Request, Response`
 - [x] P2.5: 5 working examples — echo, translation pipeline, python weather, relay setup, multi-agent chat
 - [x] P2.6: Prometheus + Grafana dashboard — 11-panel dashboard, auto-provisioned, docker compose up
-- [ ] P2.7: Documentation site (mdbook)
+- [x] P2.7: Simple API v2 Foundation — Params, metadata, typed errors, per-capability handlers, connection pool, failover
+- [ ] P2.7-docs: Documentation site (mdbook)
 - [ ] P2.8: Install script + Homebrew
 - [ ] P2.9: Developer experience integration tests
 - [ ] P2.10: Phase 2 completion report
@@ -180,9 +181,9 @@ addressed without wire protocol changes. QUIC bi-streams, the MORE flag, stream
 reset, and CBOR Maps all exist but aren't exposed through the Simple API.
 
 **Adaptation phases (from ADAPTATION_ROADMAP.md):**
-- **Phase A:** Simple API v2 (W1-10) — Params, per-capability handlers, streaming, pooling, typed errors
-- **Phase B:** Streaming RPC (W3-8) — Server-streaming, client-streaming, bidirectional, cancellation
-- **Phase C:** Session Affinity (W1-7) — ConnectionPool integration, session state, UCAN delegation
+- **Phase A:** Simple API v2 (W1-10) — Params, per-capability handlers, streaming, pooling, typed errors — **A1+C1 COMPLETE (P2.7)**
+- **Phase B:** Streaming RPC (W3-8) — Server-streaming, client-streaming, bidirectional, cancellation — **B1+B2 IN PROGRESS (P2.8)**
+- **Phase C:** Session Affinity (W1-7) — ConnectionPool integration, session state, UCAN delegation — **C1 COMPLETE (P2.7)**
 - **Phase D:** Semantic Capability Graphs (W1-12) — Multi-dimensional discovery, pipeline assembly
 - **Phase E:** TypeScript SDK + Adaptive Routing + PubSub + AgentRecord Extensions (research complete)
 
@@ -196,9 +197,9 @@ reset, and CBOR Maps all exist but aren't exposed through the Simple API.
 - `PUBSUB_BACKCHANNEL_DESIGN.md` (1,004 lines) — PubSub API, back-channeling, MQTT wildcards
 - `ADAPTIVE_ROUTING_PLANE.md` (1,647 lines) — Dynamic routing, circuit breaker, hedging
 
-**Builder prompts ready:**
-- `BUILDER_PROMPT_P2.7.md` — v2 Foundation + Connection Pooling (P0)
-- `BUILDER_PROMPT_P2.8.md` — Server-Streaming + Cancellation (P1, after P2.7)
+**Builder prompts:**
+- `BUILDER_PROMPT_P2.7.md` — v2 Foundation + Connection Pooling (P0) — **COMPLETE**
+- `BUILDER_PROMPT_P2.8.md` — Server-Streaming + Cancellation (P1) — **IN PROGRESS**
 
 **Phase 3: Build the ecosystem (ongoing)**
 - SDK in Rust, Python, TypeScript (3 languages minimum)
@@ -524,9 +525,9 @@ capability graph.
 **Tests:** 1718 passing, 0 failures, 7 ignored
 **Completed:** 326/326 steps — **ALL TRACKS COMPLETE**
 **Codebase:** 17 Rust crates, ~76K lines
-**Phase 2 progress:** P2.1-P2.6 complete (6/10)
+**Phase 2 progress:** P2.1-P2.6 complete (6/10), P2.7 complete (v2 Foundation)
 **Adaptation research:** ALL 8 design documents complete (~11,000 lines)
-**Builder prompts:** P2.7 (P0) + P2.8 (P1) ready for implementation
+**Adaptation implementation:** P2.7 complete, P2.8 (streaming) in progress
 
 ### v1 "Internet-Ready" — ACHIEVED
 
