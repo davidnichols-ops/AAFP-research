@@ -1,6 +1,6 @@
 # AAFP North Star — Path to Internet-Ready Agent Networking
 
-**Last updated:** 2026-07-04
+**Last updated:** 2026-07-05
 **Purpose:** Single source of truth for strategic direction, current state, and
 remaining work to make AAFP carry real agent traffic over the public internet.
 **Read this first** before any planning or execution.
@@ -67,9 +67,9 @@ implementation, not the protocol.
 
 | Metric | Value |
 |--------|-------|
-| Rust tests | 1613 passing, 0 failures, 7 ignored |
+| Rust tests | 1718 passing, 0 failures, 7 ignored |
 | Rust crates | 17 (15 workspace + aafp-py + aafp-loadtest) |
-| Rust code | ~75,000 lines |
+| Rust code | ~76,000 lines |
 | RFCs | 11 (0001-0011) + 3 amendment sets + 4 reviews |
 | Go interop | 664 tests, wire-format library |
 | Python adapter | PyO3, MCP SDK 1.28.1 interop verified |
@@ -154,13 +154,37 @@ finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 - [x] P2.3: Quickstart tutorial (5 minutes, no jargon) — docs/QUICKSTART.md
 - [x] P2.4: Python SDK high-level API — `from aafp import Agent, Request, Response`
 - [x] P2.5: 5 working examples — echo, translation pipeline, python weather, relay setup, multi-agent chat
-- [ ] P2.6: Prometheus + Grafana dashboard
+- [x] P2.6: Prometheus + Grafana dashboard — 11-panel dashboard, auto-provisioned, docker compose up
 - [ ] P2.7: Documentation site (mdbook)
 - [ ] P2.8: Install script + Homebrew
 - [ ] P2.9: Developer experience integration tests
 - [ ] P2.10: Phase 2 completion report
 
 **Milestone:** "Anyone can `docker compose up` and have a working AAFP relay + agent. Developers can build agents without understanding the protocol."
+
+**Phase 2.5: Simple API Adaptation (research complete, implementation pending)**
+
+Based on 8 parallel sandbox gap analyses testing the Simple API against mainstream
+agentic patterns (MCP, CrewAI/AutoGen, LangChain, browser automation, RAG, code
+execution, event-driven webhooks, streaming + HITL), 10 critical gaps were
+confirmed. Research documents have been created addressing these gaps:
+
+- [`SIMPLE_API_V2_DESIGN.md`](SIMPLE_API_V2_DESIGN.md) — Complete v2 API design (all 10 gaps)
+- [`STREAMING_RPC_DESIGN.md`](STREAMING_RPC_DESIGN.md) — Streaming RPC over QUIC (no wire changes)
+- [`SESSION_AFFINITY_DESIGN.md`](SESSION_AFFINITY_DESIGN.md) — Connection pooling + session affinity (50x perf)
+- [`SEMANTIC_CAPABILITY_GRAPHS.md`](SEMANTIC_CAPABILITY_GRAPHS.md) — Semantic capability discovery (Track U)
+- [`ADAPTATION_ROADMAP.md`](ADAPTATION_ROADMAP.md) — Synthesized adaptation plan
+
+**Key finding:** The gap is in the SDK, not the protocol. All 10 gaps can be
+addressed without wire protocol changes. QUIC bi-streams, the MORE flag, stream
+reset, and CBOR Maps all exist but aren't exposed through the Simple API.
+
+**Adaptation phases (from ADAPTATION_ROADMAP.md):**
+- **Phase A:** Simple API v2 (W1-10) — Params, per-capability handlers, streaming, pooling, typed errors
+- **Phase B:** Streaming RPC (W3-8) — Server-streaming, client-streaming, bidirectional, cancellation
+- **Phase C:** Session Affinity (W1-7) — ConnectionPool integration, session state, UCAN delegation
+- **Phase D:** Semantic Capability Graphs (W1-12) — Multi-dimensional discovery, pipeline assembly
+- **Phase E:** TypeScript SDK + Adaptive Routing + PubSub (TBD, research in progress)
 
 **Phase 3: Build the ecosystem (ongoing)**
 - SDK in Rust, Python, TypeScript (3 languages minimum)
@@ -483,9 +507,11 @@ capability graph.
 | R | COMPLETE | 8/8 | +76 |
 | S | COMPLETE | 8/8 | +many |
 
-**Tests:** 1613 passing, 0 failures, 7 ignored
+**Tests:** 1718 passing, 0 failures, 7 ignored
 **Completed:** 326/326 steps — **ALL TRACKS COMPLETE**
-**Codebase:** 17 Rust crates, ~75K lines
+**Codebase:** 17 Rust crates, ~76K lines
+**Phase 2 progress:** P2.1-P2.6 complete (6/10)
+**Adaptation research:** 5 design documents complete, 4 in progress
 
 ### v1 "Internet-Ready" — ACHIEVED
 

@@ -240,3 +240,33 @@ These items must be resolved before v1 production readiness:
 | pyo3 segfault on cleanup | **FIXED** (C1, async shutdown + wait_idle) |
 
 **Current status: v1 achieved. ALL 326 steps complete. AAFP is internet-ready.**
+
+---
+
+## Phase 2.5 — Simple API Adaptation (2026-07-05)
+
+Based on 8 parallel sandbox gap analyses, 10 critical gaps were identified in the
+Simple API. Research is complete; implementation is pending.
+
+**Design documents:**
+- `SIMPLE_API_V2_DESIGN.md` — v2 API (all 10 gaps, backward compatible)
+- `STREAMING_RPC_DESIGN.md` — Streaming RPC over QUIC (no wire changes)
+- `SESSION_AFFINITY_DESIGN.md` — Connection pooling (50x perf improvement)
+- `SEMANTIC_CAPABILITY_GRAPHS.md` — Semantic discovery (Track U)
+- `ADAPTATION_ROADMAP.md` — Synthesized adaptation plan
+
+**Implementation phases:**
+
+| Phase | Builder Prompt | Priority | Status |
+|-------|---------------|----------|--------|
+| A1+C1: v2 Foundation + Pooling | `BUILDER_PROMPT_P2.7.md` | P0 | Pending |
+| B1+B2: Streaming + Cancellation | `BUILDER_PROMPT_P2.8.md` | P1 | Pending (after P2.7) |
+| A4: Streaming types completion | TBD | P1 | Pending |
+| A5: Migration + v1 deprecation | TBD | P1 | Pending |
+| C3-C4: Session state + UCAN | TBD | P2 | Pending |
+| D: Semantic Capability Graphs | TBD | P3 | Future |
+| E: TypeScript SDK + Routing + PubSub | TBD | P2-P3 | Research in progress |
+
+**Key finding:** The gap is in the SDK, not the protocol. No wire protocol
+changes required. All gaps can be addressed by exposing existing QUIC/CBOR
+primitives through the Simple API.
