@@ -23,14 +23,15 @@ Implementations live under `implementations/` as git submodules.
 
 ---
 
-## Current Status: v1 Internet-Ready — ACHIEVED
+## Current Status: Intelligence Plane — IMPLEMENTED
 
-**All 326 steps complete across 19 tracks (A-S). 1597 tests, 0 failures.**
+**Transport freeze complete (Rev 6). Intelligence Plane implemented. 2015 tests, 0 failures.**
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1597 passing, 0 failures, 7 ignored |
-| Crates | 17 Rust crates, ~75K lines |
+| Tests | 1864 Rust + 151 TypeScript = 2015 passing, 0 failures |
+| Crates | 17 Rust crates, ~115K lines |
+| TS SDK | 9 modules, ~9.9K lines |
 | RFCs | 11 (0001-0011), frozen at Rev 6 |
 | DHT scale | 500 nodes, 100% lookup success |
 | Load test | 100 agents, 399K messages, 0% error |
@@ -53,16 +54,36 @@ Implementations live under `implementations/` as git submodules.
 | Load & ops | S | Complete (100 agents, Docker, K8s, metrics) |
 | MCP/A2A bindings | B, D | Verified (Python interop, Go wire-format) |
 | Performance | G-M | 6.0x cumulative improvement |
+| **Semantic Capability Graphs** | SCG | Implemented (D1-D6) |
+| **AgentRecord Extensions** | ARE | Implemented (E1-E6) |
+| **Adaptive Routing Plane** | AR | Implemented (T1-T7) |
+| **PubSub + Back-Channeling** | PS | Implemented (P1-P6) |
+| **TypeScript SDK** | TS | Complete (9 modules, 151 tests) |
+
+### The Intelligence Plane
+
+The transport layer (15% of the system) is frozen. The Intelligence Plane
+(85%) is now implemented:
+
+- **Predictive Routing** — temporal routing engine that selects peers based on
+  *who will be fastest 200ms from now*, not who was fastest 200ms ago.
+- **Intent Routing** — `goal("build an iOS app")` not `lookup("python")`.
+  Semantic Capability Graphs resolve intent to multi-step execution plans.
+- **Agent Reputation** — 25+ AgentRecord extension fields (performance, cost,
+  geo, semantic versioning, attestations, heartbeats) feed the routing scorer.
+- **Fluid Execution** — circuit breakers, bulkheads, request hedging, and
+  retry-with-backoff let the network decide spawning, merging, and recovery.
+- **PubSub + Back-Channeling** — MQTT-style topic wildcards, GossipSub v1.1,
+  UCAN-based ACLs, and back-channel progress streams for long-running RPCs.
+
+See [`INTELLIGENCE_PLANE.md`](INTELLIGENCE_PLANE.md) for the architecture.
 
 ### What's next
 
-- **Phase 2:** Developer experience — 3-line API, CLI, tutorials (1-2 weeks)
-- **Phase 3:** Ecosystem — SDK in 3 languages, reference apps, plugins
-- **Phase 4:** Adaptive routing — capability graphs, execution fabric, reputation
-
-See [`NORTH_STAR.md`](NORTH_STAR.md) for strategic direction.
-See [`STRATEGIC_VISION.md`](STRATEGIC_VISION.md) for the full vision.
-See [`COMPLETION_SUMMARY.md`](COMPLETION_SUMMARY.md) for what was built.
+- **Interop matrix:** Rust ↔ Go ↔ TS conformance suite
+- **Security review:** Focused pass on new identity/routing/pubsub paths
+- **Reference apps:** End-to-end demos of intent routing + predictive routing
+- **Ecosystem:** SDK distribution, plugin architecture, community onboarding
 
 ---
 
@@ -111,7 +132,7 @@ AAFP-research/
 | Repository | Owns |
 |------------|------|
 | **Umbrella (this repo)** | RFCs, architecture, roadmaps, deployment, cross-implementation docs |
-| **Rust (`implementations/rust`)** | Rust reference implementation (17 crates, 1597 tests) |
+| **Rust (`implementations/rust`)** | Rust reference implementation (17 crates, 1864 tests) |
 | **Go (`implementations/go`)** | Go wire-format interop validation (664 tests) |
 
 The protocol — not any single implementation — is the primary artifact. RFCs
@@ -154,7 +175,7 @@ tests.
 
 ```bash
 cd implementations/rust
-cargo test --workspace        # 1597 tests, 0 failures, 7 ignored
+cargo test --workspace        # 1864 tests, 0 failures, 7 ignored
 cargo run --bin aafp -- init  # generate an agent identity
 ```
 
@@ -169,6 +190,17 @@ RFCs to validate specification clarity and canonical encoding.
 ```bash
 cd implementations/go
 go test ./...                 # all packages pass
+```
+
+### TypeScript SDK (`implementations/typescript`)
+
+High-level SDK for building AAFP agents in Node.js and browsers. Covers
+identity, transport, discovery, messaging, pubsub, routing, and session
+management.
+
+```bash
+cd implementations/typescript
+npm test                      # 151 tests, 0 failures
 ```
 
 ---

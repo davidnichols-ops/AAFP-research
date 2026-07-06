@@ -4,10 +4,6 @@
 # spawn complexity.
 #
 # See TS_PHASE_8_TESTING.md §10.
-#
-# NOTE: This is a pre-build scaffold. Steps are stubs; dependencies are
-# NOT installed yet. Fill in build/test commands once the SDK packages
-# are implemented.
 name: TS SDK CI
 
 on:
