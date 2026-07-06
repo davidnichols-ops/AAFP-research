@@ -4,7 +4,7 @@
 in 3 lines of code without ever learning QUIC, UCAN, DHT, or relay reservations.
 
 **Duration:** 1-2 weeks
-**Prerequisite:** Phase 1 COMPLETE (326/326 steps, 1597 tests, internet-ready)
+**Prerequisite:** Phase 1 COMPLETE (326/326 steps, 1864 tests, internet-ready)
 **Owner:** David Nichols (arms and legs) + Devin (CEO/architect)
 
 ---
@@ -22,7 +22,7 @@ If NO, it's not done yet.
 ## Current State (What We Have)
 
 The infrastructure is complete:
-- 17 Rust crates, 1597 tests, 0 failures
+- 17 Rust crates, 1864 tests, 0 failures
 - CLI with 7 commands: `init`, `start`, `discover`, `connect`, `send`, `status`, `relay`
 - AgentBuilder with 15+ configuration options
 - Docker, K8s, systemd deployment

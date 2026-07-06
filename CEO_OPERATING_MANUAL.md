@@ -144,7 +144,7 @@ No exceptions. If it doesn't pass, it's not done.
 
 ## What's Done (Phase 1)
 
-326/326 steps complete. 1597 tests. AAFP is internet-ready.
+326/326 steps complete. 1864 tests. AAFP is internet-ready.
 
 - Post-quantum transport (ML-DSA-65, QUIC, PQ-TLS)
 - NAT traversal (relay, AutoNAT, DCuTR)

@@ -9,7 +9,7 @@
 ## Executive Summary
 
 AAFP's wire protocol is frozen (Rev 6, RFCs 0001-0011). The Rust reference
-implementation is production-grade (1597 tests, 500-node DHT, 4h stability,
+implementation is production-grade (1864 tests, 500-node DHT, 4h stability,
 post-quantum TLS). The technology is ready. The question now is: **how does an
 open protocol become a movement?**
 

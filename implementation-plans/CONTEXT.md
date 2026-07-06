@@ -41,7 +41,7 @@ performance as enhancements to protocols agents already use.
 
 | Metric | Value |
 |--------|-------|
-| Rust tests | 1597, 0 failures, 7 ignored |
+| Rust tests | 1864, 0 failures, 7 ignored |
 | Go tests | 664, 0 failures |
 | Rust crates | 17 (15 workspace + aafp-py + aafp-loadtest) |
 | Go packages | 13 |
@@ -308,7 +308,7 @@ No unauthenticated code path exists. All messaging requires MessagingEnabled.
   cargo fmt --all -- --check     # 0 diffs expected
   cargo build --workspace         # 0 warnings expected
   cargo clippy --workspace        # 0 warnings expected
-  cargo test --workspace          # 1597 tests, 0 failures expected
+  cargo test --workspace          # 1864 tests, 0 failures expected
   ```
 - **Commit style:** Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, `style:`)
 

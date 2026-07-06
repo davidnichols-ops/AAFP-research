@@ -1,15 +1,19 @@
 # AAFP Roadmap
 
-> **Protocol roadmap COMPLETE. All 19 tracks (A-S) done. Phase 2 (developer
-> experience) nearly complete. Next: the Intelligence Plane — see
-> NORTH_STAR.md and INTELLIGENCE_PLANE.md.**
+> **Protocol roadmap COMPLETE. All 19 tracks (A-S) done. Intelligence Plane
+> foundation IMPLEMENTED (tracks T, U, W + PubSub). Phase 2 nearly complete.
+> Next: remaining Intelligence Plane (tracks V, X, Y) — see NORTH_STAR.md and
+> INTELLIGENCE_PLANE.md.**
 
 **Baseline:** `v0.1-mvp-freeze`
+**Current freeze:** `v0.4-intelligence-plane`
 **Full assessment:** [`docs/status/PHASE2_STATUS_REPORT.md`](docs/status/PHASE2_STATUS_REPORT.md)
 
-> **Updated 2026-07-05:** ALL 326 protocol steps complete. 1931 tests passing
-> (1780 Rust + 151 TypeScript). SDK in 3 languages (Rust, Python, TypeScript).
-> Next: Intelligence Plane implementation (15 builder prompts across 4 tracks).
+> **Updated 2026-07-06:** ALL 326 protocol steps complete + 25 Intelligence Plane
+> foundation steps complete. 2015 tests passing (1864 Rust + 151 TypeScript).
+> SDK in 3 languages (Rust, Python, TypeScript). Intelligence Plane foundation
+> implemented (SCG, ARE, AR, PS). Security review complete (4 critical + 12 high
+> findings fixed). Next: remaining Phase 4 tracks (V, X, Y).
 
 This roadmap orders work by **architectural value** (highest first), not feature
 count. Each item states its objective, rationale, complexity, dependencies,
@@ -246,10 +250,10 @@ These items must be resolved before v1 production readiness:
 
 ---
 
-## Phase 2.5 — Simple API Adaptation (2026-07-05)
+## Phase 2.5 — Simple API Adaptation (2026-07-06) — COMPLETE ✅
 
 Based on 8 parallel sandbox gap analyses, 10 critical gaps were identified in the
-Simple API. Research is complete; implementation is pending.
+Simple API. Research is complete; ALL implementation is complete.
 
 **Design documents:**
 - `SIMPLE_API_V2_DESIGN.md` — v2 API (all 10 gaps, backward compatible)
@@ -263,29 +267,33 @@ Simple API. Research is complete; implementation is pending.
 | Phase | Builder Prompt | Priority | Status |
 |-------|---------------|----------|--------|
 | A1+C1: v2 Foundation + Pooling | `BUILDER_PROMPT_P2.7.md` | P0 | **COMPLETE** |
-| B1+B2: Streaming + Cancellation | `BUILDER_PROMPT_P2.8.md` | P1 | **IN PROGRESS** |
-| TS-1: CBOR + Crypto | `builder-prompts/TS_PHASE_1_CBOR_CRYPTO.md` | P2 | Ready to build |
-| TS-2: Transport | `builder-prompts/TS_PHASE_2_TRANSPORT.md` | P2 | Ready (after TS-1) |
-| TS-3: Server API | `builder-prompts/TS_PHASE_3_SERVER.md` | P2 | Ready (after TS-2) |
-| TS-4: Client API + Pool | `builder-prompts/TS_PHASE_4_CLIENT.md` | P2 | Ready (after TS-2) |
-| TS-5: Streaming | `builder-prompts/TS_PHASE_5_STREAMING.md` | P2 | Ready (after TS-3,4) |
-| TS-6: Browser | `builder-prompts/TS_PHASE_6_BROWSER.md` | P2 | Ready (after TS-5) |
-| TS-7: MCP Integration | `builder-prompts/TS_PHASE_7_MCP.md` | P2 | Ready (after TS-5) |
-| TS-8: Testing | `builder-prompts/TS_PHASE_8_TESTING.md` | P2 | Ready (after TS-7) |
-| TS-9: Packaging | `builder-prompts/TS_PHASE_9_PACKAGING.md` | P2 | Ready (after TS-8) |
-| SCG D1-D2: Descriptor + Query | `builder-prompts/SCG_D1_D2_DESCRIPTOR_QUERY.md` | P3 | Ready to build |
-| SCG D3-D4: Index + Compose | `builder-prompts/SCG_D3_D4_INDEX_COMPOSE.md` | P3 | Ready (after D1-D2) |
-| SCG D5-D6: Planning + Bridge | `builder-prompts/SCG_D5_D6_PLAN_BRIDGE.md` | P3 | Ready (after D3-D4) |
-| AR T1-T2: Metrics + Routing | `builder-prompts/AR_T1_T2_METRICS_ROUTING.md` | P3 | Ready to build |
-| AR T3-T4: Breaker + Hedging | `builder-prompts/AR_T3_T4_BREAKER_HEDGING.md` | P3 | Ready (after T1-T2) |
-| AR T5-T7: Integration + API | `builder-prompts/AR_T5_T7_INTEGRATION_API.md` | P3 | Ready (after T3-T4, D1-D2) |
-| PS P1-P2: API + Propagation | `builder-prompts/PS_P1_P2_API_PROPAGATION.md` | P3 | Ready to build |
-| PS P3-P4: BackChannel + Routing | `builder-prompts/PS_P3_P4_BACKCHANNEL_ROUTING.md` | P3 | Ready (after P1-P2) |
-| PS P5-P6: Security + GossipSub | `builder-prompts/PS_P5_P6_SECURITY_GOSSIPSUB.md` | P3 | Ready (after P3-P4) |
-| ARE E1-E2: Map + Geo/Perf | `builder-prompts/ARE_E1_E2_MAP_GEO_PERF.md` | P3 | Ready to build |
-| ARE E3-E4: Cost/Semantic/Reputation | `builder-prompts/ARE_E3_E4_COST_SEMANTIC_REPUTATION.md` | P3 | Ready (after E1-E2) |
-| ARE E5-E6: DHT + Testing | `builder-prompts/ARE_E5_E6_DHT_TESTING.md` | P3 | Ready (after E3-E4) |
+| B1+B2: Streaming + Cancellation | `BUILDER_PROMPT_P2.8.md` | P1 | **COMPLETE** |
+| TS-1: CBOR + Crypto | `builder-prompts/TS_PHASE_1_CBOR_CRYPTO.md` | P2 | **COMPLETE** |
+| TS-2: Transport | `builder-prompts/TS_PHASE_2_TRANSPORT.md` | P2 | **COMPLETE** |
+| TS-3: Server API | `builder-prompts/TS_PHASE_3_SERVER.md` | P2 | **COMPLETE** |
+| TS-4: Client API + Pool | `builder-prompts/TS_PHASE_4_CLIENT.md` | P2 | **COMPLETE** |
+| TS-5: Streaming | `builder-prompts/TS_PHASE_5_STREAMING.md` | P2 | **COMPLETE** |
+| TS-6: Browser | `builder-prompts/TS_PHASE_6_BROWSER.md` | P2 | **COMPLETE** |
+| TS-7: MCP Integration | `builder-prompts/TS_PHASE_7_MCP.md` | P2 | **COMPLETE** |
+| TS-8: Testing | `builder-prompts/TS_PHASE_8_TESTING.md` | P2 | **COMPLETE** |
+| TS-9: Packaging | `builder-prompts/TS_PHASE_9_PACKAGING.md` | P2 | **COMPLETE** |
+| SCG D1-D2: Descriptor + Query | `builder-prompts/SCG_D1_D2_DESCRIPTOR_QUERY.md` | P3 | **COMPLETE** |
+| SCG D3-D4: Index + Compose | `builder-prompts/SCG_D3_D4_INDEX_COMPOSE.md` | P3 | **COMPLETE** |
+| SCG D5-D6: Planning + Bridge | `builder-prompts/SCG_D5_D6_PLAN_BRIDGE.md` | P3 | **COMPLETE** |
+| AR T1-T2: Metrics + Routing | `builder-prompts/AR_T1_T2_METRICS_ROUTING.md` | P3 | **COMPLETE** |
+| AR T3-T4: Breaker + Hedging | `builder-prompts/AR_T3_T4_BREAKER_HEDGING.md` | P3 | **COMPLETE** |
+| AR T5-T7: Integration + API | `builder-prompts/AR_T5_T7_INTEGRATION_API.md` | P3 | **COMPLETE** |
+| PS P1-P2: API + Propagation | `builder-prompts/PS_P1_P2_API_PROPAGATION.md` | P3 | **COMPLETE** |
+| PS P3-P4: BackChannel + Routing | `builder-prompts/PS_P3_P4_BACKCHANNEL_ROUTING.md` | P3 | **COMPLETE** |
+| PS P5-P6: Security + GossipSub | `builder-prompts/PS_P5_P6_SECURITY_GOSSIPSUB.md` | P3 | **COMPLETE** |
+| ARE E1-E2: Map + Geo/Perf | `builder-prompts/ARE_E1_E2_MAP_GEO_PERF.md` | P3 | **COMPLETE** |
+| ARE E3-E4: Cost/Semantic/Reputation | `builder-prompts/ARE_E3_E4_COST_SEMANTIC_REPUTATION.md` | P3 | **COMPLETE** |
+| ARE E5-E6: DHT + Testing | `builder-prompts/ARE_E5_E6_DHT_TESTING.md` | P3 | **COMPLETE** |
 
 **Key finding:** The gap is in the SDK, not the protocol. No wire protocol
 changes required. All gaps can be addressed by exposing existing QUIC/CBOR
 primitives through the Simple API.
+
+**Result:** 1864 Rust tests + 151 TypeScript tests = 2015 total, 0 failures.
+0 clippy warnings. Security review complete (4 critical + 12 high fixed).
+Freeze tag: `v0.4-intelligence-plane`.

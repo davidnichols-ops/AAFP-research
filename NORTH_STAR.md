@@ -1,6 +1,6 @@
 # AAFP North Star — The Agent Operating System
 
-**Last updated:** 2026-07-05
+**Last updated:** 2026-07-06
 **Purpose:** Single source of truth for strategic direction, current state, and
 remaining work. **Read this first** before any planning or execution.
 
@@ -40,15 +40,19 @@ learns QUIC, UCAN, DHT, or relay reservations. AAFP disappears.
 ```
 Applications
 ────────────────────────────────────────────
-Agent Runtime                          ← SDK (Rust, Python, TypeScript)
+Agent Runtime                          ← SDK (Rust, Python, TypeScript) ✅
 ────────────────────────────────────────────
-Execution Fabric                       ← Future (fluid execution, spawning)
+Execution Fabric                       ← Phase 4 (fluid execution, spawning)
 ────────────────────────────────────────────
-Global Memory                          ← Future (shared state, checkpoints)
+Global Memory                          ← Phase 4 (shared state, checkpoints)
 ────────────────────────────────────────────
-Adaptive Routing (predictive)          ← Future (temporal routing engine)
+Adaptive Routing (predictive)          ← IMPLEMENTED ✅ (metrics, scoring, circuit breaker, hedging)
 ────────────────────────────────────────────
-Semantic Discovery (planning)          ← Future (intent routing, marketplace)
+Semantic Discovery (planning)          ← IMPLEMENTED ✅ (capability graphs, A* planner, intent routing)
+────────────────────────────────────────────
+PubSub + Back-Channeling               ← IMPLEMENTED ✅ (GossipSub, MQTT wildcards, UCAN ACLs)
+────────────────────────────────────────────
+Agent Reputation (extensions)          ← IMPLEMENTED ✅ (25+ fields: geo, perf, cost, attestation, heartbeat)
 ────────────────────────────────────────────
 Trust / Identity (cryptographic)       ← Complete (Track P)
 ────────────────────────────────────────────
@@ -82,18 +86,19 @@ distributed AI systems," we're on track.
 
 ---
 
-## 2. Current State (2026-07-05)
+## 2. Current State (2026-07-06)
 
 ### Hard numbers
 
 | Metric | Value |
 |--------|-------|
-| Rust tests | **1780 passing**, 0 failures, 7 ignored |
+| Rust tests | **1864 passing**, 0 failures, 7 ignored |
 | Rust crates | 17 (15 workspace + aafp-py + aafp-loadtest) |
-| Rust code | **~105,000 lines** |
+| Rust code | **~115,000 lines** |
 | TypeScript tests | **151 passing**, 0 errors, 12 test files |
 | TypeScript packages | 7 (@aafp/cbor, crypto, sdk, sdk-native, transport-quic, transport-ws, examples) |
 | TypeScript code | ~9,900 lines |
+| Total tests | **2015** (1864 Rust + 151 TypeScript) |
 | RFCs | 11 (0001-0011) + 3 amendment sets + 4 reviews |
 | Go interop | 664 tests, wire-format library |
 | Python adapter | PyO3, MCP SDK 1.28.1 interop verified |
@@ -104,10 +109,13 @@ distributed AI systems," we're on track.
 | Load test | 100 agents, 399K messages, 0% error rate |
 | Stability | 4h continuous, 2.5% memory growth (no leaks) |
 | Research docs | 8 design documents (~12,800 lines) |
-| Builder prompts | 21 ready-to-build prompts (~26,300 lines) |
+| Builder prompts | 0 remaining (all 36 implemented: 21 transport + 15 Intelligence Plane) |
 | Examples | 6 working examples |
 | Deployment | Docker, K8s, systemd, Prometheus + Grafana |
-| Tracks complete | 326/326 (ALL DONE) |
+| Tracks complete | 326/326 transport + 15/15 Intelligence Plane foundation |
+| Security review | 4 critical + 12 high findings fixed (2026-07-06) |
+| Clippy warnings | 0 |
+| Freeze tag | v0.4-intelligence-plane |
 
 ### What's complete and verified
 
@@ -134,6 +142,11 @@ distributed AI systems," we're on track.
 | Security audit | Q (8/8) | Complete | High — fuzzing, adversarial, DoS, timing, hardening |
 | WAN discovery (DHT) | R (8/8) | Complete | High — Kademlia, bootstrap, replication, churn, partition |
 | Load & operations | S (8/8) | Complete | High — 100 agents, stability, metrics, Docker, K8s, ops |
+| **Semantic Capability Graphs** | SCG (D1-D6) | **Implemented** | Medium — capability graphs, A* planner, 11 bridge capabilities |
+| **AgentRecord Extensions** | ARE (E1-E6) | **Implemented** | Medium — 25+ extension fields, DHT integration |
+| **Adaptive Routing Plane** | AR (T1-T7) | **Implemented** | Medium — metrics, scoring, circuit breaker, hedging, retry |
+| **PubSub + Back-Channeling** | PS (P1-P6) | **Implemented** | Medium — GossipSub, MQTT wildcards, UCAN ACLs, back-channels |
+| **Security hardening** | Review | **Complete** | High — 4 critical + 12 high findings fixed |
 
 ---
 
@@ -149,7 +162,7 @@ performance, security, and reliability.**
 
 | Capability | Have it? | Evidence | Track |
 |-----------|----------|----------|-------|
-| Protocol works on localhost | YES | 1597 tests, 41.47µs RTT | A-M |
+| Protocol works on localhost | YES | 1864 tests, 41.47µs RTT | A-M |
 | Protocol works over WAN | YES | 26 WAN simulation tests, packet loss/BBR validated | O |
 | NAT traversal (relay) | YES | Relay forwarding, AutoNAT, DCuTR, SDK integration | N |
 | NAT traversal (hole punch) | YES | DCuTR hole punching for cone NATs | N3 |
@@ -193,7 +206,7 @@ finds no panics. DHT scales to 500 nodes. AAFP survives 5% packet loss."
 
 **Milestone:** "Anyone can `docker compose up` and have a working AAFP relay + agent. Developers can build agents in Rust, Python, or TypeScript without understanding the protocol."
 
-**Phase 2.5: Simple API Adaptation — RESEARCH COMPLETE, RUST+TS IMPLEMENTED**
+**Phase 2.5: Simple API Adaptation — COMPLETE ✅**
 
 Based on 8 parallel sandbox gap analyses testing the Simple API against mainstream
 agentic patterns (MCP, CrewAI/AutoGen, LangChain, browser automation, RAG, code
@@ -208,8 +221,8 @@ reset, and CBOR Maps all exist but weren't exposed through the Simple API.
 - **Phase A:** Simple API v2 — Params, per-capability handlers, streaming, pooling, typed errors — **COMPLETE (Rust P2.7+P2.8, TS all phases)**
 - **Phase B:** Streaming RPC — Server-streaming, client-streaming, bidirectional, cancellation — **COMPLETE (Rust P2.8, TS Phase 5)**
 - **Phase C:** Session Affinity — ConnectionPool, session state, UCAN delegation — **COMPLETE (Rust P2.7, TS Phase 4)**
-- **Phase D:** Semantic Capability Graphs — Multi-dimensional discovery, pipeline assembly — **builder prompts ready**
-- **Phase E:** Adaptive Routing + PubSub + AgentRecord Extensions — **builder prompts ready**
+- **Phase D:** Semantic Capability Graphs — Multi-dimensional discovery, pipeline assembly — **IMPLEMENTED (SCG D1-D6)**
+- **Phase E:** Adaptive Routing + PubSub + AgentRecord Extensions — **IMPLEMENTED (AR T1-T7, PS P1-P6, ARE E1-E6)**
 
 **All 8 research documents complete** (~12,800 lines total):
 - `SIMPLE_API_V2_DESIGN.md` (1,528 lines) — v2 API addressing all 10 gaps
@@ -221,10 +234,10 @@ reset, and CBOR Maps all exist but weren't exposed through the Simple API.
 - `PUBSUB_BACKCHANNEL_DESIGN.md` (1,004 lines) — PubSub API, back-channeling, MQTT wildcards
 - `ADAPTIVE_ROUTING_PLANE.md` (1,647 lines) — Dynamic routing, circuit breaker, hedging
 
-**Builder prompts (15 remaining):**
-- `builder-prompts/` — 15 detailed prompts for SCG (3) + AR (3) + PS (3) + ARE (3) + TS integration, ~15K lines
+**Builder prompts (ALL IMPLEMENTED):**
+- `builder-prompts/` — 15 prompts for SCG (3) + AR (3) + PS (3) + ARE (3) + TS integration — **ALL BUILT**
 - TS SDK builder prompts (9) — **ALL COMPLETE** (151 tests passing)
-- Pre-build scaffolding created for all Rust tracks (47 stub files)
+- All 15 Intelligence Plane prompts — **ALL COMPLETE** (84 new tests, security hardened)
 
 **Phase 3: Build the ecosystem (next — this is where network effects happen)**
 - [x] SDK in Rust, Python, TypeScript — **3 languages COMPLETE**
@@ -238,25 +251,35 @@ reset, and CBOR Maps all exist but weren't exposed through the Simple API.
 
 **Milestone:** "Developers are building agents on AAFP without us asking them to."
 
-**Phase 4: The Intelligence Plane (the 85% that matters)**
+**Phase 4: The Intelligence Plane (foundation implemented, remaining tracks next)**
 
 This is the shift from "better protocol" to "agent operating system." Transport
 is done. The innovation happens above transport. See [`INTELLIGENCE_PLANE.md`](INTELLIGENCE_PLANE.md).
 
-- Track T: **Predictive Routing** — not "who is fastest?" but "who will be fastest 200ms from now?"
-  - Every node gossips: CPU, GPU, memory, latency, queue, failure probability, bandwidth, confidence
-  - Routers maintain a live global model, route to predicted-best, not currently-best
-  - Circuit breaker, bulkhead, request hedging, retry+backoff
-- Track U: **Semantic Discovery → Intent Routing** — not `lookup("python")` but `goal("build an iOS app")`
-  - Multi-dimensional: language, cost, GPU, latency, trust, recent performance, hardware
-  - Discovery becomes planning: assemble pipeline, estimate cost, choose execution order
-  - AgentRecord expanded: 25+ fields (latency map, geo, hardware, price, reliability, reputation, etc.)
-- Track V: **Execution Fabric** — fluid execution, not static pipelines
+- Track T: **Predictive Routing** — ✅ **FOUNDATION IMPLEMENTED** (AR T1-T7)
+  - PeerMetricsRegistry with EWMA latency/success/load tracking
+  - 4 selection strategies (weighted random, P2C, least-connections, lowest-latency)
+  - Circuit breaker (3-state: closed/open/half-open), bulkhead, request hedging, retry+backoff
+  - AdaptiveRouter integrating all components, observability snapshots + Prometheus export
+  - Next: temporal prediction engine ("who will be fastest 200ms from now?")
+- Track U: **Semantic Discovery → Intent Routing** — ✅ **FOUNDATION IMPLEMENTED** (SCG D1-D6)
+  - SemanticCapability with multi-dimensional metadata (language, cost, GPU, latency, trust, hardware)
+  - CapabilityQuery with pattern matching, geo filtering, semantic match
+  - CapabilityGraph + HeuristicPlanner (A* search for multi-step pipeline assembly)
+  - 11 internet bridge capabilities (search, web-browse, code-execute, etc.)
+  - Next: integrate with live DHT, intent-to-plan resolution at the SDK layer
+- Track V: **Execution Fabric** — ❌ **NOT STARTED**
   - Network decides: spawn 83 workers, merge, recover failures, continue, return answer
   - The application shouldn't orchestrate. The network should.
-- Track W: **Agent Reputation** — performance history becomes part of identity
-- Track X: **Economic Layer** — resource accounting, priority, compensation
-- Track Y: **World Perception Layer** — agent-native rendering of web, documents, media
+- Track W: **Agent Reputation** — ✅ **FOUNDATION IMPLEMENTED** (ARE E1-E6)
+  - 25+ AgentRecord extension fields (geo, performance, cost, semantic versioning, reputation, attestation, heartbeat)
+  - Extension trait system with CBOR encoding/decoding
+  - DHT integration for extension-indexed lookups
+  - Next: reputation scoring algorithms, EigenTrust-style aggregation
+- Track X: **Economic Layer** — ❌ **NOT STARTED**
+  - Resource accounting, priority, compensation
+- Track Y: **World Perception Layer** — ❌ **NOT STARTED**
+  - Agent-native rendering of web, documents, media
   - Agent-native content representation schema (RFC-0016 candidate)
   - Stateful browsing sessions with UCAN delegation (RFC-0017 candidate)
   - Multimodal perception (text, images, audio, video → structured representations)
@@ -523,11 +546,14 @@ capability graph.
 
 ### "Agent Operating System" (v3 — Phases 4-5)
 
-- [ ] Predictive Routing Plane: nodes gossip resource metrics, routers predict (not react)
-- [ ] Semantic Discovery → Intent Routing: `goal("build an iOS app")` not `lookup("python")`
+- [x] Predictive Routing Plane foundation: metrics, scoring, circuit breaker, hedging, retry — **IMPLEMENTED**
+- [x] Semantic Discovery → Intent Routing foundation: capability graphs, A* planner — **IMPLEMENTED**
+- [x] Agent Reputation foundation: 25+ AgentRecord extension fields — **IMPLEMENTED**
+- [x] PubSub + Back-Channeling: GossipSub, MQTT wildcards, UCAN ACLs — **IMPLEMENTED**
 - [ ] Execution Fabric: network decides spawning, merging, recovery — not the application
-- [ ] Agent Reputation: performance history as identity
 - [ ] Temporal Routing Engine: "who will be fastest 200ms from now?"
+- [ ] Economic Layer: resource accounting, priority, compensation
+- [ ] World Perception Layer: agent-native web/document/media rendering
 - [ ] Network becomes more efficient as more agents join (exponential network effect)
 - [ ] 10K+ agents, self-organizing, self-healing
 
@@ -554,7 +580,7 @@ capability graph.
 
 ---
 
-## 12. Current Track Status (2026-07-05)
+## 12. Current Track Status (2026-07-06)
 
 | Track | Status | Steps | Tests Added |
 |-------|--------|-------|-------------|
@@ -567,14 +593,22 @@ capability graph.
 | S | COMPLETE | 8/8 | +many |
 | P2.1-P2.8 | COMPLETE | 8/8 | +62 (Rust) |
 | P2.TS | COMPLETE | 9/9 | +151 (TypeScript) |
+| SCG (D1-D6) | **IMPLEMENTED** | 6/6 | +32 |
+| ARE (E1-E6) | **IMPLEMENTED** | 6/6 | +12 |
+| AR (T1-T7) | **IMPLEMENTED** | 7/7 | +50 |
+| PS (P1-P6) | **IMPLEMENTED** | 6/6 | +40 |
+| Security review | **COMPLETE** | — | 0 (fixes, no new tests) |
 
-**Tests:** 1780 Rust + 151 TypeScript = **1931 total tests passing**, 0 failures
-**Completed:** 326/326 Rust track steps + 17/17 Phase 2 steps — **ALL COMPLETE**
-**Codebase:** 17 Rust crates (~105K lines) + 7 TS packages (~9.9K lines)
+**Tests:** 1864 Rust + 151 TypeScript = **2015 total tests passing**, 0 failures
+**Completed:** 326/326 transport + 25/25 Intelligence Plane foundation — **ALL COMPLETE**
+**Codebase:** 17 Rust crates (~115K lines) + 7 TS packages (~9.9K lines)
 **SDKs:** Rust, Python, TypeScript — **3 languages COMPLETE**
 **Phase 2:** P2.1-P2.8 + TypeScript SDK — **NEARLY COMPLETE** (docs + install remaining)
+**Phase 2.5:** All 5 phases (A-E) — **COMPLETE**
+**Phase 4 foundation:** Tracks T, U, W — **IMPLEMENTED** (Tracks V, X, Y remaining)
 **Adaptation research:** ALL 8 design documents complete (~12,800 lines)
-**Builder prompts:** 15 remaining (SCG 3 + AR 3 + PS 3 + ARE 3 + integration), ~15K lines
+**Builder prompts:** 0 remaining (all 36 implemented: 21 transport + 15 Intelligence Plane)
+**Security:** 4 critical + 12 high findings fixed, 0 clippy warnings
 
 ### v1 "Internet-Ready" — ACHIEVED
 
@@ -589,27 +623,24 @@ All 19 tracks (A through S) are complete. AAFP is internet-ready:
 - Deployable (Dockerfile, docker-compose, K8s, systemd, ops runbook)
 - SDK in 3 languages (Rust, Python, TypeScript)
 
-### What's Next: The Intelligence Plane
+### What's Next: The Remaining Intelligence Plane
 
-The transport is done. The SDKs are done. The next phase is not "make the
-protocol better" — it's "build the operating system above the protocol."
+The transport is done. The SDKs are done. The Intelligence Plane foundation
+(tracks T, U, W) is implemented. The remaining work is:
 
-**The shift:** From "better protocol" to "agent operating system." Transport
-is 15% of the system. The Intelligence Plane is the other 85%.
-
-**Phase 3: Build the ecosystem (now)**
+**Phase 3: Build the ecosystem (parallel with Phase 4)**
 - Applications that people actually use (applications drive protocol adoption)
 - Public network with independent operators
 - Tutorials that don't mention QUIC, UCAN, or DHT
 - Plugin system for custom capability providers
 
-**Phase 4: The Intelligence Plane (the 85% that matters)**
-- Track T: Predictive Routing — gossip resource metrics, route to predicted-best
-- Track U: Intent Routing — `goal("build an iOS app")` not `lookup("python")`
+**Phase 4 remaining: The Intelligence Plane (the 85% that matters)**
 - Track V: Execution Fabric — network decides spawning, merging, recovery
-- Track W: Agent Reputation — performance history as identity
 - Track X: Economic Layer — resource accounting, priority, compensation
 - Track Y: World Perception — agent-native rendering of web, documents, media
+- Track T extension: Temporal prediction engine ("who will be fastest 200ms from now?")
+- Track U extension: Live DHT integration, intent-to-plan resolution at SDK layer
+- Track W extension: Reputation scoring algorithms, EigenTrust-style aggregation
 
 **The weekly question:** "If an engineer started an autonomous agent company
 tomorrow, what would make them choose AAFP over simply exposing an HTTPS

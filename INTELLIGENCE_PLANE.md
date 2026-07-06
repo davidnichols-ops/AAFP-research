@@ -1,7 +1,8 @@
 # The Intelligence Plane — The 85% Above Transport
 
 **Created:** 2026-07-05
-**Status:** Design document / strategic blueprint
+**Last updated:** 2026-07-06
+**Status:** Foundation IMPLEMENTED (tracks T, U, W + PubSub). Remaining: V, X, Y.
 **Depends on:** Transport layer (COMPLETE), SDK layer (COMPLETE in 3 languages)
 
 ---
@@ -12,7 +13,7 @@ Protocols don't win because they're technically better. They win because they
 become the easiest way to build things. TCP wasn't fastest. HTTP wasn't most
 efficient. JSON wasn't smallest. Linux wasn't prettiest. They became ecosystems.
 
-AAFP's transport is done — post-quantum, QUIC-native, 1780 tests, 3 SDKs.
+AAFP's transport is done — post-quantum, QUIC-native, 1864 tests, 3 SDKs.
 Transport is 15% of the system. The other 85% is the **Intelligence Plane**:
 the layer where network effects actually happen.
 

@@ -1,7 +1,7 @@
 # AAFP v1 — Internet-Ready: Completion Summary
 
-**Date:** 2026-07-04
-**Status:** ALL 326 STEPS COMPLETE. AAFP IS INTERNET-READY.
+**Date:** 2026-07-04 (updated 2026-07-06)
+**Status:** ALL 326 TRANSPORT STEPS + 25 INTELLIGENCE PLANE STEPS COMPLETE. AAFP IS INTERNET-READY + INTELLIGENCE PLANE FOUNDATION IMPLEMENTED.
 
 ---
 
@@ -9,12 +9,12 @@
 
 | Metric | Start | End | Delta |
 |--------|-------|-----|-------|
-| Tests | ~50 (MVP) | 1597 | +1547 |
-| Crates | 1 | 17 | +16 |
-| Lines of code | ~5K | ~75K | +70K |
+| Tests | ~50 (MVP) | 2015 (1864 Rust + 151 TS) | +1965 |
+| Crates | 1 | 17 Rust + 7 TS | +23 |
+| Lines of code | ~5K | ~125K (115K Rust + 10K TS) | +120K |
 | RFCs | 0 | 11 | +11 |
-| Tracks completed | 0 | 19 (A-S) | +19 |
-| Steps completed | 0 | 326 | +326 |
+| Tracks completed | 0 | 19 (A-S) + 4 IP tracks | +23 |
+| Steps completed | 0 | 326 + 25 | +351 |
 | Round-trip latency | 250µs | 41.47µs | 6.0x faster |
 | Throughput | ~100K msg/s | 1.25M msg/s | 12.5x |
 | DHT scale | 0 nodes | 500 nodes | — |

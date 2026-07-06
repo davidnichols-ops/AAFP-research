@@ -182,9 +182,9 @@ NAT types: cone NAT (DCuTR works, ~70% success), symmetric NAT (relay only, ~30%
 
 | Metric | Value |
 |--------|-------|
-| Rust tests | 1597 passing, 0 failures, 7 ignored |
+| Rust tests | 1864 passing, 0 failures, 7 ignored |
 | Rust crates | 17 (15 workspace + aafp-py + aafp-loadtest) |
-| Rust code | ~75,000 lines |
+| Rust code | ~115,000 lines |
 | RFCs | 11 (frozen) + 3 amendment sets + 4 reviews |
 | Go interop | 664 tests, wire-format library |
 | Python adapter | PyO3, MCP SDK 1.28.1 interop verified |
@@ -228,7 +228,7 @@ not-started work remaining.
 **AAFP has been validated over simulated WAN conditions (packet loss, BBR,
 migration). Real two-machine testing is documented but pending hardware.**
 
-All 1597 tests run on localhost. The 41.47µs RTT is a localhost number. The
+All 1864 tests run on localhost. The 41.47µs RTT is a localhost number. The
 protocol design is solid, the crypto is production-grade, the performance is
 excellent — and simulated WAN testing (packet loss, 50-200ms RTT, BBR vs Cubic,
 migration) has passed. What remains is real two-machine validation with:
@@ -368,7 +368,7 @@ cd /Users/david/Projects/AAFP-research/implementations/rust
 cargo fmt --all -- --check    # formatting (0 diffs expected)
 cargo build --workspace        # build (0 warnings expected)
 cargo clippy --workspace -- -D warnings  # lints (0 warnings expected)
-cargo test --workspace         # 1597 tests, 0 failures expected
+cargo test --workspace         # 1864 tests, 0 failures expected
 ```
 
 ---
@@ -419,7 +419,7 @@ Code Agent (other machine, behind different NAT)
 2. **Not faster for single requests.** Advantage is in persistent multi-agent communication, not one-shot API calls.
 3. **Requires agents to be online.** P2P — if the other agent is offline, you can't talk. (Message persistence is v2.)
 4. **NAT traversal isn't 100%.** ~70% hole punch success, 30% need relay (adds latency).
-5. **It's early.** 1597 tests pass on localhost. Simulated WAN testing passes. Real two-machine validation is pending hardware. Protocol design is solid.
+5. **It's early.** 1864 tests pass on localhost. Simulated WAN testing passes. Real two-machine validation is pending hardware. Protocol design is solid.
 
 ---
 

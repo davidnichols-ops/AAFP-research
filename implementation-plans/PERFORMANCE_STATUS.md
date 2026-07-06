@@ -91,7 +91,7 @@ Phase 4 (Q4): J4-J7 (QUIC Advanced) + L (Kernel/Hardware)
 
 After each track, the following must pass:
 
-1. **All existing tests pass** (1597 Rust tests, 0 failures, 7 ignored)
+1. **All existing tests pass** (1864 Rust tests, 0 failures, 7 ignored)
 2. **Clippy clean** (`cargo clippy --workspace -- -D warnings`)
 3. **Fmt clean** (`cargo fmt --all -- --check`)
 4. **No wire protocol changes** (golden traces still pass)

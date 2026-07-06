@@ -1964,7 +1964,7 @@ kubectl port-forward svc/aafp-agent 9090:9090 -n aafp  # access metrics locally
 curl http://localhost:9090/metrics
 
 # ── Testing ──────────────────────────────────────────────────────────────────
-cargo test --workspace                    # all 1597 tests
+cargo test --workspace                    # all 1864 tests
 cargo test -p aafp-conformance            # RFC conformance
 cargo test -p aafp-loadtest               # load tests
 cargo +nightly fuzz run frame_decode      # fuzz testing
