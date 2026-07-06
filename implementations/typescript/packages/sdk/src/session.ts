@@ -63,17 +63,17 @@ export class SessionStateMachine {
 
   /** Current session state. */
   get currentState(): SessionState {
-    throw new Error("Not implemented");
+    return this.state;
   }
 
   /** Session ID (32 bytes), or null if handshake not complete. */
   get sessionIdentifier(): Uint8Array | null {
-    throw new Error("Not implemented");
+    return this.sessionId;
   }
 
   /** Whether the session is in the `MessagingEnabled` state. */
   get isMessagingEnabled(): boolean {
-    throw new Error("Not implemented");
+    return this.state === "MessagingEnabled";
   }
 
   /**
@@ -83,7 +83,10 @@ export class SessionStateMachine {
    * @throws {Error} If not in the `Idle` state.
    */
   beginHandshake(): void {
-    throw new Error("Not implemented");
+    if (this.state !== "Idle") {
+      throw new Error(`cannot begin handshake from state ${this.state}`);
+    }
+    this.state = "Handshaking";
   }
 
   /**
@@ -94,7 +97,11 @@ export class SessionStateMachine {
    * @throws {Error} If not in the `Handshaking` state.
    */
   completeHandshake(sessionId: Uint8Array): void {
-    throw new Error("Not implemented");
+    if (this.state !== "Handshaking") {
+      throw new Error(`cannot complete handshake from state ${this.state}`);
+    }
+    this.sessionId = sessionId;
+    this.state = "MessagingEnabled";
   }
 
   /**
@@ -103,7 +110,7 @@ export class SessionStateMachine {
    * Transitions directly to `Closed`.
    */
   failHandshake(): void {
-    throw new Error("Not implemented");
+    this.state = "Closed";
   }
 
   /**
@@ -113,7 +120,10 @@ export class SessionStateMachine {
    * @throws {Error} If not in the `MessagingEnabled` state.
    */
   beginClose(): void {
-    throw new Error("Not implemented");
+    if (this.state !== "MessagingEnabled") {
+      throw new Error(`cannot begin close from state ${this.state}`);
+    }
+    this.state = "Closing";
   }
 
   /**
@@ -122,7 +132,7 @@ export class SessionStateMachine {
    * Transitions to `Closed`.
    */
   completeClose(): void {
-    throw new Error("Not implemented");
+    this.state = "Closed";
   }
 
   /**
@@ -133,11 +143,17 @@ export class SessionStateMachine {
    * @throws {HandlerError} If not in the `MessagingEnabled` state.
    */
   assertMessagingEnabled(): void {
-    throw new Error("Not implemented");
+    if (this.state !== "MessagingEnabled") {
+      throw new HandlerError(
+        HandlerErrorCategory.Authentication,
+        `messaging not enabled: session state is ${this.state}`,
+        2001,
+      );
+    }
   }
 
   /** Session uptime in milliseconds. */
   get uptimeMs(): number {
-    throw new Error("Not implemented");
+    return Date.now() - this.createdAt;
   }
 }

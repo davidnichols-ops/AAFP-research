@@ -99,12 +99,13 @@ export class AgentMetrics {
 
   /** Record a new connection (increments active and total). */
   recordConnection(): void {
-    throw new Error("Not implemented");
+    this.connectionsActive++;
+    this.connectionsTotal++;
   }
 
   /** Record a disconnection (decrements active, floored at 0). */
   recordDisconnect(): void {
-    throw new Error("Not implemented");
+    if (this.connectionsActive > 0) this.connectionsActive--;
   }
 
   /**
@@ -112,7 +113,8 @@ export class AgentMetrics {
    * @param bytes - Number of bytes sent.
    */
   recordSent(bytes: number): void {
-    throw new Error("Not implemented");
+    this.messagesSent++;
+    this.bytesSent += bytes;
   }
 
   /**
@@ -120,42 +122,43 @@ export class AgentMetrics {
    * @param bytes - Number of bytes received.
    */
   recordReceived(bytes: number): void {
-    throw new Error("Not implemented");
+    this.messagesReceived++;
+    this.bytesReceived += bytes;
   }
 
   /** Record a message failure. */
   recordMessageFailure(): void {
-    throw new Error("Not implemented");
+    this.messagesFailed++;
   }
 
   /** Record a successful handshake. */
   recordHandshake(): void {
-    throw new Error("Not implemented");
+    this.handshakesCompleted++;
   }
 
   /** Record a failed handshake. */
   recordHandshakeFailure(): void {
-    throw new Error("Not implemented");
+    this.handshakesFailed++;
   }
 
   /** Record a DHT record stored. */
   recordDhtRecord(): void {
-    throw new Error("Not implemented");
+    this.dhtRecords++;
   }
 
   /** Record a relay connection established. */
   recordRelayConnection(): void {
-    throw new Error("Not implemented");
+    this.relayConnections++;
   }
 
   /** Record a relay disconnection (decrements, floored at 0). */
   recordRelayDisconnect(): void {
-    throw new Error("Not implemented");
+    if (this.relayConnections > 0) this.relayConnections--;
   }
 
   /** Agent uptime in seconds. */
   get uptimeSeconds(): number {
-    throw new Error("Not implemented");
+    return (Date.now() - this.startTime) / 1000;
   }
 
   /**
@@ -163,7 +166,20 @@ export class AgentMetrics {
    * @returns A {@link MetricsSnapshot} copy.
    */
   snapshot(): MetricsSnapshot {
-    throw new Error("Not implemented");
+    return {
+      connectionsActive: this.connectionsActive,
+      connectionsTotal: this.connectionsTotal,
+      messagesSent: this.messagesSent,
+      messagesReceived: this.messagesReceived,
+      bytesSent: this.bytesSent,
+      bytesReceived: this.bytesReceived,
+      handshakesCompleted: this.handshakesCompleted,
+      handshakesFailed: this.handshakesFailed,
+      dhtRecords: this.dhtRecords,
+      relayConnections: this.relayConnections,
+      messagesFailed: this.messagesFailed,
+      uptimeSeconds: this.uptimeSeconds,
+    };
   }
 
   /**
@@ -175,7 +191,15 @@ export class AgentMetrics {
    * @returns The current {@link HealthStatus}.
    */
   get health(): HealthStatus {
-    throw new Error("Not implemented");
+    if (this.connectionsActive === 0 && this.connectionsTotal > 0) {
+      return HealthStatus.Unhealthy;
+    }
+    const totalMessages = this.messagesSent + this.messagesReceived;
+    if (totalMessages > 0) {
+      const errorRate = this.messagesFailed / totalMessages;
+      if (errorRate > 0.1) return HealthStatus.Degraded;
+    }
+    return HealthStatus.Healthy;
   }
 }
 
@@ -210,7 +234,24 @@ export class PrometheusExporter {
    * @returns A promise that resolves when the server closes.
    */
   async serve(addr: string): Promise<void> {
-    throw new Error("Not implemented");
+    const http = await import("node:http");
+    const [host, port] = addr.split(":");
+    const server = http.createServer((req, res) => {
+      if (req.method === "GET" && req.url === "/metrics") {
+        res.writeHead(200, { "Content-Type": "text/plain; version=0.0.4" });
+        res.end(this.render());
+      } else {
+        res.writeHead(404);
+        res.end("Not Found");
+      }
+    });
+    return new Promise<void>((resolve, reject) => {
+      server.listen(Number(port) || 9090, host || "0.0.0.0", () => {
+        // Server is listening; keep running until closed externally
+      });
+      server.on("error", reject);
+      server.on("close", resolve);
+    });
   }
 
   /**
@@ -221,6 +262,29 @@ export class PrometheusExporter {
    * @returns Prometheus text-format string.
    */
   render(): string {
-    throw new Error("Not implemented");
+    const s = this.metrics.snapshot();
+    const id = this.agentId;
+    const lines: string[] = [];
+
+    const metric = (name: string, help: string, type: string, value: number) => {
+      lines.push(`# HELP ${name} ${help}`);
+      lines.push(`# TYPE ${name} ${type}`);
+      lines.push(`${name}{agent_id="${id}"} ${value}`);
+    };
+
+    metric("aafp_connections_active", "Current active connections", "gauge", s.connectionsActive);
+    metric("aafp_connections_total", "Total connections established", "counter", s.connectionsTotal);
+    metric("aafp_messages_sent", "Total messages sent", "counter", s.messagesSent);
+    metric("aafp_messages_received", "Total messages received", "counter", s.messagesReceived);
+    metric("aafp_bytes_sent", "Total bytes sent", "counter", s.bytesSent);
+    metric("aafp_bytes_received", "Total bytes received", "counter", s.bytesReceived);
+    metric("aafp_handshakes_completed", "Total handshakes completed", "counter", s.handshakesCompleted);
+    metric("aafp_handshakes_failed", "Total handshakes failed", "counter", s.handshakesFailed);
+    metric("aafp_dht_records", "DHT records stored", "gauge", s.dhtRecords);
+    metric("aafp_relay_connections", "Active relay connections", "gauge", s.relayConnections);
+    metric("aafp_messages_failed", "Total messages that failed", "counter", s.messagesFailed);
+    metric("aafp_uptime_seconds", "Agent uptime in seconds", "gauge", s.uptimeSeconds);
+
+    return lines.join("\n") + "\n";
   }
 }
