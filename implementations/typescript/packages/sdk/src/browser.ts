@@ -144,18 +144,20 @@ export class WebTransportTransport implements Transport {
     url: string,
     opts?: TransportCreateOptions,
   ): Promise<WebTransportTransport> {
-    // const session = new WebTransport(url, opts);
-    // await session.ready;
-    // const localAddr = parseWebTransportUrl(url);
-    // return new WebTransportTransport(session, localAddr);
-    throw new Error("Not implemented");
+    const WT = (globalThis as unknown as { WebTransport?: new (url: string, opts?: unknown) => unknown }).WebTransport;
+    if (!WT) throw new Error("WebTransport not available in this runtime");
+    const session = new WT(url, {
+      serverCertificateHashes: opts?.serverCertificateHashes,
+    });
+    // Await session.ready
+    await (session as unknown as { ready: Promise<void> }).ready;
+    const localAddr = url; // Simplified: use URL as local addr
+    return new WebTransportTransport(session, localAddr);
   }
 
   /** @inheritdoc */
-  async dial(addr: Multiaddr): Promise<Connection> {
-    // For WebTransport, dial and connect are the same — the session IS the
-    // connection. return new WebTransportConnection(this.session, addrToString(addr));
-    throw new Error("Not implemented");
+  async dial(_addr: Multiaddr): Promise<Connection> {
+    return new WebTransportConnection(this.session);
   }
 
   /** @inheritdoc */
@@ -167,8 +169,7 @@ export class WebTransportTransport implements Transport {
 
   /** @inheritdoc */
   async close(): Promise<void> {
-    // await this.session.close();
-    throw new Error("Not implemented");
+    await (this.session as unknown as { close: () => void }).close();
   }
 }
 
@@ -225,18 +226,26 @@ export class WsGatewayTransport implements Transport {
    * @returns    A ready-to-use `WsGatewayTransport`.
    */
   static async create(url: string): Promise<WsGatewayTransport> {
-    // const ws = new WebSocket(url);
-    // ws.binaryType = "arraybuffer";
-    // await once(ws, "open");
-    // return new WsGatewayTransport(ws, parseWsUrl(url));
-    throw new Error("Not implemented");
+    const WS = (globalThis as unknown as { WebSocket?: new (url: string) => unknown }).WebSocket;
+    if (!WS) throw new Error("WebSocket not available in this runtime");
+    const ws = new WS(url);
+    (ws as unknown as { binaryType: string }).binaryType = "arraybuffer";
+    await new Promise<void>((resolve, reject) => {
+      const sock = ws as unknown as {
+        addEventListener: (ev: string, cb: (...args: unknown[]) => void) => void;
+        removeEventListener: (ev: string, cb: (...args: unknown[]) => void) => void;
+      };
+      const onOpen = () => { sock.removeEventListener("open", onOpen); resolve(); };
+      const onError = (e: unknown) => { sock.removeEventListener("error", onError); reject(e); };
+      sock.addEventListener("open", onOpen);
+      sock.addEventListener("error", onError);
+    });
+    return new WsGatewayTransport(ws, url);
   }
 
   /** @inheritdoc */
-  async dial(addr: Multiaddr): Promise<Connection> {
-    // The WebSocket itself is the connection; the relay dials the real QUIC peer.
-    // return new WsGatewayConnection(this.ws, addrToString(addr));
-    throw new Error("Not implemented");
+  async dial(_addr: Multiaddr): Promise<Connection> {
+    return new WsGatewayConnection(this.ws as WebSocket);
   }
 
   /** @inheritdoc */
@@ -248,8 +257,7 @@ export class WsGatewayTransport implements Transport {
 
   /** @inheritdoc */
   async close(): Promise<void> {
-    // this.ws.close();
-    throw new Error("Not implemented");
+    (this.ws as unknown as { close: () => void }).close();
   }
 }
 
@@ -304,9 +312,9 @@ export async function createTransport(
 
   // 1. Node.js 25+ with node:quic — dynamically imported, tree-shakeable.
   if (runtime === "node" && hasNodeQuic()) {
-    // const { NodeQuicTransport } = await import("./node-quic.js");
-    // return new NodeQuicTransport(opts);
-    throw new Error("Not implemented: node:quic transport");
+    // In a full implementation, this would dynamically import the node:quic
+    // transport module. For now, fall through to WebTransport/WS gateway.
+    // The node:quic transport will be added when Node 25 stabilizes.
   }
 
   // 2. Browser / Deno with WebTransport.
@@ -361,4 +369,236 @@ function defaultGatewayUrl(): string {
     return `${proto}//${loc.location.host}/aafp-gateway`;
   }
   return "ws://localhost:9000/aafp-gateway";
+}
+
+// ─── WebTransportConnection ──────────────────────────────────────
+
+/**
+ * Connection wrapping a WebTransport session.
+ * Opens bidi streams via `session.createBidirectionalStream()`.
+ */
+class WebTransportConnection implements Connection {
+  constructor(private session: unknown) {}
+
+  get remoteAddr(): string {
+    return "webtransport://remote";
+  }
+
+  async openBidiStream(): Promise<BidiStream> {
+    const s = this.session as unknown as {
+      createBidirectionalStream: () => Promise<unknown>;
+    };
+    const stream = await s.createBidirectionalStream();
+    return new WebTransportBidiStream(stream);
+  }
+
+  async acceptBidiStream(): Promise<BidiStream> {
+    const s = this.session as unknown as {
+      incomingBidirectionalStreams: AsyncIterable<unknown>;
+    };
+    const stream = await s.incomingBidirectionalStreams[Symbol.asyncIterator]().next();
+    if (stream.done) throw new Error("No incoming streams");
+    return new WebTransportBidiStream(stream.value);
+  }
+
+  async close(): Promise<void> {
+    await (this.session as unknown as { close: () => void }).close();
+  }
+}
+
+/**
+ * BidiStream wrapping a WebTransportBidirectionalStream.
+ */
+class WebTransportBidiStream implements BidiStream {
+  private readonly writer: unknown;
+  private readonly reader: unknown;
+
+  constructor(stream: unknown) {
+    this.writer = (stream as unknown as { writable: unknown }).writable;
+    this.reader = (stream as unknown as { readable: unknown }).readable;
+  }
+
+  async write(data: Uint8Array): Promise<void> {
+    const w = this.writer as unknown as {
+      getWriter: () => { write: (d: Uint8Array) => Promise<void>; releaseLock: () => void };
+    };
+    const writer = w.getWriter();
+    try {
+      await writer.write(data);
+    } finally {
+      writer.releaseLock();
+    }
+  }
+
+  async finish(): Promise<void> {
+    const w = this.writer as unknown as {
+      getWriter: () => { close: () => Promise<void>; releaseLock: () => void };
+    };
+    const writer = w.getWriter();
+    try {
+      await writer.close();
+    } finally {
+      writer.releaseLock();
+    }
+  }
+
+  async read(): Promise<Uint8Array | null> {
+    const r = this.reader as unknown as {
+      getReader: () => { read: () => Promise<{ done: boolean; value?: Uint8Array }>; releaseLock: () => void };
+    };
+    const reader = r.getReader();
+    try {
+      const result = await reader.read();
+      if (result.done) return null;
+      return result.value ?? null;
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async reset(_code?: number): Promise<void> {
+    // WebTransport streams don't have a direct reset; close abruptly
+    try {
+      const w = this.writer as unknown as {
+        getWriter: () => { abort: () => Promise<void>; releaseLock: () => void };
+      };
+      const writer = w.getWriter();
+      await writer.abort();
+      writer.releaseLock();
+    } catch {
+      // Best-effort
+    }
+  }
+}
+
+// ─── WsGatewayConnection ─────────────────────────────────────────
+
+/**
+ * Frame types for the WebSocket gateway multiplexing protocol.
+ */
+const enum WsFrameType {
+  OPEN = 0x01,
+  DATA = 0x02,
+  FIN = 0x03,
+  RESET = 0x04,
+  PING = 0x05,
+  PONG = 0x06,
+}
+
+/**
+ * Connection over a WebSocket gateway.
+ * Multiplexes logical bidi streams over a single WebSocket.
+ */
+class WsGatewayConnection implements Connection {
+  private nextStreamId = 1;
+  private readonly streams: Map<number, WsGatewayBidiStream> = new Map();
+
+  constructor(private ws: unknown) {}
+
+  get remoteAddr(): string {
+    return "ws-gateway://remote";
+  }
+
+  async openBidiStream(): Promise<BidiStream> {
+    const streamId = this.nextStreamId++;
+    const stream = new WsGatewayBidiStream(streamId, this.ws, this.streams);
+    this.streams.set(streamId, stream);
+    // Send OPEN frame
+    await this.sendFrame(streamId, WsFrameType.OPEN, new Uint8Array(0));
+    return stream;
+  }
+
+  async acceptBidiStream(): Promise<BidiStream> {
+    throw new Error("acceptBidiStream not supported on WsGateway client");
+  }
+
+  async close(): Promise<void> {
+    (this.ws as unknown as { close: () => void }).close();
+    this.streams.clear();
+  }
+
+  async sendFrame(streamId: number, type: number, payload: Uint8Array): Promise<void> {
+    const header = new ArrayBuffer(9 + payload.length);
+    const view = new DataView(header);
+    view.setUint32(0, streamId, false); // big-endian
+    view.setUint8(4, type);
+    view.setUint32(5, payload.length, false); // big-endian
+    new Uint8Array(header, 9).set(payload);
+    const ws = this.ws as unknown as { send: (data: ArrayBuffer) => void; readyState: number };
+    if (ws.readyState === 1) { // OPEN
+      ws.send(header);
+    }
+  }
+}
+
+/**
+ * BidiStream multiplexed over a WebSocket.
+ */
+class WsGatewayBidiStream implements BidiStream {
+  private readonly chunks: Uint8Array[] = [];
+  private readonly waiters: Array<() => void> = [];
+  private done = false;
+  private errored: Error | null = null;
+
+  constructor(
+    private readonly streamId: number,
+    private readonly ws: unknown,
+    private readonly streams: Map<number, WsGatewayBidiStream>,
+  ) {}
+
+  async write(data: Uint8Array): Promise<void> {
+    await this.sendFrame(WsFrameType.DATA, data);
+  }
+
+  async finish(): Promise<void> {
+    await this.sendFrame(WsFrameType.FIN, new Uint8Array(0));
+    this.done = true;
+    this.notifyWaiters();
+  }
+
+  async read(): Promise<Uint8Array | null> {
+    if (this.chunks.length > 0) return this.chunks.shift()!;
+    if (this.done || this.errored) return null;
+    await new Promise<void>((resolve) => this.waiters.push(resolve));
+    if (this.chunks.length > 0) return this.chunks.shift()!;
+    return null;
+  }
+
+  async reset(code?: number): Promise<void> {
+    const payload = new Uint8Array([code ?? 0]);
+    await this.sendFrame(WsFrameType.RESET, payload);
+    this.errored = new Error("Stream reset");
+    this.streams.delete(this.streamId);
+    this.notifyWaiters();
+  }
+
+  private async sendFrame(type: number, payload: Uint8Array): Promise<void> {
+    const header = new ArrayBuffer(9 + payload.length);
+    const view = new DataView(header);
+    view.setUint32(0, this.streamId, false);
+    view.setUint8(4, type);
+    view.setUint32(5, payload.length, false);
+    new Uint8Array(header, 9).set(payload);
+    const ws = this.ws as unknown as { send: (data: ArrayBuffer) => void; readyState: number };
+    if (ws.readyState === 1) {
+      ws.send(header);
+    }
+  }
+
+  /** Called by the connection when data arrives for this stream. */
+  pushData(data: Uint8Array): void {
+    this.chunks.push(data);
+    this.notifyWaiters();
+  }
+
+  /** Called by the connection when the remote finishes the stream. */
+  remoteFinish(): void {
+    this.done = true;
+    this.notifyWaiters();
+  }
+
+  private notifyWaiters(): void {
+    for (const w of this.waiters) w();
+    this.waiters.length = 0;
+  }
 }

@@ -261,12 +261,19 @@ export async function sha256WebCrypto(
     crypto?: { subtle: { digest: (alg: string, data: BufferSource) => Promise<ArrayBuffer> } };
   };
   if (c.crypto?.subtle) {
-    const hash = await c.crypto.subtle.digest("SHA-256", data);
+    // Copy to a fresh ArrayBuffer to satisfy BufferSource typing
+    const buf = new ArrayBuffer(data.byteLength);
+    new Uint8Array(buf).set(data);
+    const hash = await c.crypto.subtle.digest("SHA-256", buf);
     return new Uint8Array(hash);
   }
-  // const { sha256 } = await import("@noble/hashes/sha2.js");
-  // return sha256(data);
-  throw new Error("Not implemented: WebCrypto unavailable and noble fallback not wired");
+  // Fallback: use @noble/hashes if available
+  try {
+    const { sha256 } = await import("@noble/hashes/sha2.js");
+    return sha256(data);
+  } catch {
+    throw new Error("Not implemented: WebCrypto unavailable and noble fallback not wired");
+  }
 }
 
 /**

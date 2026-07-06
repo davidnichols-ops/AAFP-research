@@ -13,11 +13,8 @@
     "src/**/*.test.ts",
     "src/langchain.ts",
     "src/vercel-ai.ts",
-    "src/mcp-transport.ts",
     "src/mcp-bridge.ts",
     "src/mcp-accept.ts",
-    "src/identity-browser.ts",
-    "src/browser.ts",
     "dist",
     "node_modules"
   ]

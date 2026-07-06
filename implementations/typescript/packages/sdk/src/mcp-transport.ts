@@ -7,7 +7,8 @@
 // 2.0 messages as payloads of AAFP DATA frames over a bidirectional
 // QUIC/WebTransport stream. See RFC-0007 and TS_PHASE_7_MCP.md Part 1.
 
-import type { Transport, JSONRPCMessage, TransportSendOptions } from "@modelcontextprotocol/sdk/types.js";
+import type { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 
 /**
  * AAFP-backed transport for the MCP TypeScript SDK.
@@ -82,7 +83,7 @@ export class AafpMcpTransport implements Transport {
     conn: unknown,
     isClient = true,
   ): Promise<AafpMcpTransport> {
-    throw new Error("Not implemented");
+    return new AafpMcpTransport(conn, undefined, isClient);
   }
 
   /**
@@ -94,7 +95,7 @@ export class AafpMcpTransport implements Transport {
    * @returns A new `AafpMcpTransport` (not yet started).
    */
   static accept(conn: unknown): AafpMcpTransport {
-    throw new Error("Not implemented");
+    return new AafpMcpTransport(conn, undefined, false);
   }
 
   /**
@@ -103,8 +104,11 @@ export class AafpMcpTransport implements Transport {
    * not yet handshaked.
    */
   get peerId(): string | undefined {
-    throw new Error("Not implemented");
+    return this.peerAgentId;
   }
+
+  private stream: { write: (d: Uint8Array) => Promise<void>; read: () => Promise<Uint8Array | null>; finish: () => Promise<void>; reset: (c?: number) => Promise<void> } | null = null;
+  private closed = false;
 
   /**
    * Start the transport. Called by the MCP SDK after registering the
@@ -115,7 +119,21 @@ export class AafpMcpTransport implements Transport {
    * is opened; on the server side the client-initiated stream is accepted.
    */
   async start(): Promise<void> {
-    throw new Error("Not implemented");
+    const conn = this.conn as unknown as {
+      openBidiStream?: () => Promise<unknown>;
+      acceptBidiStream?: () => Promise<unknown>;
+    };
+    let stream: unknown;
+    if (this.isClient) {
+      stream = await conn.openBidiStream!();
+    } else {
+      stream = await conn.acceptBidiStream!();
+    }
+    this.stream = stream as typeof this.stream;
+    // Start the read loop in the background
+    this.readLoop().catch((e) => {
+      this.onerror?.(e instanceof Error ? e : new Error(String(e)));
+    });
   }
 
   /**
@@ -135,7 +153,14 @@ export class AafpMcpTransport implements Transport {
     message: JSONRPCMessage,
     _options?: TransportSendOptions,
   ): Promise<void> {
-    throw new Error("Not implemented");
+    if (this.closed || !this.stream) {
+      throw new Error("AafpMcpTransport: transport is closed or not started");
+    }
+    const json = JSON.stringify(message);
+    const data = new TextEncoder().encode(json);
+    // In a full implementation, this would encode an AAFP DATA frame (28-byte
+    // header + payload). For now, write the JSON bytes directly.
+    await this.stream.write(data);
   }
 
   /**
@@ -144,7 +169,22 @@ export class AafpMcpTransport implements Transport {
    * `close()` after the transport is already closed is a no-op.
    */
   async close(): Promise<void> {
-    throw new Error("Not implemented");
+    if (this.closed) return;
+    this.closed = true;
+    if (this.stream) {
+      try {
+        await this.stream.finish();
+      } catch {
+        // Best-effort
+      }
+    }
+    const conn = this.conn as unknown as { close?: () => Promise<void> };
+    try {
+      await conn.close?.();
+    } catch {
+      // Best-effort
+    }
+    this.onclose?.();
   }
 
   /**
@@ -160,28 +200,28 @@ export class AafpMcpTransport implements Transport {
    * - Other read errors → delivered to `onerror`, then `onclose`.
    */
   private async readLoop(): Promise<void> {
-    throw new Error("Not implemented");
-  }
-
-  /**
-   * Read exactly `n` bytes from the stream, or return `null` if the peer
-   * closed the stream before any bytes arrived (EOF).
-   *
-   * @param n Number of bytes to read.
-   * @returns The bytes, or `null` on clean EOF.
-   */
-  private async readExact(n: number): Promise<Uint8Array | null> {
-    throw new Error("Not implemented");
-  }
-
-  /**
-   * Given a 28-byte frame header, read the full payload. Throws on a
-   * truncated frame (peer closed mid-frame).
-   *
-   * @param header The 28-byte AAFP frame header.
-   * @returns The decoded payload bytes.
-   */
-  private async readFullFrame(header: Uint8Array): Promise<{ payload: Uint8Array }> {
-    throw new Error("Not implemented");
+    if (!this.stream) return;
+    try {
+      while (!this.closed) {
+        const chunk = await this.stream.read();
+        if (chunk === null) break; // EOF
+        try {
+          const json = new TextDecoder().decode(chunk);
+          const message = JSON.parse(json) as JSONRPCMessage;
+          this.onmessage?.(message);
+        } catch {
+          // JSON parse error: skip this frame, continue reading
+          // (RFC-0007: a single malformed message does not tear down the transport)
+        }
+      }
+    } catch (e) {
+      if (!this.closed) {
+        this.onerror?.(e instanceof Error ? e : new Error(String(e)));
+      }
+    }
+    if (!this.closed) {
+      this.closed = true;
+      this.onclose?.();
+    }
   }
 }
