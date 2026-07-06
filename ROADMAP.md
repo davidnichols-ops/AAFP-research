@@ -1,12 +1,15 @@
 # AAFP Roadmap
 
-> **This roadmap is COMPLETE. All items are done. For future direction, see
-> NORTH_STAR.md and STRATEGIC_VISION.md.**
+> **Protocol roadmap COMPLETE. All 19 tracks (A-S) done. Phase 2 (developer
+> experience) nearly complete. Next: the Intelligence Plane — see
+> NORTH_STAR.md and INTELLIGENCE_PLANE.md.**
 
 **Baseline:** `v0.1-mvp-freeze`
 **Full assessment:** [`docs/status/PHASE2_STATUS_REPORT.md`](docs/status/PHASE2_STATUS_REPORT.md)
 
-> **Updated 2026-07-04:** ALL 326 steps complete across 19 tracks (A-S). AAFP is internet-ready (v1 achieved).
+> **Updated 2026-07-05:** ALL 326 protocol steps complete. 1931 tests passing
+> (1780 Rust + 151 TypeScript). SDK in 3 languages (Rust, Python, TypeScript).
+> Next: Intelligence Plane implementation (15 builder prompts across 4 tracks).
 
 This roadmap orders work by **architectural value** (highest first), not feature
 count. Each item states its objective, rationale, complexity, dependencies,

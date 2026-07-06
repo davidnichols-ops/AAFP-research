@@ -1,24 +1,24 @@
 # Builder Prompts Index
 
-21 ready-to-build prompts covering the TypeScript SDK (9 phases) and all future
-tracks (Semantic Capability Graphs, Adaptive Routing, PubSub, AgentRecord
-Extensions). Total: ~26,200 lines of detailed implementation guidance.
+15 remaining prompts for the Intelligence Plane (TypeScript SDK 9 phases are
+COMPLETE — 151 tests, 7 packages). Total remaining: ~15,000 lines of detailed
+implementation guidance across 4 tracks.
 
-## TypeScript SDK (9 phases, ~11,200 lines)
+## TypeScript SDK (9 phases) — ✅ ALL COMPLETE
 
-| Phase | File | Lines | Description |
-|-------|------|-------|-------------|
-| TS-1 | `TS_PHASE_1_CBOR_CRYPTO.md` | 1,306 | Pure-TS CBOR, ML-DSA-65, HKDF, AEAD, AgentId |
-| TS-2 | `TS_PHASE_2_TRANSPORT.md` | 1,763 | Transport interface, Node QUIC, WebTransport, WebSocket, frames |
-| TS-3 | `TS_PHASE_3_SERVER.md` | 1,702 | ServeBuilder, onCapability, HandlerContext, HandlerError, handshake |
-| TS-4 | `TS_PHASE_4_CLIENT.md` | 1,407 | ConnectBuilder, ConnectedAgent, DiscoveryBuilder, ConnectionPool |
-| TS-5 | `TS_PHASE_5_STREAMING.md` | 1,285 | StreamingHandlerContext, ResponseStream, onStreaming, callStreaming |
-| TS-6 | `TS_PHASE_6_BROWSER.md` | 1,038 | WebTransport, WebSocket bridge, isomorphic API, React/Vue/Svelte |
-| TS-7 | `TS_PHASE_7_MCP.md` | 943 | MCP TS SDK wrapping, LangChain.js, Vercel AI SDK integration |
-| TS-8 | `TS_PHASE_8_TESTING.md` | 711 | Vitest, cross-language vectors, conformance, golden traces, CI |
-| TS-9 | `TS_PHASE_9_PACKAGING.md` | 921 | npm monorepo, ESM/CJS, Deno/Bun, TypeDoc, publishing workflow |
+| Phase | File | Lines | Status | Tests |
+|-------|------|-------|--------|-------|
+| TS-1 | `TS_PHASE_1_CBOR_CRYPTO.md` | 1,306 | ✅ COMPLETE | 43 |
+| TS-2 | `TS_PHASE_2_TRANSPORT.md` | 1,763 | ✅ COMPLETE | 20 |
+| TS-3 | `TS_PHASE_3_SERVER.md` | 1,702 | ✅ COMPLETE | 60 (with TS-4) |
+| TS-4 | `TS_PHASE_4_CLIENT.md` | 1,407 | ✅ COMPLETE | (with TS-3) |
+| TS-5 | `TS_PHASE_5_STREAMING.md` | 1,285 | ✅ COMPLETE | 30 |
+| TS-6 | `TS_PHASE_6_BROWSER.md` | 1,038 | ✅ COMPLETE | 17 |
+| TS-7 | `TS_PHASE_7_MCP.md` | 943 | ✅ COMPLETE | (with TS-6) |
+| TS-8 | `TS_PHASE_8_TESTING.md` | 711 | ✅ COMPLETE | 11 |
+| TS-9 | `TS_PHASE_9_PACKAGING.md` | 921 | ✅ COMPLETE | (with TS-8) |
 
-**Dependency order:** TS-1 → TS-2 → (TS-3, TS-4 parallel) → TS-5 → TS-6 → TS-7 → TS-8 → TS-9
+**Total: 151 TypeScript tests passing, 0 errors**
 
 ## Semantic Capability Graphs (3 prompts, ~2,900 lines)
 

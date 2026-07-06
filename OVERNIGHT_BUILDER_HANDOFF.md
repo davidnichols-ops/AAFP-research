@@ -1,78 +1,76 @@
-# Overnight Builder Handoff — AAFP Implementation
+# Builder Handoff — AAFP Intelligence Plane Implementation
 
-**Created:** 2026-07-05
-**Purpose:** Handoff document for a Devin builder session to implement all 21 builder prompts
+**Created:** 2026-07-05 (updated)
+**Purpose:** Handoff document for implementing the 15 remaining builder prompts
 **Codebase:** /Users/david/Projects/AAFP-research/implementations/rust/
 
 ---
 
 ## Mission
 
-Work through all 21 builder prompts in dependency order, implementing each one in the AAFP codebase. After each implementation, run the full test suite to verify no regressions. Commit after each successful phase.
+Implement the 15 remaining builder prompts across 4 tracks to build the
+Intelligence Plane — the 85% of the system above transport. The TypeScript SDK
+(9 prompts) is already complete. These 15 prompts build the semantic,
+routing, pubsub, and extension layers.
 
 ## Current State
 
-- **1718 tests passing**, 0 failures, 7 ignored
-- **17 Rust crates**, ~76K lines
-- **P2.1-P2.8 complete** (Simple API v2 foundation + streaming + cancellation + connection pooling)
-- All 8 research documents complete (~11K lines)
-- 21 builder prompts ready (~26K lines of detailed implementation guidance)
+- **1780 Rust tests passing**, 0 failures, 7 ignored
+- **151 TypeScript tests passing**, 0 errors (ALL 9 TS PHASES COMPLETE)
+- **1931 total tests** across Rust + TypeScript
+- **17 Rust crates**, ~105K lines
+- **7 TypeScript packages**, ~9.9K lines
+- **P2.1-P2.8 complete** (Simple API v2 + streaming + cancellation + pooling)
+- All 8 research documents complete (~12.8K lines)
+- 15 builder prompts remaining (~15K lines)
+- Scaffolding exists for all 4 tracks (47 stub files, compiles clean)
 
-## Build Order (STRICT — follow this order)
+## The 4 Tracks (parallel, independent)
 
-### Phase 1: TypeScript SDK Foundation (TS-1 → TS-2)
-1. **TS-1:** `builder-prompts/TS_PHASE_1_CBOR_CRYPTO.md` — Pure-TS CBOR, ML-DSA-65, HKDF, AEAD, AgentId
-2. **TS-2:** `builder-prompts/TS_PHASE_2_TRANSPORT.md` — Transport interface, Node QUIC, WebTransport, WebSocket, frames
+### Track 1: Semantic Capability Graphs (SCG D1-D6)
+**Target:** `crates/aafp-discovery/src/semantic/` (13 stub files)
+**Prompts:**
+- `SCG_D1_D2_DESCRIPTOR_QUERY.md` (1,081 lines) — SemanticCapability, CBOR encoding, CapabilityQuery
+- `SCG_D3_D4_INDEX_COMPOSE.md` (700 lines) — CapabilityIndex, CapabilityGraph, PipelineAssembler
+- `SCG_D5_D6_PLAN_BRIDGE.md` (1,140 lines) — CapabilityPlanner, A* search, 11 bridge capabilities
+**Order:** D1-D2 → D3-D4 → D5-D6 (sequential)
 
-### Phase 2: TypeScript SDK API (TS-3 + TS-4 in parallel)
-3. **TS-3:** `builder-prompts/TS_PHASE_3_SERVER.md` — ServeBuilder, onCapability, HandlerContext, HandlerError, handshake
-4. **TS-4:** `builder-prompts/TS_PHASE_4_CLIENT.md` — ConnectBuilder, ConnectedAgent, DiscoveryBuilder, ConnectionPool
+### Track 2: AgentRecord Extensions (ARE E1-E6)
+**Target:** `crates/aafp-identity/src/extensions/` (10 stub files)
+**Prompts:**
+- `ARE_E1_E2_MAP_GEO_PERF.md` (984 lines) — Extension trait, CBOR key 11, Geo, Performance
+- `ARE_E3_E4_COST_SEMANTIC_REPUTATION.md` (2,188 lines) — Cost, Semantic, Version, Reputation, attestation
+- `ARE_E5_E6_DHT_TESTING.md` (1,793 lines) — DHT integration, secondary indexing, heartbeats, tests
+**Order:** E1-E2 → E3-E4 → E5-E6 (sequential)
 
-### Phase 3: TypeScript SDK Streaming (TS-5)
-5. **TS-5:** `builder-prompts/TS_PHASE_5_STREAMING.md` — StreamingHandlerContext, ResponseStream, onStreaming, callStreaming
+### Track 3: Adaptive Routing Plane (AR T1-T7)
+**Target:** `crates/aafp-sdk/src/routing/` (11 stub files)
+**Prompts:**
+- `AR_T1_T2_METRICS_ROUTING.md` (1,416 lines) — PeerMetricsRegistry, EWMA, 4 selection strategies
+- `AR_T3_T4_BREAKER_HEDGING.md` (1,129 lines) — CircuitBreaker, bulkhead, hedging, retry+backoff
+- `AR_T5_T7_INTEGRATION_API.md` (986 lines) — Integration, RoutingConfig, per-call overrides, observability
+**Order:** T1-T2 → T3-T4 → T5-T7 (sequential)
+**Note:** T5-T7 depends on SCG D1-D2 (uses SemanticCapability)
 
-### Phase 4: Semantic + AgentRecord (parallel)
-6. **SCG D1-D2:** `builder-prompts/SCG_D1_D2_DESCRIPTOR_QUERY.md` — SemanticCapability, CBOR encoding, CapabilityQuery, QueryFilter
-7. **ARE E1-E2:** `builder-prompts/ARE_E1_E2_MAP_GEO_PERF.md` — Extension trait, CBOR key 11, GeoExtension, PerformanceExtension
+### Track 4: PubSub + Back-Channeling (PS P1-P6)
+**Target:** `crates/aafp-sdk/src/pubsub/` (13 stub files)
+**Prompts:**
+- `PS_P1_P2_API_PROPAGATION.md` (1,673 lines) — Simple API, Event, SubscriptionStream, propagation
+- `PS_P3_P4_BACKCHANNEL_ROUTING.md` (1,203 lines) — Back-channel topics, MQTT wildcards, TopicMatcher
+- `PS_P5_P6_SECURITY_GOSSIPSUB.md` (866 lines) — UCAN ACLs, limits, GossipSub v1.1, peer scoring
+**Order:** P1-P2 → P3-P4 → P5-P6 (sequential)
 
-### Phase 5: Semantic + AgentRecord (parallel)
-8. **SCG D3-D4:** `builder-prompts/SCG_D3_D4_INDEX_COMPOSE.md` — CapabilityIndex, CapabilityGraph, PipelineAssembler, topological sort
-9. **ARE E3-E4:** `builder-prompts/ARE_E3_E4_COST_SEMANTIC_REPUTATION.md` — Cost, Semantic, Version, Reputation extensions, attestation, UCAN
-
-### Phase 6: Routing + PubSub (parallel)
-10. **AR T1-T2:** `builder-prompts/AR_T1_T2_METRICS_ROUTING.md` — PeerMetricsRegistry, EWMA, RollingWindow, 4 selection strategies
-11. **PS P1-P2:** `builder-prompts/PS_P1_P2_API_PROPAGATION.md` — Simple API, Event, SubscriptionStream, propagation driver fix
-
-### Phase 7: Routing + PubSub (parallel)
-12. **AR T3-T4:** `builder-prompts/AR_T3_T4_BREAKER_HEDGING.md` — CircuitBreaker (3-state), bulkhead, request hedging, retry+backoff
-13. **PS P3-P4:** `builder-prompts/PS_P3_P4_BACKCHANNEL_ROUTING.md` — Back-channel topics, MQTT wildcards, TopicMatcher, streaming integration
-
-### Phase 8: Routing + PubSub (parallel)
-14. **AR T5-T7:** `builder-prompts/AR_T5_T7_INTEGRATION_API.md` — Track U integration, RoutingConfig, per-call overrides, observability
-15. **PS P5-P6:** `builder-prompts/PS_P5_P6_SECURITY_GOSSIPSUB.md` — UCAN ACLs, per-connection limits, GossipSub v1.1, peer scoring
-
-### Phase 9: Semantic + AgentRecord (parallel)
-16. **SCG D5-D6:** `builder-prompts/SCG_D5_D6_PLAN_BRIDGE.md` — CapabilityPlanner, heuristic+A* search, 11 internet bridge capabilities
-17. **ARE E5-E6:** `builder-prompts/ARE_E5_E6_DHT_TESTING.md` — DHT integration, secondary indexing, heartbeats, adaptive TTL, tests
-
-### Phase 10: TypeScript SDK Browser + MCP (TS-6 → TS-7)
-18. **TS-6:** `builder-prompts/TS_PHASE_6_BROWSER.md` — WebTransport, WebSocket bridge, isomorphic API, React/Vue/Svelte
-19. **TS-7:** `builder-prompts/TS_PHASE_7_MCP.md` — MCP TS SDK wrapping, LangChain.js, Vercel AI SDK integration
-
-### Phase 11: TypeScript SDK Testing + Packaging (TS-8 → TS-9)
-20. **TS-8:** `builder-prompts/TS_PHASE_8_TESTING.md` — Vitest, cross-language vectors, conformance, golden traces, CI
-21. **TS-9:** `builder-prompts/TS_PHASE_9_PACKAGING.md` — npm monorepo, ESM/CJS, Deno/Bun, TypeDoc, publishing workflow
-
-## Cross-Track Dependencies (MUST respect)
+## Cross-Track Dependencies
 
 ```
-TS-1 → TS-2 → (TS-3, TS-4 parallel) → TS-5 → TS-6 → TS-7 → TS-8 → TS-9
 SCG D1-D2 → SCG D3-D4 → SCG D5-D6
 ARE E1-E2 → ARE E3-E4 → ARE E5-E6
-AR T1-T2 → AR T3-T4 → AR T5-T7 (T5-T7 also depends on SCG D1-D2)
+AR T1-T2 → AR T3-T4 → AR T5-T7 (T5-T7 also needs SCG D1-D2)
 PS P1-P2 → PS P3-P4 → PS P5-P6
 ARE E3-E4 → SCG D5-D6 (planner uses reputation/cost)
 ```
+
+**Parallelization:** Tracks 1-4 can run in parallel. Within each track, phases are sequential.
 
 ## Verification Protocol (AFTER EACH PHASE)
 
@@ -88,22 +86,19 @@ cargo build --workspace
 # 3. Clippy (0 warnings expected)
 cargo clippy --workspace -- -D warnings
 
-# 4. Full test suite (must not regress below 1718 tests)
+# 4. Full test suite (must not regress below 1780 tests)
 cargo test --workspace
 
 # 5. If all pass, commit
 git add -A
-git commit -m "$(cat <<'EOF'
-Phase X: <description of what was built>
+git commit -m "Phase X: <description>
 
 - <key changes>
 - Tests: <new count> passing, 0 failures
 
 Generated with [Devin](https://devin.ai)
 
-Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
-EOF
-)"
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>"
 ```
 
 ## Key Conventions (from AGENTS.md)
@@ -116,51 +111,17 @@ EOF
 - **Don't add/remove comments** unless asked
 - **Compact code** — collapse duplicate else branches, avoid unnecessary nesting
 
-## TypeScript SDK Location
+## Strategic Context
 
-The TypeScript SDK should be created at:
-```
-/Users/david/Projects/AAFP-research/implementations/typescript/
-```
+Transport is 15% of the system. The Intelligence Plane is the other 85%.
+These 15 prompts build the foundation of that plane:
 
-Follow the monorepo structure described in TS_PHASE_9_PACKAGING.md from the start.
+1. **Predictive Routing** (AR) — gossip metrics, temporal routing, circuit breaker, hedging
+2. **Intent Routing** (SCG) — semantic discovery, pipeline assembly, planning
+3. **Agent Reputation** (ARE) — performance history as identity, 25+ AgentRecord fields
+4. **PubSub** (PS) — event streaming, back-channeling, GossipSub v1.1, UCAN security
 
-## Rust Implementation Location
+Every new agent should make every other agent more useful. That is the
+exponential network effect that makes AAFP impossible to replace.
 
-All Rust changes go in:
-```
-/Users/david/Projects/AAFP-research/implementations/rust/crates/
-```
-
-## Research Documents (read these before implementing each track)
-
-| Track | Research Document | Builder Prompts |
-|-------|------------------|-----------------|
-| TypeScript SDK | `TYPESCRIPT_SDK_DESIGN.md` | TS_PHASE_1-9 |
-| Semantic Capability Graphs | `SEMANTIC_CAPABILITY_GRAPHS.md` | SCG_D1-D6 |
-| Adaptive Routing | `ADAPTIVE_ROUTING_PLANE.md` | AR_T1-T7 |
-| PubSub + Back-Channel | `PUBSUB_BACKCHANNEL_DESIGN.md` | PS_P1-P6 |
-| AgentRecord Extensions | `AGENT_RECORD_EXTENSIONS.md` | ARE_E1-E6 |
-
-## Error Recovery
-
-If a phase fails:
-1. Read the error messages carefully
-2. Check the builder prompt for guidance on edge cases
-3. Search the codebase for similar patterns
-4. Fix and re-run tests
-5. If stuck after 3 attempts, skip to the next independent phase and come back
-
-## Progress Tracking
-
-After each phase, update this file with:
-- [x] Phase N: <name> — COMPLETE (<test count> tests)
-- [ ] Phase N+1: <name> — NEXT
-
-## Final Deliverable
-
-At the end, all 21 builder prompts should be implemented, with:
-- TypeScript SDK at `implementations/typescript/`
-- All Rust crates updated with new features
-- Full test suite passing with no regressions
-- Each phase committed separately with clear messages
+See `INTELLIGENCE_PLANE.md` for the full strategic design.
