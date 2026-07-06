@@ -14,18 +14,23 @@
       "require": "./dist/cjs/index.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
   },
   "dependencies": {
-    "@noble/post-quantum": "^0.2.0",
+    "@aafp/cbor": "workspace:*",
+    "@noble/ciphers": "^2.2.0",
     "@noble/hashes": "^1.5.0",
-    "@aafp/cbor": "workspace:*"
+    "@noble/post-quantum": "^0.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
   }
 }

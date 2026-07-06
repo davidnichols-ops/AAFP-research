@@ -12,9 +12,8 @@ import {
   MlDsa65PublicKey,
   MlDsa65SecretKey,
   MlDsa65Signature,
-  ML_DSA_65_PUBKEY_LEN,
-  ML_DSA_65_SECRETKEY_LEN,
 } from "./dsa.js";
+import { deriveAgentId } from "./agent-id.js";
 import { CryptoError } from "./types.js";
 
 /**
@@ -60,7 +59,7 @@ export interface AgentKeypair {
  * Provides the same surface as the {@link AgentKeypair} interface plus
  * serialization (`toBytes`/`fromBytesFull`) and typed key accessors.
  */
-export class MlDsa65Keypair implements AgentKeypair {
+export class AgentKeypairImpl implements AgentKeypair {
   /** ML-DSA-65 public key (1952 bytes). */
   public readonly publicKey: Uint8Array;
   /** ML-DSA-65 secret key (4032 bytes). */
@@ -69,10 +68,11 @@ export class MlDsa65Keypair implements AgentKeypair {
   /**
    * Generate a fresh ML-DSA-65 keypair using secure randomness.
    *
-   * @returns A new {@link MlDsa65Keypair}.
+   * @returns A new {@link AgentKeypairImpl}.
    */
-  static generate(): MlDsa65Keypair {
-    throw new Error("Not implemented");
+  static generate(): AgentKeypairImpl {
+    const kp = MlDsa65.keypair();
+    return new AgentKeypairImpl(kp.publicKey.bytes, kp.secretKey.bytes);
   }
 
   /**
@@ -80,10 +80,11 @@ export class MlDsa65Keypair implements AgentKeypair {
    * Algorithm 1). Used for cross-language test vectors (A-10).
    *
    * @param seed - 32-byte seed.
-   * @returns A deterministic {@link MlDsa65Keypair}.
+   * @returns A deterministic {@link AgentKeypairImpl}.
    */
-  static fromSeed(seed: Uint8Array): MlDsa65Keypair {
-    throw new Error("Not implemented");
+  static fromSeed(seed: Uint8Array): AgentKeypairImpl {
+    const kp = MlDsa65.keypairFromSeed(seed);
+    return new AgentKeypairImpl(kp.publicKey.bytes, kp.secretKey.bytes);
   }
 
   /**
@@ -100,8 +101,11 @@ export class MlDsa65Keypair implements AgentKeypair {
   static fromSecretAndPublic(
     secret: Uint8Array,
     publicKey: Uint8Array,
-  ): MlDsa65Keypair {
-    throw new Error("Not implemented");
+  ): AgentKeypairImpl {
+    // Validate lengths via typed wrappers
+    new MlDsa65SecretKey(secret);
+    new MlDsa65PublicKey(publicKey);
+    return new AgentKeypairImpl(publicKey, secret);
   }
 
   /**
@@ -112,8 +116,18 @@ export class MlDsa65Keypair implements AgentKeypair {
    * @returns The reconstructed keypair.
    * @throws {CryptoError} if the data is truncated or keys are invalid.
    */
-  static fromBytesFull(data: Uint8Array): MlDsa65Keypair {
-    throw new Error("Not implemented");
+  static fromBytesFull(data: Uint8Array): AgentKeypairImpl {
+    if (data.length < 4) {
+      throw new CryptoError("Decode", "keypair too short");
+    }
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    const skLen = view.getUint32(0);
+    if (data.length < 4 + skLen) {
+      throw new CryptoError("Decode", "truncated secret key");
+    }
+    const secretKey = data.slice(4, 4 + skLen);
+    const publicKey = data.slice(4 + skLen);
+    return AgentKeypairImpl.fromSecretAndPublic(secretKey, publicKey);
   }
 
   private constructor(publicKey: Uint8Array, secretKey: Uint8Array) {
@@ -123,17 +137,25 @@ export class MlDsa65Keypair implements AgentKeypair {
 
   /** Derive the AgentId (hex of SHA-256(publicKey)). */
   agentId(): AgentId {
-    throw new Error("Not implemented");
+    return deriveAgentId(this.publicKey);
   }
 
   /** Sign a message with ML-DSA-65. Returns 3309-byte signature. */
   sign(msg: Uint8Array): Uint8Array {
-    throw new Error("Not implemented");
+    return MlDsa65.sign(new MlDsa65SecretKey(this.secretKey), msg).bytes;
   }
 
   /** Verify a signature against this keypair's public key. */
   verify(msg: Uint8Array, sig: Uint8Array): boolean {
-    throw new Error("Not implemented");
+    try {
+      return MlDsa65.verify(
+        new MlDsa65PublicKey(this.publicKey),
+        msg,
+        new MlDsa65Signature(sig),
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -144,7 +166,12 @@ export class MlDsa65Keypair implements AgentKeypair {
    * @returns Serialized keypair bytes.
    */
   toBytes(): Uint8Array {
-    throw new Error("Not implemented");
+    const out = new Uint8Array(4 + this.secretKey.length + this.publicKey.length);
+    const view = new DataView(out.buffer);
+    view.setUint32(0, this.secretKey.length);
+    out.set(this.secretKey, 4);
+    out.set(this.publicKey, 4 + this.secretKey.length);
+    return out;
   }
 
   /**
@@ -153,7 +180,7 @@ export class MlDsa65Keypair implements AgentKeypair {
    * @throws {CryptoError} if the public key length is invalid.
    */
   publicKeyTyped(): MlDsa65PublicKey {
-    throw new Error("Not implemented");
+    return new MlDsa65PublicKey(this.publicKey);
   }
 
   /**
@@ -162,7 +189,7 @@ export class MlDsa65Keypair implements AgentKeypair {
    * @throws {CryptoError} if the secret key length is invalid.
    */
   secretKeyTyped(): MlDsa65SecretKey {
-    throw new Error("Not implemented");
+    return new MlDsa65SecretKey(this.secretKey);
   }
 }
 
@@ -173,7 +200,7 @@ export class MlDsa65Keypair implements AgentKeypair {
  * @returns A new {@link AgentKeypair}.
  */
 export function generateKeypair(seed?: Uint8Array): AgentKeypair {
-  throw new Error("Not implemented");
+  return seed ? AgentKeypairImpl.fromSeed(seed) : AgentKeypairImpl.generate();
 }
 
 /**
@@ -187,7 +214,7 @@ export function fromSecretAndPublic(
   secret: Uint8Array,
   publicKey: Uint8Array,
 ): AgentKeypair {
-  throw new Error("Not implemented");
+  return AgentKeypairImpl.fromSecretAndPublic(secret, publicKey);
 }
 
 /**
@@ -197,7 +224,12 @@ export function fromSecretAndPublic(
  * @returns Serialized keypair bytes.
  */
 export function keypairToBytes(kp: AgentKeypair): Uint8Array {
-  throw new Error("Not implemented");
+  const out = new Uint8Array(4 + kp.secretKey.length + kp.publicKey.length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, kp.secretKey.length);
+  out.set(kp.secretKey, 4);
+  out.set(kp.publicKey, 4 + kp.secretKey.length);
+  return out;
 }
 
 /**
@@ -208,5 +240,5 @@ export function keypairToBytes(kp: AgentKeypair): Uint8Array {
  * @throws {CryptoError} if the data is truncated or keys are invalid.
  */
 export function keypairFromBytes(data: Uint8Array): AgentKeypair {
-  throw new Error("Not implemented");
+  return AgentKeypairImpl.fromBytesFull(data);
 }

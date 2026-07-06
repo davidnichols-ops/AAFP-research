@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist"
+  },
+  "references": [
+    { "path": "./packages/cbor" },
+    { "path": "./packages/crypto" },
+    { "path": "./packages/transport-quic" },
+    { "path": "./packages/transport-ws" },
+    { "path": "./packages/sdk" },
+    { "path": "./packages/sdk-native" },
+    { "path": "./packages/examples" }
+  ],
+  "files": []
+}

@@ -25,6 +25,7 @@ export type { CborDecoderOptions, CborDecodeResult } from "./decoder.js";
 export {
   CborDecoder,
   decodeCbor,
+  checkCanonical,
   DEFAULT_MAX_DECODE_DEPTH,
 } from "./decoder.js";
 

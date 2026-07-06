@@ -8,6 +8,7 @@
  * cached; the 32-byte AgentId is used for all routing/discovery operations.
  */
 
+import { sha256 } from "@noble/hashes/sha256";
 import { CryptoError } from "./types.js";
 
 /**
@@ -25,6 +26,31 @@ export const AGENT_ID_HEX_LEN = 64;
 /** Expected byte length of an AgentId (SHA-256 digest). */
 export const AGENT_ID_BYTE_LEN = 32;
 
+/** Convert a Uint8Array to a lowercase hex string. */
+function toHex(bytes: Uint8Array): string {
+  let hex = "";
+  for (const b of bytes) {
+    hex += b.toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+/** Convert a hex string to a Uint8Array. Throws on invalid hex. */
+function hexToBytes(hex: string): Uint8Array {
+  if (hex.length % 2 !== 0) {
+    throw new CryptoError("Decode", `hex string has odd length: ${hex.length}`);
+  }
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    const byte = parseInt(hex.slice(i, i + 2), 16);
+    if (Number.isNaN(byte)) {
+      throw new CryptoError("Decode", `invalid hex char at position ${i}`);
+    }
+    bytes[i / 2] = byte;
+  }
+  return bytes;
+}
+
 /**
  * Derive an AgentId from an ML-DSA-65 public key.
  *
@@ -41,7 +67,8 @@ export const AGENT_ID_BYTE_LEN = 32;
  * ```
  */
 export function deriveAgentId(publicKey: Uint8Array): AgentId {
-  throw new Error("Not implemented");
+  const hash = sha256(publicKey);
+  return toHex(hash) as AgentId;
 }
 
 /**
@@ -55,7 +82,7 @@ export function deriveAgentId(publicKey: Uint8Array): AgentId {
  * @returns `true` if `deriveAgentId(publicKey) === agentId`, `false` otherwise.
  */
 export function verifyAgentId(agentId: AgentId, publicKey: Uint8Array): boolean {
-  throw new Error("Not implemented");
+  return deriveAgentId(publicKey) === agentId;
 }
 
 /**
@@ -66,7 +93,14 @@ export function verifyAgentId(agentId: AgentId, publicKey: Uint8Array): boolean 
  * @throws {CryptoError} if the input is not valid hex or not exactly 32 bytes.
  */
 export function agentIdFromHex(hex: string): Uint8Array {
-  throw new Error("Not implemented");
+  const bytes = hexToBytes(hex);
+  if (bytes.length !== AGENT_ID_BYTE_LEN) {
+    throw new CryptoError(
+      "Decode",
+      `agent ID must be ${AGENT_ID_BYTE_LEN} bytes (${AGENT_ID_HEX_LEN} hex chars), got ${bytes.length} bytes`,
+    );
+  }
+  return bytes;
 }
 
 /**
@@ -78,5 +112,5 @@ export function agentIdFromHex(hex: string): Uint8Array {
  * @returns First 8 hex characters (e.g. `"abababab"`).
  */
 export function agentIdShort(agentId: AgentId): string {
-  throw new Error("Not implemented");
+  return agentId.slice(0, 8);
 }

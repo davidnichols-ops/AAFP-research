@@ -14,6 +14,8 @@
  */
 
 import { CryptoError } from "./types.js";
+import { ml_dsa65 } from "@noble/post-quantum/ml-dsa";
+import { randomBytes } from "@noble/post-quantum/utils";
 
 /** ML-DSA-65 public key length in bytes (FIPS 204). */
 export const ML_DSA_65_PUBKEY_LEN = 1952;
@@ -109,6 +111,9 @@ export interface MlDsa65Keypair {
   readonly secretKey: MlDsa65SecretKey;
 }
 
+// Lazy import of @noble/post-quantum to avoid issues if not installed
+// (Using static imports above for ESM compatibility)
+
 /**
  * ML-DSA-65 signature scheme operations.
  *
@@ -126,7 +131,13 @@ export class MlDsa65 {
    * @returns A new {@link MlDsa65Keypair}.
    */
   static keypair(): MlDsa65Keypair {
-    throw new Error("Not implemented");
+    
+    
+    const keys = ml_dsa65.keygen(randomBytes(32));
+    return {
+      publicKey: new MlDsa65PublicKey(keys.publicKey),
+      secretKey: new MlDsa65SecretKey(keys.secretKey),
+    };
   }
 
   /**
@@ -142,7 +153,18 @@ export class MlDsa65 {
    * @throws {CryptoError} if `seed` is not 32 bytes.
    */
   static keypairFromSeed(seed: Uint8Array): MlDsa65Keypair {
-    throw new Error("Not implemented");
+    if (seed.length !== ML_DSA_65_SEED_LEN) {
+      throw new CryptoError(
+        "InvalidKeyLength",
+        `seed must be ${ML_DSA_65_SEED_LEN} bytes, got ${seed.length}`,
+      );
+    }
+    
+    const keys = ml_dsa65.keygen(seed);
+    return {
+      publicKey: new MlDsa65PublicKey(keys.publicKey),
+      secretKey: new MlDsa65SecretKey(keys.secretKey),
+    };
   }
 
   /**
@@ -154,7 +176,8 @@ export class MlDsa65 {
    * @returns A 3309-byte detached signature.
    */
   static sign(secretKey: MlDsa65SecretKey, msg: Uint8Array): MlDsa65Signature {
-    throw new Error("Not implemented");
+    const sig = ml_dsa65.sign(secretKey.bytes, msg);
+    return new MlDsa65Signature(sig);
   }
 
   /**
@@ -175,7 +198,14 @@ export class MlDsa65 {
     msg: Uint8Array,
     seed: Uint8Array,
   ): MlDsa65Signature {
-    throw new Error("Not implemented");
+    if (seed.length !== ML_DSA_65_SEED_LEN) {
+      throw new CryptoError(
+        "InvalidKeyLength",
+        `sign seed must be ${ML_DSA_65_SEED_LEN} bytes, got ${seed.length}`,
+      );
+    }
+    const sig = ml_dsa65.sign(secretKey.bytes, msg, undefined, seed);
+    return new MlDsa65Signature(sig);
   }
 
   /**
@@ -194,6 +224,10 @@ export class MlDsa65 {
     msg: Uint8Array,
     sig: MlDsa65Signature,
   ): boolean {
-    throw new Error("Not implemented");
+    try {
+      return ml_dsa65.verify(publicKey.bytes, msg, sig.bytes);
+    } catch {
+      return false;
+    }
   }
 }

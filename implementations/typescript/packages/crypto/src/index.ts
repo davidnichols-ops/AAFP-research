@@ -37,7 +37,7 @@ export type { AgentId } from "./agent-id.js";
 
 // AgentKeypair — ML-DSA-65 keypair management
 export {
-  MlDsa65Keypair,
+  AgentKeypairImpl,
   generateKeypair,
   fromSecretAndPublic,
   keypairToBytes,

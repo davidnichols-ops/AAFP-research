@@ -25,7 +25,7 @@ import type { CborValue, CborIntMap, CborStrMap } from "./types.js";
  * ```
  */
 export function intMap(entries: [number, CborValue][]): CborIntMap {
-  throw new Error("Not implemented");
+  return { type: "int-map", entries };
 }
 
 /**
@@ -37,7 +37,8 @@ export function intMap(entries: [number, CborValue][]): CborIntMap {
  *   an integer-keyed map.
  */
 export function intMapGet(map: CborValue, key: number): CborValue | undefined {
-  throw new Error("Not implemented");
+  if (map.type !== "int-map") return undefined;
+  return map.entries.find(([k]) => k === key)?.[1];
 }
 
 /**
@@ -59,7 +60,7 @@ export function intMapGet(map: CborValue, key: number): CborValue | undefined {
  * ```
  */
 export function strMap(entries: [string, CborValue][]): CborStrMap {
-  throw new Error("Not implemented");
+  return { type: "text-map", entries };
 }
 
 /**
@@ -71,5 +72,6 @@ export function strMap(entries: [string, CborValue][]): CborStrMap {
  *   a string-keyed map.
  */
 export function strMapGet(map: CborValue, key: string): CborValue | undefined {
-  throw new Error("Not implemented");
+  if (map.type !== "text-map") return undefined;
+  return map.entries.find(([k]) => k === key)?.[1];
 }

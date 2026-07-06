@@ -8,11 +8,12 @@
  * Both algorithms use a 32-byte key and a 12-byte nonce. Ciphertext output
  * includes the authentication tag appended.
  *
- * Uses the Web Crypto API (`crypto.subtle`) — available in Node 18+, all
- * browsers, Deno, and Bun — to avoid native dependencies.
+ * ChaCha20-Poly1305 uses `@noble/ciphers` (pure JS, works everywhere).
+ * AES-256-GCM uses the Web Crypto API (`crypto.subtle`).
  */
 
 import { CryptoError } from "./types.js";
+import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
 
 /** Nonce length in bytes (standard for both ChaCha20-Poly1305 and AES-256-GCM). */
 export const NONCE_LEN = 12;
@@ -81,7 +82,18 @@ export class Aead {
     aad: Uint8Array,
     plaintext: Uint8Array,
   ): Promise<Uint8Array> {
-    throw new Error("Not implemented");
+    if (this.algorithm === AeadAlgorithm.ChaCha20Poly1305) {
+      const cipher = chacha20poly1305(this.key, nonce, aad);
+      return cipher.encrypt(plaintext);
+    }
+    // AES-256-GCM via Web Crypto
+    const cryptoKey = await this.importAesKey();
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: this.toBuffer(nonce), additionalData: this.toBuffer(aad) },
+      cryptoKey,
+      this.toBuffer(plaintext),
+    );
+    return new Uint8Array(ciphertext);
   }
 
   /**
@@ -100,13 +112,45 @@ export class Aead {
     aad: Uint8Array,
     ciphertext: Uint8Array,
   ): Promise<Uint8Array> {
-    throw new Error("Not implemented");
+    try {
+      if (this.algorithm === AeadAlgorithm.ChaCha20Poly1305) {
+        const cipher = chacha20poly1305(this.key, nonce, aad);
+        return cipher.decrypt(ciphertext);
+      }
+      // AES-256-GCM via Web Crypto
+      const cryptoKey = await this.importAesKey();
+      const plaintext = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: this.toBuffer(nonce), additionalData: this.toBuffer(aad) },
+        cryptoKey,
+        this.toBuffer(ciphertext),
+      );
+      return new Uint8Array(plaintext);
+    } catch {
+      throw CryptoError.aeadDecryptionFailed();
+    }
   }
 
   /**
    * @returns The AEAD algorithm in use.
    */
   getAlgorithm(): AeadAlgorithm {
-    throw new Error("Not implemented");
+    return this.algorithm;
+  }
+
+  private async importAesKey(): Promise<CryptoKey> {
+    return crypto.subtle.importKey(
+      "raw",
+      this.toBuffer(this.key),
+      { name: "AES-GCM" },
+      false,
+      ["encrypt", "decrypt"],
+    );
+  }
+
+  /** Copy a Uint8Array to a fresh ArrayBuffer (avoids SharedArrayBuffer type issues). */
+  private toBuffer(arr: Uint8Array): ArrayBuffer {
+    const buf = new ArrayBuffer(arr.byteLength);
+    new Uint8Array(buf).set(arr);
+    return buf;
   }
 }

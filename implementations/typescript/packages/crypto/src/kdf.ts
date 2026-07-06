@@ -5,6 +5,9 @@
  * HKDF (RFC 5869).
  */
 
+import { hkdf } from "@noble/hashes/hkdf";
+import { sha256 } from "@noble/hashes/sha256";
+
 /**
  * HKDF-SHA256 extract-and-expand (RFC 5869).
  *
@@ -26,7 +29,7 @@ export function hkdfSha256(
   info: Uint8Array,
   outputLen: number,
 ): Uint8Array {
-  throw new Error("Not implemented");
+  return hkdf(sha256, ikm, salt, info, outputLen);
 }
 
 /**
@@ -42,5 +45,5 @@ export function hkdfSha256(
  * @returns 32 bytes of derived key material.
  */
 export function deriveKey(ikm: Uint8Array, info: Uint8Array): Uint8Array {
-  throw new Error("Not implemented");
+  return hkdfSha256(new Uint8Array(0), ikm, info, 32);
 }

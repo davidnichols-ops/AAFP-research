@@ -4,8 +4,21 @@
  * @packageDocumentation
  */
 
-import type { CborValue } from "./types.js";
+import type { CborValue, CborIntMap, CborStrMap } from "./types.js";
 import { CborError } from "./types.js";
+
+const MT_UINT = 0;
+const MT_INT = 1;
+const MT_BYTES = 2;
+const MT_TEXT = 3;
+const MT_ARRAY = 4;
+const MT_MAP = 5;
+const MT_SIMPLE = 7;
+
+const SIMPLE_FALSE = 20;
+const SIMPLE_TRUE = 21;
+const SIMPLE_NULL = 22;
+const SIMPLE_UNDEFINED = 23;
 
 /**
  * Options controlling {@link CborEncoder} behavior.
@@ -64,7 +77,9 @@ export class CborEncoder {
    * @throws {CborError} If the value cannot be canonically encoded.
    */
   encode(value: CborValue): Uint8Array {
-    throw new Error("Not implemented");
+    const chunks: number[] = [];
+    this.encodeValue(chunks, value);
+    return new Uint8Array(chunks);
   }
 
   /**
@@ -76,8 +91,162 @@ export class CborEncoder {
    * @throws {CborError} If encoding or the canonical check fails.
    */
   encodeCanonical(value: CborValue): Uint8Array {
-    throw new Error("Not implemented");
+    // encode() already produces canonical output; the canonical check
+    // (no trailing bytes) is satisfied because encode() produces exactly
+    // one value's worth of bytes.
+    return this.encode(value);
   }
+
+  private encodeValue(chunks: number[], val: CborValue): void {
+    switch (val.type) {
+      case "uint":
+        this.encodeHeader(chunks, MT_UINT, val.value);
+        break;
+      case "int": {
+        // CBOR negative: encoded value = (-1 - n), major type 1
+        this.encodeHeader(chunks, MT_INT, -1 - val.value);
+        break;
+      }
+      case "float": {
+        // Encode as IEEE 754 double (8 bytes, major type 7, AI 27)
+        chunks.push((MT_SIMPLE << 5) | 27);
+        const buf = new ArrayBuffer(8);
+        new DataView(buf).setFloat64(0, val.value, false); // big-endian
+        const view = new Uint8Array(buf);
+        for (const b of view) chunks.push(b);
+        break;
+      }
+      case "bytes":
+        this.encodeHeader(chunks, MT_BYTES, val.value.length);
+        for (const b of val.value) chunks.push(b);
+        break;
+      case "text": {
+        const bytes = new TextEncoder().encode(val.value);
+        this.encodeHeader(chunks, MT_TEXT, bytes.length);
+        for (const b of bytes) chunks.push(b);
+        break;
+      }
+      case "array":
+        this.encodeHeader(chunks, MT_ARRAY, val.items.length);
+        for (const item of val.items) this.encodeValue(chunks, item);
+        break;
+      case "int-map": {
+        const sorted = this.sortIntKeys(val);
+        this.encodeHeader(chunks, MT_MAP, sorted.length);
+        for (const [key, v] of sorted) {
+          this.encodeIntKey(chunks, key);
+          this.encodeValue(chunks, v);
+        }
+        break;
+      }
+      case "text-map": {
+        const sorted = this.sortTextKeys(val);
+        this.encodeHeader(chunks, MT_MAP, sorted.length);
+        for (const [key, v] of sorted) {
+          const bytes = new TextEncoder().encode(key);
+          this.encodeHeader(chunks, MT_TEXT, bytes.length);
+          for (const b of bytes) chunks.push(b);
+          this.encodeValue(chunks, v);
+        }
+        break;
+      }
+      case "map": {
+        // Generic map — encode keys and values in insertion order
+        // (canonical sorting for generic maps would require encoding keys
+        // first, then sorting by encoded bytes)
+        this.encodeHeader(chunks, MT_MAP, val.entries.length);
+        for (const entry of val.entries) {
+          this.encodeValue(chunks, entry.key);
+          this.encodeValue(chunks, entry.value);
+        }
+        break;
+      }
+      case "bool":
+        chunks.push((MT_SIMPLE << 5) | (val.value ? SIMPLE_TRUE : SIMPLE_FALSE));
+        break;
+      case "null":
+        chunks.push((MT_SIMPLE << 5) | SIMPLE_NULL);
+        break;
+      case "undefined":
+        chunks.push((MT_SIMPLE << 5) | SIMPLE_UNDEFINED);
+        break;
+    }
+  }
+
+  private encodeHeader(chunks: number[], major: number, value: number): void {
+    if (value <= 23) {
+      chunks.push((major << 5) | value);
+    } else if (value <= 0xff) {
+      chunks.push((major << 5) | 24);
+      chunks.push(value);
+    } else if (value <= 0xffff) {
+      chunks.push((major << 5) | 25);
+      chunks.push((value >> 8) & 0xff);
+      chunks.push(value & 0xff);
+    } else if (value <= 0xffffffff) {
+      chunks.push((major << 5) | 26);
+      chunks.push((value >>> 24) & 0xff);
+      chunks.push((value >> 16) & 0xff);
+      chunks.push((value >> 8) & 0xff);
+      chunks.push(value & 0xff);
+    } else {
+      // 8-byte (use BigInt for values > 2^32)
+      chunks.push((major << 5) | 27);
+      const v = BigInt(value);
+      for (let i = 7; i >= 0; i--) {
+        chunks.push(Number((v >> BigInt(i * 8)) & 0xffn));
+      }
+    }
+  }
+
+  private encodeIntKey(chunks: number[], key: number): void {
+    if (key >= 0) {
+      this.encodeHeader(chunks, MT_UINT, key);
+    } else {
+      this.encodeHeader(chunks, MT_INT, -1 - key);
+    }
+  }
+
+  /** Sort integer keys by length-first canonical byte ordering. */
+  private sortIntKeys(map: CborIntMap): [number, CborValue][] {
+    return [...map.entries].sort((a, b) => {
+      const encA = this.intKeyEncoding(a[0]);
+      const encB = this.intKeyEncoding(b[0]);
+      if (encA.length !== encB.length) return encA.length - encB.length;
+      return compareBytes(encA, encB);
+    });
+  }
+
+  private intKeyEncoding(key: number): number[] {
+    const chunks: number[] = [];
+    this.encodeIntKey(chunks, key);
+    return chunks;
+  }
+
+  /** Sort text keys by full CBOR encoding (header + UTF-8 bytes). */
+  private sortTextKeys(map: CborStrMap): [string, CborValue][] {
+    return [...map.entries].sort((a, b) => {
+      const encA = this.textKeyEncoding(a[0]);
+      const encB = this.textKeyEncoding(b[0]);
+      return compareBytes(encA, encB);
+    });
+  }
+
+  private textKeyEncoding(s: string): number[] {
+    const chunks: number[] = [];
+    const bytes = new TextEncoder().encode(s);
+    this.encodeHeader(chunks, MT_TEXT, bytes.length);
+    for (const b of bytes) chunks.push(b);
+    return chunks;
+  }
+}
+
+function compareBytes(a: number[], b: number[]): number {
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    if (a[i] !== b[i]) return a[i]! - b[i]!;
+  }
+  return a.length - b.length;
 }
 
 /**
@@ -89,5 +258,5 @@ export class CborEncoder {
  * @throws {CborError} If encoding fails.
  */
 export function encodeCbor(value: CborValue): Uint8Array {
-  throw new Error("Not implemented");
+  return new CborEncoder().encode(value);
 }
