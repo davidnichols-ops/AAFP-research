@@ -15,10 +15,10 @@ routing, pubsub, and extension layers.
 
 ## Current State
 
-- **1864 Rust tests passing**, 0 failures, 7 ignored
+- **2857 Rust tests passing**, 0 failures, 7 ignored
 - **151 TypeScript tests passing**, 0 errors (ALL 9 TS PHASES COMPLETE)
-- **2015 total tests** across Rust + TypeScript
-- **17 Rust crates**, ~115K lines
+- **3008 total tests** across Rust + TypeScript
+- **19 Rust crates**, ~140K lines
 - **7 TypeScript packages**, ~9.9K lines
 - **P2.1-P2.8 complete** (Simple API v2 + streaming + cancellation + pooling)
 - All 8 research documents complete (~12.8K lines)
@@ -88,7 +88,7 @@ cargo build --workspace
 # 3. Clippy (0 warnings expected)
 cargo clippy --workspace -- -D warnings
 
-# 4. Full test suite (must not regress below 1864 tests)
+# 4. Full test suite (must not regress below 2857 tests)
 cargo test --workspace
 
 # 5. If all pass, commit

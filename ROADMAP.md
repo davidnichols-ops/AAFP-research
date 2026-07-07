@@ -1,19 +1,17 @@
 # AAFP Roadmap
 
 > **Protocol roadmap COMPLETE. All 19 tracks (A-S) done. Intelligence Plane
-> foundation IMPLEMENTED (tracks T, U, W + PubSub). Phase 2 nearly complete.
-> Next: remaining Intelligence Plane (tracks V, X, Y) — see NORTH_STAR.md and
-> INTELLIGENCE_PLANE.md.**
+> COMPLETE (all 6 tracks: T, U, V, W, X, Y). Phase 2 nearly complete.
+> Next: ecosystem + real-world deployment — see NORTH_STAR.md.**
 
 **Baseline:** `v0.1-mvp-freeze`
-**Current freeze:** `v0.4-intelligence-plane`
+**Current freeze:** `v0.5-phase4-complete`
 **Full assessment:** [`docs/status/PHASE2_STATUS_REPORT.md`](docs/status/PHASE2_STATUS_REPORT.md)
 
-> **Updated 2026-07-06:** ALL 326 protocol steps complete + 25 Intelligence Plane
-> foundation steps complete. 2015 tests passing (1864 Rust + 151 TypeScript).
-> SDK in 3 languages (Rust, Python, TypeScript). Intelligence Plane foundation
-> implemented (SCG, ARE, AR, PS). Security review complete (4 critical + 12 high
-> findings fixed). Next: remaining Phase 4 tracks (V, X, Y).
+> **Updated 2026-07-06:** ALL 326 protocol steps + 40 Intelligence Plane steps
+> complete. 3008 tests passing (2857 Rust + 151 TypeScript). SDK in 3 languages.
+> Intelligence Plane COMPLETE (SCG, ARE, AR, PS, V, X, Y, T-ext, U-ext, W-ext).
+> Security review complete. Next: ecosystem + real-world deployment.
 
 This roadmap orders work by **architectural value** (highest first), not feature
 count. Each item states its objective, rationale, complexity, dependencies,
@@ -294,6 +292,6 @@ Simple API. Research is complete; ALL implementation is complete.
 changes required. All gaps can be addressed by exposing existing QUIC/CBOR
 primitives through the Simple API.
 
-**Result:** 1864 Rust tests + 151 TypeScript tests = 2015 total, 0 failures.
+**Result:** 2857 Rust tests + 151 TypeScript tests = 3008 total, 0 failures.
 0 clippy warnings. Security review complete (4 critical + 12 high fixed).
 Freeze tag: `v0.4-intelligence-plane`.

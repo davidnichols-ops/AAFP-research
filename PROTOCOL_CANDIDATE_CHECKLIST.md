@@ -52,7 +52,7 @@ protocol freeze.
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Rust implementation conforms | [x] | 1864 tests, 0 failures, 7 ignored |
+| Rust implementation conforms | [x] | 2857 tests, 0 failures, 7 ignored |
 | Go implementation conforms | [x] | 13 packages, 664 tests, 0 failures |
 | Rust ↔ Go authenticated interoperability | [x] | ML-DSA-65 cross-verified (A-10) |
 | Wire compatibility tests | [x] | 17 golden traces verified by both |

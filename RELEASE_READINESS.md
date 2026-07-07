@@ -14,7 +14,7 @@ The AAFP core protocol implementation is complete and has been stable through
 multiple development cycles:
 
 - **17 crates** in the Rust workspace
-- **1864 tests** passing, 7 ignored, 0 failed
+- **2857 tests** passing, 7 ignored, 0 failed
 - **ML-DSA-65** post-quantum signatures with cross-language interop (Rust ↔ Go)
 - **AAFP v1 handshake** with full state machine, replay cache, close manager
 - **QUIC transport** with X25519MLKEM768 post-quantum key exchange

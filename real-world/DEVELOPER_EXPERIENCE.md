@@ -5,7 +5,7 @@
 **Goal:** Make AAFP the most pleasant agent framework to learn, build, debug,
 and operate — measured against gRPC, tRPC, and LangChain.
 
-AAFP v1 is internet-ready: 326 steps complete, 1864 tests passing, the wire
+AAFP v1 is internet-ready: 326 steps complete, 2857 tests passing, the wire
 protocol frozen at Rev 6. Phase 2 is **developer experience**. This document
 is the master plan for that phase. It covers documentation architecture,
 learning paths, an interactive playground, SDK onboarding in three languages,

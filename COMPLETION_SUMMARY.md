@@ -9,9 +9,9 @@
 
 | Metric | Start | End | Delta |
 |--------|-------|-----|-------|
-| Tests | ~50 (MVP) | 2015 (1864 Rust + 151 TS) | +1965 |
+| Tests | ~50 (MVP) | 2015 (2857 Rust + 151 TS) | +1965 |
 | Crates | 1 | 17 Rust + 7 TS | +23 |
-| Lines of code | ~5K | ~125K (115K Rust + 10K TS) | +120K |
+| Lines of code | ~5K | ~125K (140K Rust + 10K TS) | +120K |
 | RFCs | 0 | 11 | +11 |
 | Tracks completed | 0 | 19 (A-S) + 4 IP tracks | +23 |
 | Steps completed | 0 | 326 + 25 | +351 |

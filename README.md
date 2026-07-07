@@ -23,14 +23,14 @@ Implementations live under `implementations/` as git submodules.
 
 ---
 
-## Current Status: Intelligence Plane — IMPLEMENTED
+## Current Status: Intelligence Plane — COMPLETE
 
-**Transport freeze complete (Rev 6). Intelligence Plane implemented. 2015 tests, 0 failures.**
+**Transport frozen (Rev 6). Intelligence Plane complete (all 6 tracks). 3008 tests, 0 failures. Freeze tag: v0.5-phase4-complete.**
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1864 Rust + 151 TypeScript = 2015 passing, 0 failures |
-| Crates | 17 Rust crates, ~115K lines |
+| Tests | 2857 Rust + 151 TypeScript = 3008 passing, 0 failures |
+| Crates | 19 Rust crates, ~140K lines |
 | TS SDK | 9 modules, ~9.9K lines |
 | RFCs | 11 (0001-0011), frozen at Rev 6 |
 | DHT scale | 500 nodes, 100% lookup success |
@@ -132,7 +132,7 @@ AAFP-research/
 | Repository | Owns |
 |------------|------|
 | **Umbrella (this repo)** | RFCs, architecture, roadmaps, deployment, cross-implementation docs |
-| **Rust (`implementations/rust`)** | Rust reference implementation (17 crates, 1864 tests) |
+| **Rust (`implementations/rust`)** | Rust reference implementation (17 crates, 2857 tests) |
 | **Go (`implementations/go`)** | Go wire-format interop validation (664 tests) |
 
 The protocol — not any single implementation — is the primary artifact. RFCs
@@ -175,7 +175,7 @@ tests.
 
 ```bash
 cd implementations/rust
-cargo test --workspace        # 1864 tests, 0 failures, 7 ignored
+cargo test --workspace        # 2857 tests, 0 failures, 7 ignored
 cargo run --bin aafp -- init  # generate an agent identity
 ```
 
