@@ -1,0 +1,9 @@
+[package]
+name = "research-agent"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aafp-perception = { path = "../../implementations/rust/crates/aafp-perception" }
+tokio = { version = "1", features = ["full"] }
+dotenvy = "0.15"
